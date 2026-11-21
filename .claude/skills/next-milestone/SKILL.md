@@ -30,7 +30,7 @@ database to screen, for example "add a vendor and see it in the list". Order the
 app works after every slice. Track them with the task tools. Do not write a plan document.
 
 If a requirement is ambiguous, choose the reading that best serves the goal in
-`docs/product/brief.md`, record it in `docs/open-questions.md` with the assumption, and
+`docs/product/prd.md`, record it in `docs/open-questions.md` with the assumption, and
 continue. Stop to ask only if the answer would change the data model or the scope in a way
 that is expensive to undo.
 
@@ -69,5 +69,9 @@ see it, what was assumed on their behalf, and what is next. Give screenshots of 
 new screens. Leave out file names, test counts and technical detail unless something went
 wrong that they need to decide on.
 
-M3 and M4 are independent of each other. If both are next, they may be built in parallel by
+M2 and M3 are independent of each other. If both are next, they may be built in parallel by
 two agents in separate worktrees, then merged and verified together.
+
+For milestones with AI features, also run the prompt evaluation sets in `server/ai/evals/`
+against a real model if a key is configured, and tell the owner plainly if none was, since
+the scripted stand-in proves the flow but not the quality of the AI's output.

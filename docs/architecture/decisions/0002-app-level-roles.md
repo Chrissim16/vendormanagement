@@ -1,20 +1,17 @@
-# 0002 Roles are held in the app, not in the database
+# 0002 Two roles, held in the app
 
-Date: 2026-11-21. Status: accepted.
+Date: 2026-11-21. Status: accepted (revised the same day after the PRD interview).
 
 ## Context
-Databricks Apps can act as the app's own service principal or on behalf of the signed-in
-user. On-behalf-of access to Lakebase needs a Postgres role per user and extra workspace
-admin setup.
+At most five users, all in one team. The owner first asked for restricted access to
+contracts, then agreed that with a team this small a separation is not needed.
 
 ## Decision
-The app connects as its service principal. Identity comes from `X-Forwarded-Email`. The
-role (admin, editor, viewer) is stored in the app's `users` table and enforced in server code.
-
-## Why
-Three simple roles do not need row-level database permissions, and this avoids a workspace
-admin task every time a colleague joins.
+Two roles, admin and member, stored in the app's `users` table and enforced in server
+code. Every user sees all data, including contract values. The app connects to the
+database as its own service principal; identity comes from `X-Forwarded-Email`.
 
 ## Consequence
-Access control is only as good as the server checks, so every write endpoint has a test
-per role. Revisit if some contracts must be hidden from some colleagues (open question Q8).
+Who can open the app at all is controlled in Databricks, by who is given permission to use
+the app. That list must be limited to the VS Finance team at deployment. Every admin-only
+endpoint has a test proving a member is refused.

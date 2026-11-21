@@ -12,12 +12,14 @@ You will be given the range of commits or the diff to review.
 Read `CLAUDE.md` and `docs/architecture/overview.md`, then the diff, then enough of the
 surrounding code to judge it. Look for, in this order:
 
-1. **Wrong behaviour.** Logic that contradicts `docs/product/domain-model.md` or `requirements.md`. Date arithmetic around notice deadlines, month ends and time zones. Money handled as a float or summed across currencies.
-2. **Access control.** Any write route without a server-side role check. Any place identity is taken from something other than the auth middleware. Any query built by string concatenation. Any user-supplied URL rendered without checking it is https.
+1. **Wrong behaviour.** Logic that contradicts `docs/product/domain-model.md` or `requirements.md`. Date arithmetic around notice deadlines, month and quarter boundaries and time zones. Money handled as a float, or EUR and GBP summed without conversion. Metric definitions that differ from the domain model.
+2. **Access control.** Any admin route without a server-side role check. Any place identity is taken from something other than the auth middleware. Any query built by string concatenation. Uploaded files accepted without checking type and size, or served with a path built from user input.
 3. **Audit and transactions.** A write to a business record without an audit entry in the same transaction. Multi-step writes that can half-complete.
 4. **Tests that do not test.** Acceptance criteria without a Playwright test carrying the requirement ID. Tests that assert nothing meaningful, mock the database, or were weakened or skipped to pass.
-5. **Structure.** Business rules in routes or components. A feature reaching into another feature's internals. Duplicated logic that already exists in `shared/` or `platform/`.
-6. **Docs out of step.** Schema, commands or conventions changed without the matching doc.
+5. **Ports and AI.** Feature code importing a port implementation, AppKit or a Databricks package directly. A port method without a contract test. A model call that bypasses `server/ai`, an AI output that takes effect without a person accepting it, a figure taken from model output instead of computed, or a chat tool that can write.
+6. **Real data.** Anything in code, seeds, tests or docs that looks like a real company, person, contract or ticket.
+7. **Structure.** Business rules in routes or components. A feature reaching into another feature's internals. Duplicated logic that already exists in `shared/` or `platform/`.
+8. **Docs out of step.** Schema, commands or conventions changed without the matching doc.
 
 Report each finding with file and line, what is wrong, a concrete case where it fails, and
 a severity: must fix, should fix, or note. Do not pad the list with style preferences the

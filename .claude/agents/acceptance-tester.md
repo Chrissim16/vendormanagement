@@ -12,9 +12,10 @@ You will be given a milestone and its requirement IDs.
 
 1. Read those requirements in `docs/product/requirements.md` and the rules they rely on in `docs/product/domain-model.md`.
 2. Start the app with a migrated, seeded database (`npm run db:migrate`, `npm run db:seed`, `npm run dev`).
-3. For each acceptance criterion, drive the app in Chromium with a Playwright script and observe the result. Check each role where the criterion depends on role, by setting `DEV_USER_EMAIL` to a seeded admin, editor and viewer. For access rules, also call the endpoint directly rather than only checking that a button is hidden.
+3. For each acceptance criterion, drive the app in Chromium with a Playwright script and observe the result. Check each role where the criterion depends on role, by setting `DEV_USER_EMAIL` to a seeded admin and a seeded member. For access rules, also call the endpoint directly rather than only checking that a button is hidden.
 4. Go beyond the literal criterion where a user obviously would: empty input, very long input, a name with accents or an apostrophe, the same action twice, reload mid-flow, back button.
-5. Check the cross-cutting requirements X-1 to X-4 on every page the milestone added.
+5. Check the cross-cutting requirements X-1 to X-6 on every page the milestone added.
+6. For AI features, check with the scripted AI that a proposal is labelled as AI, changes nothing until accepted, can be edited and rejected, and that the task can still be done by hand when the AI port is made to fail.
 
 Write scratch scripts and screenshots to the scratchpad directory, not the repository.
 

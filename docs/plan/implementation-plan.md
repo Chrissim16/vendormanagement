@@ -1,7 +1,7 @@
 # Implementation plan
 
-Milestones are built in order with `/next-milestone`. Each one ends with something the
-owner can click through. A milestone is done when all of these hold:
+Milestones are built in order with `/next-milestone`. Each ends with something the owner
+can click through. A milestone is done when:
 
 1. Every listed requirement's acceptance criteria pass in the running app, confirmed by the `acceptance-tester` agent.
 2. `npm run check` passes.
@@ -11,54 +11,71 @@ owner can click through. A milestone is done when all of these hold:
 
 | # | Milestone | Requirements | Depends on |
 |---|---|---|---|
-| M0 | Foundation | F-1, F-2, F-3 | none |
-| M1 | Vendor register | V-1 to V-6 | M0 |
-| M2 | Contracts and renewals | C-1 to C-7 | M1 |
-| M3 | Spend | S-1 to S-5 | M1 |
-| M4 | Performance | P-1 to P-3 | M1 |
-| M5 | Dashboard and polish | D-1, D-2, X-1 to X-4 audit | M2, M3, M4 |
-| M6 | Deploy to Databricks | none new | M0; needs the owner |
+| M0 | Foundation | F-1 to F-4 | none |
+| M1 | Vendors and agreements | V-1 to V-4, A-1 to A-8 | M0 |
+| M2 | SOW delivery and money | M-1 to M-7 | M1 |
+| M3 | Performance from Jira | J-1 to J-5 | M1 |
+| M4 | Scorecards and AI scoring | P-1 to P-7, AI-1, AI-2 | M2, M3 |
+| M5 | Briefings, risk flags, dashboard, report | B-1, R-1, D-1, D-2 | M4 |
+| M6 | RFP | Q-1 to Q-11 | M1; AI from M4 |
+| M7 | Ask a question | C-1 | M5, M6 |
+| M8 | Contract reading | E-1 | M1; AI from M4 |
+| M9 | Move to Databricks | none new | all; needs the owner at work |
 
-X-1 to X-4 apply to every milestone; M5 re-checks them across the whole app.
+X-1 to X-6 apply to every milestone. M2 and M3 touch different features and may be built in parallel.
 
 ## M0 Foundation
-Goal: an empty but real app that knows who you are, and a workflow that proves its own work.
+- Check current Databricks Apps and AppKit docs, scaffold the app, update `architecture/overview.md` to the real layout.
+- The five ports with their local implementations and contract tests. Deployed implementations are written here too, from documentation, and marked unproven.
+- Database, migrations, users, roles, audit.
+- App shell with navigation for every section, and the reusable patterns: form, data table with URL-held filters, empty state, error state, file upload, PDF export.
+- System check page.
+- `npm run check`, CI on every push, seed script with invented data, `.env.example`.
 
-- Check current Databricks Apps and AppKit docs; scaffold with `databricks apps init` (or by hand to the same layout if the CLI is unavailable) and update `architecture/overview.md` to the actual layout.
-- Local Postgres, Drizzle, first migration: users, categories, audit log.
-- Auth middleware, roles, `requireRole`, bootstrap admin, user admin page.
-- Audit helper and audit log page.
-- App shell: navigation for all future sections, header with user and role, empty-state pattern, error pattern, form pattern, data-table pattern with URL-held filters. These patterns are reused by every later milestone, so build them properly once.
-- `npm run check` wired up: typecheck, lint, Vitest, Playwright with an accessibility check. CI workflow running it on every push.
-- Seed script with realistic sample data, extended by each later milestone.
-- `.env.example`, and commands in `CLAUDE.md` confirmed.
+## M1 Vendors and agreements
+Vendors, contacts, the five agreement kinds with status, MSA to SOW structure, documents, subscriptions with renewals and decisions, warnings page and header count, Excel import.
 
-## M1 Vendor register
-Vendors, contacts, document links, categories, list with search, filter, sort and CSV export, vendor page with history. Status rules that depend on contracts are completed in M2.
+## M2 SOW delivery and money
+Milestones, change requests with history, consultants and rate cards, invoices, budget view and budget warning, spend overview, exchange rate.
 
-## M2 Contracts and renewals
-Contracts, derived notice deadline and renewal state as tested pure functions, contract list, renewal view, renewal decisions with roll-forward, header counter, CSV export. Completes V-4.
+## M3 Performance from Jira
+Fake Jira that mimics the Jira Cloud and Jira Service Management API shape, with invented tickets across several boards, including boards that escalate by status and by label. Board links, sync job, monthly metrics with drill-down, targets, performance overview.
+Before building, the `databricks-researcher` agent confirms the current Jira Service Management API fields for SLA results and satisfaction ratings.
 
-## M3 Spend
-Manual entries, CSV and Excel upload with preview and validation, upload history and revert, per-vendor and overview spend views, CSV export. Can be built in parallel with M4 once M2 is done; they touch different features.
+## M4 Scorecards and AI scoring
+The `server/ai` layer with suggestion records, prompt versioning and evaluation sets. Monthly proposals, ticket themes, quarterly scorecards, manual scorecards, vendor PDF, criteria admin.
 
-## M4 Performance
-Criteria admin, scorecards with draft and final states, vendor score and trend, performance overview.
+## M5 Briefings, risk flags, dashboard, report
+Vendor briefing with PDF, risk flag rules as tested pure functions, dashboard, monthly management report PDF.
 
-## M5 Dashboard and polish
-Home dashboard, data quality panel, load test with the volumes in D-2, full accessibility and keyboard pass, consistency pass over empty states, errors and date formats.
+## M6 RFP
+Demand, AI draft, review sign-offs, candidates, Word and Excel export, response upload and matching, AI comparison, multi-evaluator scoring, decision, decision record PDF.
 
-## M6 Deploy to Databricks
-Needs answers to Q2 and Q3 in `open-questions.md` and a person with workspace access.
+## M7 Ask a question
+Read-only query tools over the existing list queries, document text search, chat screen with source links.
 
-- Create the Lakebase database and the app; attach the database as a resource.
-- `app.yaml` with configuration; run migrations against Lakebase.
-- Deploy, sign in with Entra ID, confirm F-1 with the real identity header.
-- Write `docs/runbook.md`: how to deploy, roll back, back up, and add an admin.
+## M8 Contract reading
+Field proposal from an uploaded document with source passages and confirm step.
 
-M6 can be pulled forward to straight after M0 as soon as workspace access is available.
-Deploying early is preferred, because it surfaces platform surprises while the app is small.
+## M9 Move to Databricks
+Done at work, with limited AI assistance, so the preparation is done here first.
 
-## After version 1
-Candidates, not commitments: vendor onboarding and approval, risk and due diligence,
-email reminders, finance system link, currency conversion, document storage.
+Prepared before the move:
+- `docs/runbook.md`: step-by-step deployment for a non-developer, with what each step should show when it worked.
+- `app.yaml`, resource definitions, a first-run script that migrates the database.
+- A final full run of `npm run check` and the acceptance tester over all milestones.
+
+At work:
+1. Download the repository from GitHub.
+2. Create the app, the Lakebase database and the volume; grant app access to the VS Finance team only.
+3. Set the Jira service account and the model serving endpoint as app resources.
+4. Deploy and open the system check page. Fix whatever it reports.
+5. Link the real Jira boards, run the first sync, compare a month's metrics with Jira's own reports.
+6. Enter real vendors and agreements with the Excel import.
+
+Recommended: do steps 1 to 4 once straight after M0, with the empty app. It costs little,
+and it proves sign-in, database and deployment while there is almost nothing to go wrong.
+
+## Backlog after version 1
+Service credit calculation; in-app review for people outside the team; email or Teams
+warnings; unusual-clause detection in contract text; award and rejection letters.

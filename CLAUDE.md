@@ -1,7 +1,12 @@
 # Vendor Management System
 
-Internal tool for one company to track its vendors, contracts and renewals, vendor
-performance and spend. Runs as a Databricks App with Entra ID sign-in.
+Vendor and contract management for one finance IT team of at most five people: vendors,
+agreements (MSA, SOW, subscription, NDA, DPA), SOW budgets and invoices, helpdesk
+performance from Jira, AI-proposed scorecards and briefings, and a guided RFP process.
+
+It is built here, outside the company, and later moved to the company's Databricks
+workspace (Databricks App, Entra ID sign-in, Lakebase, model serving, Jira Cloud). None of
+those company services can be reached from this repository's build environment.
 
 The owner is a non-developer who directs the work and reviews outcomes. Agents write all
 the code. Write everything addressed to the owner (summaries, questions, `docs/plan/progress.md`)
@@ -11,7 +16,7 @@ in plain language, with no code or jargon they would have to look up.
 
 | Need | File |
 |---|---|
-| What we are building and why | `docs/product/brief.md` |
+| What we are building and why (the PRD) | `docs/product/prd.md` |
 | Requirements with acceptance criteria | `docs/product/requirements.md` |
 | Entities, fields, business rules | `docs/product/domain-model.md` |
 | Stack, structure, conventions | `docs/architecture/overview.md` |
@@ -45,7 +50,16 @@ Read `progress.md` first in every session. Read the other files when the task to
 - The signed-in user comes from the `X-Forwarded-Email` header, which only exists when
   deployed. Local development uses the `DEV_USER_EMAIL` variable. Never trust a user
   identity sent in a request body or query string.
-- Every write checks the user's role on the server. Hiding a button is not access control.
+- Anything that only exists inside the company (identity, database, file storage, Jira, AI
+  model) is used through its port in `server/platform/ports/`. Feature code never imports
+  an implementation, and a new port method needs a contract test both implementations pass.
+- No real company data in this repository, ever: no real vendor names, people, amounts or
+  tickets. Sample data is invented. If the owner pastes real data into a session, do not
+  write it to a file.
+- AI suggests, people decide. Every model call goes through `server/ai` and is stored as a
+  suggestion that a person accepts or edits. Numbers shown as facts are computed in code,
+  not by the model. Chat is read-only.
+- Admin-only endpoints check the role on the server. Hiding a button is not access control.
 - Every create, update and delete of a business record writes an audit log entry in the
   same database transaction.
 - Money is stored as integer minor units plus an ISO currency code. Never use floats.

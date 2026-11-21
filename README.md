@@ -1,7 +1,9 @@
 # Vendor Management System
 
-An internal tool to keep one reliable record of our vendors, their contracts and renewal
-dates, how they perform and what we spend with them.
+A vendor and contract management tool for the VS Finance team: one record of our vendors
+and agreements, SOW budgets and invoices, helpdesk performance scored from Jira data with
+AI assistance, and a guided RFP process. It is built outside the company and moved to
+Databricks through GitHub when finished.
 
 ## How this project is built
 
@@ -19,7 +21,7 @@ look at the result when it reports back.
 
 ## What to read
 
-- `docs/product/brief.md` is the one-page description of the product. If it is wrong, everything built from it will be wrong, so this is the document most worth your time.
+- `docs/product/prd.md` is the product requirements document. If it is wrong, everything built from it will be wrong, so this is the document most worth your time.
 - `docs/open-questions.md` lists what the agents assumed on your behalf. Correct anything that does not match how your team works.
 - `docs/plan/implementation-plan.md` shows the milestones in order.
 - `docs/plan/progress.md` is the running log of what has been done.
