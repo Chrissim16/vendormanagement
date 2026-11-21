@@ -14,12 +14,48 @@ Newest entry first. Written for the owner, in plain language.
 | M5 Briefings, risk flags, dashboard, report | Done here; the AI-written text is unproven until tried with the company's model |
 | M6 RFP | Done here; the AI draft and comparison are unproven until tried with the company's model |
 | M7 Ask a question | Done here; how well a real AI understands questions is unproven until tried with the company's model |
-| M8 Contract reading | Not started |
+| M8 Contract reading | Done here; how well a real AI reads a contract is unproven until tried with the company's model |
 | M9 Move to Databricks | Not started; done at work |
 
-**Next:** M8 Contract reading.
+**Next:** M9 Move to Databricks, which is done at work and needs you. Everything that can be built outside the company is now built.
 
 ## Log
+
+### 2026-11-21 M8 Contract reading done
+The app can now read a contract for you and propose what to fill in, with the sentence each value comes from. As before, the AI part runs on a stand-in that works by simple rules, because the company's model cannot be reached from here (see "Needs your attention").
+
+What you can do in it:
+
+- **Ask the AI to read a document.** On an agreement's page, every attached document that has real text has a button "Read with AI". The agreement must exist first; a draft with only a title is enough.
+- **Compare, field by field.** A blue panel across the page, "Read from the documents", shows a table: the field, what the agreement holds now, what the document says, and the passage of the document word for word with its page. Each row says "The same" or "Differs". The fields are title, signed on, start date, end or renewal date, notice period, value (a subscription's yearly value or a SOW's budget) and currency. The kind is compared too, but never changed.
+- **Take over only what you tick.** Every value that differs has a tick box, ticked to begin with. Nothing changes on the agreement until you press "Use the ticked values"; then exactly the ticked values are saved, by the same rules as the edit form. If the agreement cannot take one of them (an end date before the start date, a SOW budget fixed by an approved change request), nothing at all is saved and the panel says why, with your ticks still in place.
+- **Reject, or read again.** "Reject" closes the proposal without changing anything. "Read again" asks the AI anew at any time.
+- **See afterwards what happened.** Once used or rejected, the panel becomes one line saying what was done, by whom and when, with the table behind "What it read". The agreement's history has a line for asking, for the values that changed, and for the review, naming the values that were taken.
+- **Know what was left out.** Under the table the panel names what the document does not say. It also names any value the AI gave without a passage that really states it; such a value is not offered at all.
+
+The sample data has an invented order form on Tarnwick Software's "Reporting suite" subscription that says a different yearly fee and notice period than were keyed in, so you can try it at once.
+
+How it was checked: an independent tester read the sample order form and its own PDF, Word and Excel documents on agreements of every kind, compared each passage with the file, checked after every step that nothing had been saved before confirming and that nothing unticked was saved, tried values the agreement refuses, two people at once, a failing AI, the keyboard alone and a narrow window. Every point passed. An independent reviewer read the code and found two things that had to be fixed and seven that should be; all are fixed, each with a test, and the full set of automated checks passes. The two that mattered:
+
+- **A value could be shown next to a passage that did not really say it.** The check only asked whether the numbers of a value occurred somewhere in its passage. So "1 January" could be read out of "31 January", day and month could be swapped, a payment term of 30 days could pass as the notice period, and the word "may" counted as the month of May. Now a date must stand in the passage as a whole date, an amount must have its currency right next to it, a notice period must be a number of days in a sentence about notice, and a passage may not begin or end in the middle of a word or number. A value that fails this is left out and named, and the rest of the reading stands.
+- **An amount could have been saved in the wrong currency.** A fee written in dollars would have been offered as euros, and the currency could be changed without the amount. Now an amount always carries the currency written next to it, amounts in other currencies than euros and pounds are left out, and amount and currency are taken over together or not at all.
+
+Needs your attention:
+
+- **No real AI model has been tried, again.** The stand-in only recognises plain sentences such as "signed on 4 January 2027" or "The annual fee is € 26,500.00". Real contracts are worded more freely; a real model should cope, and the checks above apply to it just the same, but how many fields it finds has to be seen at work. There are five new invented test cases; the two the stand-in can take pass, and the three that need real understanding (contract language, not working values out, an instruction planted in the document) wait for the company's model.
+- **The passage proves that the document says it, not that it is the right clause.** If a contract names a day rate and a budget, the AI could offer the day rate as the budget, with a passage that truly states that amount. That is why each value comes with its passage: read it before you tick.
+- **A notice period given in months is not taken over.** "Three months' notice" is listed as left out, because three months is not always ninety days and the deadline could come out a day or two late. Fill it in by hand. Say if you would rather have it converted on the safe side (three months as 92 days).
+- **Contract text reaches the AI.** It is passed as material to read and the AI is told never to follow instructions in it. In production that text stays inside the company's Databricks workspace.
+
+Decided on your behalf (see `docs/open-questions.md`, Q80 to Q86):
+
+- Reading starts from an existing agreement; the AI does not create an agreement from a document by itself.
+- The AI proposes only what the document states. It works nothing out: no end date from a start date and a term, no yearly fee from a monthly one.
+- Of a long contract the first ten pages or so are read, and the panel says so.
+- Any team member may ask, use and reject; the history shows who did.
+- Documents an RFP candidate sent cannot be read this way, only documents attached to an agreement.
+
+One requirement was written out in more detail to match what was built (E-1).
 
 ### 2026-11-21 M7 Ask a question done
 You can now ask the app a question in plain words and get an answer that shows where it came from. As before, the AI part runs on a stand-in that works by simple rules, because the company's model cannot be reached from here (see "Needs your attention").
@@ -322,6 +358,9 @@ architecture and plan were rewritten to match. The plan now has ten milestones.
 First version of the brief, requirements, plan and agent workflow. No application code yet.
 
 ## Follow-ups
+- Contract reading compares, after values were taken over, the document with the agreement as it has become; which values were taken is in the history, not in the panel.
+- The time shown on an AI proposal follows the app's clock, which is pinned when "today" is pinned for testing, so in a test set-up it can differ from the time in the history. Not so in normal use.
+- Contract reading does not propose the reference, automatic renewal, the renewal term, fixed price or time and materials, or the MSA a SOW sits under.
 - A large PDF (hundreds of pages) is read while the person who attached it waits, and the app is busy for everyone during those seconds. Fine for ordinary contracts; to be moved to the background if large files turn out to be common.
 - Ask has no limit on how often someone can ask. Each question is two calls to the AI model; to be watched once the cost per call at work is known.
 - Ask finds document passages by the words they share with the question, looking through every document each time. Fine for a few hundred documents; a proper text index is the next step if there are many more.
