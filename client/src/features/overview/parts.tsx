@@ -114,6 +114,8 @@ export function AiTextPanel({
   onReview,
   reviewing,
   note,
+  acceptLabel = "Use this text",
+  canAsk = true,
 }: {
   title: string;
   suggestion: TextSuggestion<unknown> | null;
@@ -131,6 +133,10 @@ export function AiTextPanel({
   reviewing: boolean;
   /** The line under the buttons that says what accepting does. */
   note: string;
+  /** What the primary button says, when the AI's writing is more than a text (a whole draft). */
+  acceptLabel?: string;
+  /** False once the moment for asking has passed: the AI's writing stays readable, without buttons. */
+  canAsk?: boolean;
 }) {
   const acceptRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLElement>(null);
@@ -170,22 +176,22 @@ export function AiTextPanel({
           </div>
           <div className={clsx("flex flex-col gap-2", s.status === "rejected" && "text-ink-2")}>{children}</div>
           <div className="flex flex-wrap items-center gap-2.5">
-            {!taken && (
+            {!taken && canAsk && (
               <Button
                 ref={acceptRef}
                 variant="primary"
                 onClick={() => !reviewing && onReview("accept", acceptRef.current?.getBoundingClientRect() ?? null)}
                 aria-disabled={reviewing || undefined}
               >
-                Use this text
+                {acceptLabel}
               </Button>
             )}
-            {s.status === "proposed" && (
+            {s.status === "proposed" && canAsk && (
               <Button onClick={() => !reviewing && onReview("reject", null)} aria-disabled={reviewing || undefined}>
                 Reject
               </Button>
             )}
-            {!taken && ask("Ask again")}
+            {!taken && canAsk && ask("Ask again")}
             <p className="min-w-0 flex-1 text-[13px] text-ink-2">{note}</p>
           </div>
         </div>

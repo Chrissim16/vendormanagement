@@ -63,7 +63,7 @@ Derived, not stored:
 - `renew` can roll forward: the renewal date moves on by the renewal term and the start date stays as it was, which opens the next term for its own decision later.
 - `terminate` does not end the agreement by itself; someone sets it to ended when it stops.
 
-**Document**: attached to an agreement (and from M6 to an RFP). `title*`, `file_name*`, `content_type*`, `size_bytes*`, `storage_key*`, `extracted_text`. PDF, Word and Excel only, 25 MB at most, judged by the file's content as well as its name. The stored file's name is generated, so nothing a person typed becomes part of a file path. Attaching and removing are recorded in the agreement's history.
+**Document**: attached to an agreement, or to a candidate's response in an RFP; never both. `title*`, `file_name*`, `content_type*`, `size_bytes*`, `storage_key*`, `extracted_text`. PDF, Word and Excel only, 25 MB at most, judged by the file's content as well as its name. The stored file's name is generated, so nothing a person typed becomes part of a file path. Attaching and removing are recorded in the agreement's history.
 
 **Warning** (worked out, not stored), for A-7:
 
@@ -252,22 +252,39 @@ per criterion a `score` 1 to 5, a `vendor_comment` and an `internal_note`, plus 
 ## RFP
 
 **RFP**: `title*`, `need*`, `budget_minor`, `currency`, `sponsor`, `demand_approved_on`, `target_decision_date`, `owner_user_id*`,
-`stage*` (drafting | in_review | approved | issued | evaluating | decided | cancelled), `written_weight*`, `demo_weight*` (sum 100).
+`stage*` (drafting | in_review | approved | issued | evaluating | decided | cancelled), `written_weight*`, `demo_weight*` (sum 100; 70 and 30 to start with), `cancel_reason`.
+- Stages: a member moves an RFP between drafting, in review and approved. The first issue to a candidate makes it issued, the first answer or score makes it evaluating, the decision makes it decided. Any running RFP can be cancelled with a reason. A decided or cancelled RFP does not change any more.
+- It can go to review once it has a section, a question, criteria for every part that counts and weights that add up.
+- The budget and the sponsor stay inside the team: they are in the review copy and the decision record, never in what goes to a candidate or to the AI.
+- Every change to an RFP and its parts is recorded in the RFP's own history.
 
-**RFP criterion**: `rfp_id*`, `name*`, `weight*`, `part*` (written | demo).
+**RFP criterion**: `rfp_id*`, `name*` (unique within its part), `weight*` (1 to 100; the weights within a part add up to 100), `part*` (written | demo).
 **RFP section**: `rfp_id*`, `position*`, `heading*`, `body`.
-**RFP question**: `rfp_id*`, `number*`, `text*`, `criterion_id*` (a written criterion).
-**Review sign-off**: `rfp_id*`, `reviewer_name*`, `reviewer_role`, `outcome*` (approved | changes_requested), `on_date*`, `comment`.
+**RFP question**: `rfp_id*`, `number*` (its place in the list), `text*`, `criterion_id*` (a written criterion).
+- Sections, criteria and questions are saved together as one document. They and the two part weights are locked once the stage is `issued`.
+- The template gives six sections and six criteria (four written, two demo). The AI's draft is a suggestion; the document is what a person saved. A draft taken over counts as accepted while the document still reads as drafted and as edited once it does not.
 
-**Candidate**: `rfp_id*`, `vendor_id*`, `list*` (longlist | shortlist | dropped), `reason*`, `issued_on`, `response_received_on`.
-**Answer**: `candidate_id*`, `question_id*`, `text`. Filled from the uploaded response.
-**AI comparison**: per question a summary per candidate and the differences; per candidate and criterion a proposed score with reason.
-**Evaluation score**: `candidate_id*`, `criterion_id*`, `evaluator_user_id*`, `score*` (1 to 5), `comment`.
+**Review sign-off**: `rfp_id*`, `reviewer_name*`, `reviewer_role`, `outcome*` (approved | changes_requested), `on_date*` (not in the future), `comment` (required for requested changes), `resolved_on`.
+- A requested change is open until a member marks it as dealt with. Approved needs at least one approval and no open request. Sign-offs are recorded in review and stand once the RFP is approved.
 
-- Candidate score per criterion = average across evaluators. Part score = weighted average of its criteria. Overall = written part and demo part combined by their weights.
-- Questions and criteria are locked once the stage is `issued`.
+**Candidate**: `rfp_id*`, `vendor_id*` (once per RFP, not an offboarded vendor), `list*` (longlist | shortlist | dropped), `reason*`, `issued_on`, `nda_warning_acknowledged_by`, `response_received_on`, `unmatched` (rows of an uploaded answer sheet that fitted no question).
+- A new vendor is created as a prospect owned by the member who adds it.
+- Only a shortlisted candidate of an approved RFP is issued. Without an NDA in place (or not required) the member must acknowledge the warning; who did is kept.
+- An issued candidate cannot go back to the longlist; it is dropped. A candidate that was issued or has answers, documents or scores is never removed.
+- Answers and scores are about candidates that are shortlisted and issued.
 
-**Decision**: `rfp_id*`, `winner_candidate_id*`, `decided_on*`, `rationale*`. Sets the winner's vendor to `active`. No agreement is created.
+**Answer**: `candidate_id*`, `question_id*`, `text*`. Filled from the uploaded response or typed in.
+- An uploaded row belongs to the question whose number it carries, otherwise to the question with the same wording. A row that fits none, or a second answer to one question, is kept as unmatched until a member places or sets it aside. Uploading again replaces the answers it matches.
+- A response document (the uploaded sheet, anything else the candidate sent) is a **Document** attached to the candidate.
+
+**AI comparison** (one AI suggestion per RFP, made per written criterion): per question a summary per candidate and the differences; per candidate and written criterion a proposed score with a reason and a passage that occurs word for word in that candidate's answers. It may quote no number that is not in the answers. It is asked again by hand; the RFP keeps a fingerprint of the answers it read, so the page can say when one has changed.
+
+**Evaluation score**: `candidate_id*`, `criterion_id*`, `evaluator_user_id*`, `score*` (1 to 5), `comment`, `suggested_score` (what the AI proposed when the score was given).
+- Candidate score per criterion = average across evaluators. Part score = average of its criteria by weight, once every criterion of the part has a score. Overall = written part and demo part combined by their weights; a part that counts for 0 is left out.
+- Averages are kept exact and rounded once to two decimals, halves up. Candidates are ranked on the rounded overall score; equal scores share a place.
+- The comparison counts as accepted while every score given with it equals its proposal, and as edited once one differs.
+
+**Decision** (kept on the RFP): `winner_candidate_id*` (a candidate the RFP was issued to), `decided_on*` (not in the future), `rationale*`. Sets the winner's vendor to `active`. No agreement is created.
 
 ## AI and audit
 

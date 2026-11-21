@@ -88,6 +88,8 @@ Figures that line up use tabular numerals. Dates read `21 Nov 2026`. Money reads
 - A record with a lot of its own content (a SOW, a scorecard, an RFP) gets a full page.
 - The dashboard opens with a greeting that states what needs doing, three neutral tiles (warnings, risk flags, scorecards due), then two columns: on the left what needs attention counted by kind and the SOWs by budget used, each with a thin meter; on the right spend as bars, vendor scores with their trend in words, the scorecards due and open RFPs. Every row leads to its detail. The button to the monthly report sits in the dashboard's header.
 - A section of a page that has nothing to list says so in one sentence on the sunken fill, in place of its rows.
+- A record that moves through stages (an RFP) is a full page that shows the stages as a row of numbered pills, the current one filled with the primary colour, the ones behind it on the brand tint. Under it one sunken tile says the next step in a sentence, with a button to the tab where it is done. The parts of the work are tabs; the page opens on the tab of the next step and never switches tab by itself afterwards.
+- A document made of many small parts (an RFP's sections, criteria and questions) is edited as one form with one Save in a bar that stays at the bottom of the window. The bar says whether there are unsaved changes and what still stops the next step; running totals (weights adding up to 100) sit next to what they count.
 - A report page (the monthly report, a briefing) is a full page of plain tables between hairlines, with the download as its one primary action.
 
 ## Forms and dialogs
@@ -154,6 +156,11 @@ and talking points) uses the same panel, with "Use this text" as its primary act
 "Reject" and "Ask again". The text the record keeps sits in ordinary boxes right below the
 panel with its own Save button and a line saying whether it is saved; taking the AI's text
 over fills those boxes, where it can still be changed. A link inside a sentence is underlined.
+
+A proposal that is more than a text (a whole RFP draft) uses the same panel with its own
+primary action ("Use this draft"); when using it would replace something, the button asks
+once more in place. A comparison the AI makes across records (candidates' answers) is one
+tinted panel, folded per criterion, that says plainly that nothing in it is a score.
 
 A score from 1 to 5 is chosen on a row of five squares on the sunken fill; the chosen one
 is filled with the primary colour and its thumb snaps over with a bounce. The same square,

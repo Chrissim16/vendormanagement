@@ -72,7 +72,7 @@ export interface ScorecardDueRow {
   criteria: number;
 }
 
-/** An RFP that is still running. RFPs arrive with a later milestone; until then there are none. */
+/** An RFP that is still running, with its stage in words. */
 export interface OpenRfp {
   id: string;
   title: string;

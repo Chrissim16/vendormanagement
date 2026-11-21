@@ -2,6 +2,7 @@ import type { AiPort } from "../../platform/ports/types";
 import { ask, type Prompt } from "../index";
 import { monthlyProposalCases } from "./monthly-proposal";
 import { briefingCases, reportSummaryCases } from "./overview";
+import { rfpComparisonCases, rfpDraftCases } from "./rfp";
 
 /**
  * Evaluation sets: for each prompt, a handful of invented inputs with checks on what a
@@ -26,7 +27,7 @@ export interface EvalResult {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- each case carries its own input and output types.
-const cases: EvalCase<any, any>[] = [...monthlyProposalCases, ...reportSummaryCases, ...briefingCases];
+const cases: EvalCase<any, any>[] = [...monthlyProposalCases, ...reportSummaryCases, ...briefingCases, ...rfpDraftCases, ...rfpComparisonCases];
 
 export async function runEvals(ai: AiPort): Promise<EvalResult[]> {
   const out: EvalResult[] = [];

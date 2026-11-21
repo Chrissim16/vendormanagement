@@ -130,8 +130,12 @@ test.describe("D-1 dashboard", () => {
     await expect(due).toHaveCount(d.due.length);
     await expect(due.filter({ hasText: "Sedgewater Cloud" })).toContainText("Not started");
 
-    // Open RFPs: none until that part exists, and the section says so.
-    await expect(page.getByRole("region", { name: "Open RFPs" })).toContainText("No RFP is open.");
+    // Open RFPs: the running ones with their stage, each leading to its page; the decided one is not listed.
+    const rfps = page.getByRole("list", { name: "Open RFPs" }).getByRole("listitem");
+    await expect(rfps).toHaveCount(d.rfps.length);
+    await expect(rfps.filter({ hasText: "Expense management tool" })).toContainText("Evaluating");
+    await expect(rfps.filter({ hasText: "Expense management tool" }).getByRole("link")).toHaveAttribute("href", `/rfps/${d.rfps.find((x) => x.title === "Expense management tool")!.id}`);
+    await expect(rfps.filter({ hasText: "Treasury reporting advice" })).toHaveCount(0);
     await expectAccessible(page);
 
     // A "not started" row opens the start dialog with the vendor chosen.
@@ -181,7 +185,7 @@ test.describe("D-2 monthly management report", () => {
     await expect(page.getByRole("table", { name: "Agreements ending" }).getByRole("row").filter({ hasText: "SOW 02 Close process review" })).toContainText("9 Dec 2026");
     await expect(page.getByRole("table", { name: "Vendor scores" }).getByRole("row").filter({ hasText: "Mossgate IT" })).toContainText("/ 5");
     await expect(page.getByRole("table", { name: "Missed helpdesk targets" }).getByRole("row")).toHaveCount(r.data.missed.length + 1);
-    await expect(page.getByRole("region", { name: "Open RFPs" })).toContainText("No RFP is open.");
+    await expect(page.getByRole("table", { name: "Open RFPs" }).getByRole("row").filter({ hasText: "Service desk tooling" })).toContainText("Drafting");
 
     // AI-1: the AI's paragraph is a suggestion; the report's own summary stays empty.
     const ai = page.getByRole("region", { name: "AI summary" });

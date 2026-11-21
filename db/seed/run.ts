@@ -13,8 +13,11 @@ import { generateProposal, reviewProposal } from "../../server/features/scorecar
 import { finaliseScorecard, saveScorecard, startScorecard, type ScorecardContext } from "../../server/features/scorecards/service";
 import { addMonth, monthOf } from "../../shared/performance";
 import { addQuarter, quarterBounds, quarterOf } from "../../shared/scorecards";
-import { createVendor, saveContact } from "../../server/features/vendors/service";
-import { briefings, jiraBoardLinks, scorecards } from "../schema";
+import { createVendor, saveContact, updateVendor } from "../../server/features/vendors/service";
+import { briefings, jiraBoardLinks, rfps, scorecards } from "../schema";
+import { addCandidate, issueCandidate, moveCandidate, saveAnswer } from "../../server/features/rfp/candidates";
+import { compareAnswers, decide, saveScore } from "../../server/features/rfp/evaluation";
+import { addSignoff, changeSignoff, createRfp, getRfp, moveStage, reviewDraft, suggestDraft, type RfpContext } from "../../server/features/rfp/service";
 import { createBriefing } from "../../server/features/briefings/service";
 import { reviewSummary, suggestSummary } from "../../server/features/reports/service";
 import type { BoardLinkInput, Targets } from "../../shared/performance";
@@ -387,8 +390,172 @@ export async function seed(db: Db, today: Day, ctx?: ScorecardContext) {
     const admin = (await db.select().from(users).where(eq(users.email, "admin@example.test")))[0];
     if (admin) await seedPerformance(ctx.perf, toUser(admin));
     await seedScorecards(ctx, today);
+    await seedRfps(ctx, today);
     await seedOverview(ctx, today);
   }
+}
+
+/**
+ * Three invented RFPs, one at each end and one in the middle: one being evaluated (answers
+ * in, the AI's comparison waiting, some scores given, one shortlisted candidate not yet
+ * issued and without an NDA), one in drafting with an AI draft nobody has looked at, and
+ * one decided. Everything goes through the same functions the screens use.
+ */
+async function seedRfps(ctx: ScorecardContext, today: Day) {
+  if (ctx.ai.kind !== "stand-in") return;
+  if ((await ctx.db.select({ n: sql<number>`count(*)::int` }).from(rfps))[0]!.n > 0) return;
+  const people = await ctx.db.select().from(users);
+  const person = (email: string) => toUser(people.find((u) => u.email === email)!);
+  const [mira, jonas, sanne] = [person("mira@example.test"), person("jonas@example.test"), person("sanne@example.test")];
+  const vendorId = async (name: string) => (await ctx.db.select({ id: vendors.id }).from(vendors).where(eq(vendors.name, name)))[0]!.id;
+  // The sample data attaches no files, so it needs no place to keep them.
+  const noFiles = () => Promise.reject(new Error("The sample data stores no files."));
+  const rfp: RfpContext = {
+    db: ctx.db,
+    ai: ctx.ai,
+    today: ctx.today,
+    now: ctx.now,
+    storage: { kind: "stand-in", put: noFiles, get: noFiles, remove: noFiles, check: async () => ({ ok: true, detail: "" }) },
+  };
+  const d = (n: number) => addDays(today, n);
+
+  /** Demand, the AI's draft taken over, one approval, approved. */
+  const approved = async (demand: object, by: typeof mira, reviewedOn: Day) => {
+    const created = await createRfp(rfp, demand, by);
+    const drafted = await suggestDraft(rfp, created.id, by);
+    await reviewDraft(rfp, created.id, { action: "accept", suggestionId: drafted.draft!.id }, by);
+    await moveStage(rfp, created.id, { to: "in_review" }, by);
+    await addSignoff(rfp, created.id, { reviewerName: "Chris Tanaka", reviewerRole: "CTO", outcome: "approved", onDate: reviewedOn, comment: null }, by);
+    return created.id;
+  };
+  const candidate = async (id: string, body: object, by: typeof mira) => {
+    const next = await addCandidate(rfp, id, body, by);
+    return next.candidates.at(-1)!.id;
+  };
+  const detailedAnswers = [
+    "Yes, as standard. This is in use at comparable finance teams today, and we can show it working in a demonstration with our own sample data. Two reference customers are willing to take a call.",
+    "This is covered by the standard product without custom work. Setting it up is part of our implementation plan, which a named consultant leads from kick-off until one month after going live.",
+    "We do this today for customers of a similar size. Our approach is described in the attached overview; in short, it is configured rather than built, and you keep control of the settings afterwards.",
+    "Yes. It is included in the price we quote, there is no separate module to buy, and changes in this area are announced one release ahead so that you can prepare for them.",
+  ];
+  /** Types a candidate's answers in: every question, or all but each `skip`th, with or without detail. */
+  const answer = async (id: string, candidateId: string, detailed: boolean, skip: number, by: typeof mira) => {
+    const { questions } = await getRfp(rfp.db, id, today);
+    for (const q of questions) {
+      if (skip && q.number % skip === 0) continue;
+      const text = detailed ? detailedAnswers[q.number % detailedAnswers.length]! : "Yes, this is covered.";
+      await saveAnswer(rfp, candidateId, q.id, { text }, by);
+    }
+  };
+
+  // 1. Being evaluated.
+  const expenses = await approved(
+    {
+      title: "Expense management tool",
+      need: "Staff hand in expense claims on paper and by email, and finance keys them in by hand. We need a tool in which a claim is submitted with its receipt, approved by the manager and booked in the ledger without retyping.",
+      budgetMinor: 60_000_00,
+      sponsor: "Head of finance operations",
+      demandApprovedOn: d(-48),
+      targetDecisionDate: d(40),
+      ownerUserId: mira.id,
+    },
+    mira,
+    d(-30),
+  );
+  const asked = await addSignoff(
+    rfp,
+    expenses,
+    {
+      reviewerName: "Robin Vale",
+      reviewerRole: "Information security",
+      outcome: "changes_requested",
+      onDate: d(-31),
+      comment: "Ask where the audit trail of approvals is kept and for how long.",
+    },
+    mira,
+  );
+  await changeSignoff(rfp, asked.signoffs.find((x) => x.outcome === "changes_requested")!.id, { resolved: true }, mira);
+  await moveStage(rfp, expenses, { to: "approved" }, mira);
+  const fennmoor = await candidate(
+    expenses,
+    { newVendor: { name: "Fennmoor Expenses", type: "software" }, list: "shortlist", reason: "Specialist in expense claims with references at two comparable finance teams." },
+    mira,
+  );
+  const tarnwick = await candidate(
+    expenses,
+    { vendorId: await vendorId("Tarnwick Software"), list: "shortlist", reason: "Already our supplier for reporting; offers an expenses module." },
+    mira,
+  );
+  await candidate(expenses, { newVendor: { name: "Calderby Software", type: "software" }, list: "shortlist", reason: "Came out well in the market scan; added late." }, jonas);
+  const oakhollow = await candidate(expenses, { newVendor: { name: "Oakhollow Apps", type: "software" }, list: "longlist", reason: "Suggested by a colleague." }, jonas);
+  await moveCandidate(rfp, oakhollow, { list: "dropped", reason: "No hosting inside the EU." }, jonas);
+  // Like every sample vendor, the candidates added on the way say in their legal name that they are made up.
+  for (const name of ["Fennmoor Expenses", "Calderby Software", "Oakhollow Apps"])
+    await updateVendor(ctx.db, await vendorId(name), { legalName: `${name} (invented)`, country: "NL" }, mira, today);
+  await issueCandidate(rfp, fennmoor, { issuedOn: d(-21), ndaWarningAcknowledged: true }, mira);
+  await issueCandidate(rfp, tarnwick, { issuedOn: d(-21) }, mira);
+  await answer(expenses, fennmoor, true, 0, mira);
+  await answer(expenses, tarnwick, false, 5, mira);
+  const compared = await compareAnswers(rfp, expenses, mira);
+  for (const k of compared.criteria.filter((x) => x.part === "written")) {
+    const proposed = (c: string) => compared.comparison!.output.scores.find((x) => x.candidateId === c && x.criterionId === k.id)!.score;
+    await saveScore(rfp, fennmoor, k.id, { score: proposed(fennmoor), suggestionId: compared.comparison!.id }, mira);
+    await saveScore(rfp, tarnwick, k.id, { score: Math.max(1, proposed(tarnwick) - 1), comment: k === compared.criteria[0] ? "Too little detail to judge the fit." : null }, mira);
+    await saveScore(rfp, fennmoor, k.id, { score: 5 }, jonas);
+  }
+
+  // 2. In drafting, with an AI draft waiting.
+  const desk = await createRfp(
+    rfp,
+    {
+      title: "Service desk tooling",
+      need: "The service desk licence comes up for renewal next year. Before renewing we want to compare it with two or three alternatives on ticket handling, reporting on response times and the cost per agent.",
+      sponsor: "IT service manager",
+      demandApprovedOn: d(-6),
+      targetDecisionDate: d(150),
+      ownerUserId: jonas.id,
+    },
+    jonas,
+  );
+  await suggestDraft(rfp, desk.id, jonas);
+
+  // 3. Decided.
+  const treasury = await approved(
+    {
+      title: "Treasury reporting advice",
+      need: "Advice on how to set up cash and liquidity reporting across the group's entities: which figures, how often, and from which systems.",
+      budgetMinor: 35_000_00,
+      sponsor: "Group treasurer",
+      demandApprovedOn: d(-130),
+      targetDecisionDate: d(-25),
+      ownerUserId: sanne.id,
+    },
+    sanne,
+    d(-110),
+  );
+  await moveStage(rfp, treasury, { to: "approved" }, sanne);
+  const emberline = await candidate(treasury, { vendorId: await vendorId("Emberline Advisory"), list: "shortlist", reason: "Our research partner; knows the group." }, sanne);
+  const harrowick = await candidate(treasury, { vendorId: await vendorId("Harrowick Partners"), list: "shortlist", reason: "Did similar work for a peer." }, sanne);
+  await issueCandidate(rfp, emberline, { issuedOn: d(-95) }, sanne);
+  await issueCandidate(rfp, harrowick, { issuedOn: d(-95), ndaWarningAcknowledged: true }, sanne);
+  await answer(treasury, emberline, true, 0, sanne);
+  await answer(treasury, harrowick, false, 0, sanne);
+  for (const k of (await getRfp(rfp.db, treasury, today)).criteria) {
+    await saveScore(rfp, emberline, k.id, { score: 4 }, sanne);
+    await saveScore(rfp, emberline, k.id, { score: k.part === "demo" ? 5 : 4 }, mira);
+    await saveScore(rfp, harrowick, k.id, { score: 3 }, sanne);
+    await saveScore(rfp, harrowick, k.id, { score: k.part === "demo" ? 4 : 3 }, mira);
+  }
+  await decide(
+    rfp,
+    treasury,
+    {
+      winnerCandidateId: emberline,
+      decidedOn: d(-27),
+      rationale: "Emberline scored highest on every criterion and already knows the group's entities, so it can start without a discovery phase.",
+    },
+    sanne,
+  );
 }
 
 /**

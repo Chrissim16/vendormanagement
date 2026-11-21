@@ -123,23 +123,23 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 
 **Q-1 Demand.** A member creates an RFP with the need, budget, sponsor, approval date and target decision date.
 
-**Q-2 Draft.** The AI drafts sections, criteria with weights and a numbered question list from the need and a template. A member can edit everything. Each question belongs to one criterion. Weights within a part add up to 100.
+**Q-2 Draft.** The AI drafts sections, criteria with weights and a numbered question list from the need and a template. The draft is a proposal: it becomes the RFP's document when a member takes it over, and a member can edit everything. Each question belongs to one criterion. Weights within a part add up to 100. Without the AI, the template gives the same start by hand.
 
-**Q-3 Review.** The RFP exports as Word and PDF. A member records each reviewer's sign-off or requested changes. The stage cannot move to approved without at least one approval and no open change request.
+**Q-3 Review.** The RFP exports as Word and PDF. A member records each reviewer's sign-off or requested changes, and marks a requested change as dealt with. The stage cannot move to approved without at least one approval and no open change request.
 
 **Q-4 Candidates.** A member keeps a longlist and shortlist with a reason per candidate. A candidate not yet known is created as a prospect vendor.
 
-**Q-5 Issue.** For each shortlisted candidate the app exports the RFP as Word and the question list as an Excel answer sheet. Issuing to a candidate without an NDA in place shows a warning that must be acknowledged. Once issued, questions and criteria are locked.
+**Q-5 Issue.** For each shortlisted candidate the app exports the RFP as Word and the question list as an Excel answer sheet; neither holds the budget or the sponsor. Issuing to a candidate without an NDA in place shows a warning that must be acknowledged. Once issued, questions, criteria and the weights of the two parts are locked.
 
 **Q-6 Responses.** A member uploads a candidate's filled answer sheet. The app matches answers to questions and shows any it could not match for manual entry. Other response documents can be attached.
 
-**Q-7 AI comparison.** Per question the AI summarises each candidate's answer and the differences between them, and proposes a score per candidate and criterion with a reason that quotes the answer.
+**Q-7 AI comparison.** Per question the AI summarises each candidate's answer and the differences between them, and proposes a score per candidate and criterion with a reason that quotes the answer. The proposal gives no score by itself, and the page says when an answer has changed since.
 
 **Q-8 Scoring.** Each team member can score each candidate per criterion, including demo and interview criteria. The app shows the average per criterion, the weighted written and demo scores, the overall score and the ranking.
 
-**Q-9 Decision.** A member records the winner and the rationale. The winner becomes an active vendor; no agreement is created. Other candidates stay prospects.
+**Q-9 Decision.** A member records the winner and the rationale. The winner becomes an active vendor; no agreement is created. Other candidates stay prospects. After the decision nothing on the RFP changes.
 
-**Q-10 Decision record.** The full trail (demand, sign-offs, candidates with reasons, scores per evaluator, decision) exports as one PDF.
+**Q-10 Decision record.** The full trail (demand, sign-offs, candidates with reasons, scores per evaluator, decision) exports as one PDF. Before a decision it holds the trail so far.
 
 **Q-11 Overview.** A list of RFPs with stage, owner and target date, and a page per RFP that shows the current stage and the next step.
 

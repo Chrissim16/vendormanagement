@@ -23,6 +23,8 @@ import { BriefingPage } from "./features/briefings/BriefingPage";
 import { DashboardPage } from "./features/overview/DashboardPage";
 import { ReportPage } from "./features/overview/ReportPage";
 import { ComingSection, NotFoundPage } from "./features/placeholders";
+import { RfpPage } from "./features/rfp/RfpPage";
+import { RfpsPage } from "./features/rfp/RfpsPage";
 import { VendorsPage } from "./features/vendors/VendorsPage";
 import { WarningsPage } from "./features/warnings/WarningsPage";
 import { Layout } from "./platform/Layout";
@@ -63,7 +65,8 @@ const router = createBrowserRouter([
       { path: "/performance/scorecards/:id", element: <ScorecardPage /> },
       { path: "/performance/:vendorId", element: <VendorPerformancePage /> },
       { path: "/performance/:vendorId/tickets", element: <TicketsPage /> },
-      { path: "/rfps", element: <ComingSection name="rfps" /> },
+      { path: "/rfps", element: <RfpsPage /> },
+      { path: "/rfps/:id", element: <RfpPage /> },
       { path: "/ask", element: <ComingSection name="ask" /> },
       {
         path: "/admin/import",

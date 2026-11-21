@@ -310,7 +310,8 @@ export async function readDocument(db: Db, storage: StoragePort, id: string) {
 export async function removeDocument(db: Db, storage: StoragePort, id: string, by: User): Promise<void> {
   const key = await db.transaction(async (tx) => {
     const doc = await repo.getDocument(tx, id);
-    if (!doc) throw notFound("That document");
+    // A document of an RFP response is removed from the RFP, where its own history is kept.
+    if (!doc?.agreementId) throw notFound("That document");
     const row = await repo.getAgreement(tx, doc.agreementId);
     await repo.deleteDocument(tx, id);
     await audit(tx, {

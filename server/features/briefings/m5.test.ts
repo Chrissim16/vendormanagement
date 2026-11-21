@@ -209,8 +209,11 @@ describe("D-1 dashboard", () => {
     expect(d.due.find((x) => x.vendorName === "Sedgewater Cloud")).toMatchObject({ scorecardId: null });
   });
 
-  it("has no open RFPs until RFPs exist", () => {
-    expect(d.rfps).toEqual([]);
+  it("lists the RFPs still running with their stage, the nearest decision first, and leaves out the decided one", () => {
+    expect(d.rfps.map((r) => [r.title, r.stage])).toEqual([
+      ["Expense management tool", "Evaluating"],
+      ["Service desk tooling", "Drafting"],
+    ]);
   });
 });
 
@@ -225,7 +228,11 @@ describe("D-2 monthly management report", () => {
 
   it("opens on the last month that is over, with every section worked out as at its last day", async () => {
     const r = await report();
-    expect(r.data).toMatchObject({ month: "2026-10", asAt: "2026-10-31", running: false, rfps: [] });
+    expect(r.data).toMatchObject({ month: "2026-10", asAt: "2026-10-31", running: false });
+    expect(r.data.rfps.map((x) => [x.title, x.stage])).toEqual([
+      ["Expense management tool", "Evaluating"],
+      ["Service desk tooling", "Drafting"],
+    ]);
     expect(r.summary).toBeNull();
     expect(r.suggestion).toBeNull();
     // Spend in the month equals the Money page for the same dates.
@@ -279,7 +286,10 @@ describe("D-2 monthly management report", () => {
       "Vendor scores",
       "Missed helpdesk targets",
       "Open RFPs",
-      "No RFP is open.",
+      "Expense management tool",
+      "Evaluating",
+      "Service desk tooling",
+      "Drafting",
     ])
       expect(before.text).toContain(heading);
     expect(before.text).toContain("figures as at 30 Sep 2026");

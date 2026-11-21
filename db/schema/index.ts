@@ -155,9 +155,9 @@ export const documents = pgTable(
   "documents",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    agreementId: uuid("agreement_id")
-      .notNull()
-      .references(() => agreements.id),
+    /** A document belongs to an agreement, or (M6) to a candidate's response in an RFP; never to both. */
+    agreementId: uuid("agreement_id").references(() => agreements.id),
+    rfpCandidateId: uuid("rfp_candidate_id").references((): AnyPgColumn => rfpCandidates.id),
     title: text("title").notNull(),
     fileName: text("file_name").notNull(),
     contentType: text("content_type").notNull(),
@@ -167,7 +167,11 @@ export const documents = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     createdBy: text("created_by"),
   },
-  (t) => [index("documents_agreement_idx").on(t.agreementId)],
+  (t) => [
+    index("documents_agreement_idx").on(t.agreementId),
+    index("documents_candidate_idx").on(t.rfpCandidateId),
+    check("documents_owner_check", sql`(${t.agreementId} is null) <> (${t.rfpCandidateId} is null)`),
+  ],
 );
 
 /** One row of admin settings. Absent until an admin first saves; the defaults apply until then. */
@@ -564,4 +568,190 @@ export const managementReports = pgTable(
     ...stamps,
   },
   (t) => [uniqueIndex("management_reports_month_unique").on(t.month), check("management_reports_month_check", sql`${t.month} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`)],
+);
+
+// ---------- RFP (M6)
+
+export const rfpStages = ["drafting", "in_review", "approved", "issued", "evaluating", "decided", "cancelled"] as const;
+
+/**
+ * One request for proposal, from the approved demand to the decision (Q-1 to Q-11). The
+ * decision is kept on the RFP itself: the winner, the day and the rationale.
+ */
+export const rfps = pgTable(
+  "rfps",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    title: text("title").notNull(),
+    need: text("need").notNull(),
+    budgetMinor: bigint("budget_minor", { mode: "number" }),
+    currency: text("currency", { enum: ["EUR", "GBP"] })
+      .notNull()
+      .default("EUR"),
+    sponsor: text("sponsor"),
+    demandApprovedOn: date("demand_approved_on", { mode: "string" }),
+    targetDecisionDate: date("target_decision_date", { mode: "string" }),
+    ownerUserId: uuid("owner_user_id")
+      .notNull()
+      .references(() => users.id),
+    stage: text("stage", { enum: rfpStages }).notNull().default("drafting"),
+    writtenWeight: integer("written_weight").notNull().default(70),
+    demoWeight: integer("demo_weight").notNull().default(30),
+    /** The AI's latest draft and its latest comparison of the answers; each counts for nothing until a person uses it. */
+    draftSuggestionId: uuid("draft_suggestion_id").references(() => aiSuggestions.id),
+    comparisonSuggestionId: uuid("comparison_suggestion_id").references(() => aiSuggestions.id),
+    /** A fingerprint of the answers the comparison was made from, to tell when an answer has changed since. */
+    comparisonAnswers: text("comparison_answers"),
+    winnerCandidateId: uuid("winner_candidate_id").references((): AnyPgColumn => rfpCandidates.id),
+    decidedOn: date("decided_on", { mode: "string" }),
+    rationale: text("rationale"),
+    cancelReason: text("cancel_reason"),
+    ...stamps,
+  },
+  (t) => [
+    index("rfps_stage_idx").on(t.stage),
+    check("rfps_stage_check", sql`${t.stage} in ('drafting', 'in_review', 'approved', 'issued', 'evaluating', 'decided', 'cancelled')`),
+    check("rfps_weights_check", sql`${t.writtenWeight} >= 0 and ${t.demoWeight} >= 0 and ${t.writtenWeight} + ${t.demoWeight} = 100`),
+    check("rfps_budget_check", sql`coalesce(${t.budgetMinor}, 0) >= 0`),
+    // A decided RFP without its decision would leave the trail with a hole in it.
+    check("rfps_decision_check", sql`${t.stage} <> 'decided' or (${t.winnerCandidateId} is not null and ${t.decidedOn} is not null and ${t.rationale} is not null)`),
+  ],
+);
+
+export const rfpCriteria = pgTable(
+  "rfp_criteria",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    rfpId: uuid("rfp_id")
+      .notNull()
+      .references(() => rfps.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    name: text("name").notNull(),
+    weight: integer("weight").notNull(),
+    part: text("part", { enum: ["written", "demo"] }).notNull(),
+  },
+  (t) => [
+    index("rfp_criteria_rfp_idx").on(t.rfpId),
+    check("rfp_criteria_part_check", sql`${t.part} in ('written', 'demo')`),
+    check("rfp_criteria_weight_check", sql`${t.weight} between 1 and 100`),
+  ],
+);
+
+export const rfpSections = pgTable(
+  "rfp_sections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    rfpId: uuid("rfp_id")
+      .notNull()
+      .references(() => rfps.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    heading: text("heading").notNull(),
+    body: text("body"),
+  },
+  (t) => [index("rfp_sections_rfp_idx").on(t.rfpId)],
+);
+
+export const rfpQuestions = pgTable(
+  "rfp_questions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    rfpId: uuid("rfp_id")
+      .notNull()
+      .references(() => rfps.id, { onDelete: "cascade" }),
+    number: integer("number").notNull(),
+    text: text("text").notNull(),
+    criterionId: uuid("criterion_id")
+      .notNull()
+      .references(() => rfpCriteria.id),
+  },
+  (t) => [uniqueIndex("rfp_questions_number_unique").on(t.rfpId, t.number)],
+);
+
+/** A reviewer's verdict on the draft (Q-3). Reviewers are often outside the team, so they are named, not linked to a user. */
+export const rfpSignoffs = pgTable(
+  "rfp_signoffs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    rfpId: uuid("rfp_id")
+      .notNull()
+      .references(() => rfps.id, { onDelete: "cascade" }),
+    reviewerName: text("reviewer_name").notNull(),
+    reviewerRole: text("reviewer_role"),
+    outcome: text("outcome", { enum: ["approved", "changes_requested"] }).notNull(),
+    onDate: date("on_date", { mode: "string" }).notNull(),
+    comment: text("comment"),
+    /** For requested changes: the day they were dealt with. Until then the request is open and blocks approval. */
+    resolvedOn: date("resolved_on", { mode: "string" }),
+    ...stamps,
+  },
+  (t) => [index("rfp_signoffs_rfp_idx").on(t.rfpId), check("rfp_signoffs_outcome_check", sql`${t.outcome} in ('approved', 'changes_requested')`)],
+);
+
+export const rfpCandidates = pgTable(
+  "rfp_candidates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    rfpId: uuid("rfp_id")
+      .notNull()
+      .references(() => rfps.id, { onDelete: "cascade" }),
+    vendorId: uuid("vendor_id")
+      .notNull()
+      .references(() => vendors.id),
+    list: text("list", { enum: ["longlist", "shortlist", "dropped"] }).notNull(),
+    reason: text("reason").notNull(),
+    issuedOn: date("issued_on", { mode: "string" }),
+    /** Who went ahead with issuing although no NDA was in place (Q-5). */
+    ndaWarningAcknowledgedBy: text("nda_warning_acknowledged_by"),
+    responseReceivedOn: date("response_received_on", { mode: "string" }),
+    /** Rows of an uploaded answer sheet that could not be matched to a question, kept until someone has placed or discarded them (Q-6). */
+    unmatched: jsonb("unmatched").$type<{ row: number; number: string; question: string; answer: string }[]>().notNull().default([]),
+    ...stamps,
+  },
+  (t) => [
+    uniqueIndex("rfp_candidates_one_per_vendor").on(t.rfpId, t.vendorId),
+    check("rfp_candidates_list_check", sql`${t.list} in ('longlist', 'shortlist', 'dropped')`),
+  ],
+);
+
+export const rfpAnswers = pgTable(
+  "rfp_answers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    candidateId: uuid("candidate_id")
+      .notNull()
+      .references(() => rfpCandidates.id, { onDelete: "cascade" }),
+    questionId: uuid("question_id")
+      .notNull()
+      .references(() => rfpQuestions.id),
+    text: text("text").notNull(),
+    ...stamps,
+  },
+  (t) => [uniqueIndex("rfp_answers_one_per_question").on(t.candidateId, t.questionId)],
+);
+
+/** One team member's score for one candidate on one criterion (Q-8). */
+export const rfpScores = pgTable(
+  "rfp_scores",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    candidateId: uuid("candidate_id")
+      .notNull()
+      .references(() => rfpCandidates.id, { onDelete: "cascade" }),
+    criterionId: uuid("criterion_id")
+      .notNull()
+      .references(() => rfpCriteria.id),
+    evaluatorUserId: uuid("evaluator_user_id")
+      .notNull()
+      .references(() => users.id),
+    score: integer("score").notNull(),
+    comment: text("comment"),
+    /** What the AI proposed when this score was given, and from which comparison (AI-1). */
+    suggestedScore: integer("suggested_score"),
+    suggestionId: uuid("suggestion_id").references(() => aiSuggestions.id),
+    ...stamps,
+  },
+  (t) => [
+    uniqueIndex("rfp_scores_one_per_evaluator").on(t.candidateId, t.criterionId, t.evaluatorUserId),
+    check("rfp_scores_score_check", sql`${t.score} between 1 and 5`),
+  ],
 );

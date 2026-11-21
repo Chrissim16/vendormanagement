@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { kindShort, statusLabels, type Agreement } from "../../../../shared/agreements";
 import { formatDay } from "../../../../shared/dates";
 import { formatMoney } from "../../../../shared/money";
+import { candidateListLabels, rfpStageLabels, type CandidateList, type RfpStage } from "../../../../shared/rfp";
 import type { Page } from "../../../../shared/types";
 import { vendorStatusLabels, vendorTypeLabels, type Contact, type Paperwork, type VendorDetail } from "../../../../shared/vendors";
 import { api, messageOf } from "../../lib/api";
@@ -82,6 +83,40 @@ export function AgreementRow({ a, indent }: { a: Agreement; indent?: boolean }) 
 
 const tabIds = ["overview", "contacts", "agreements", "money", "performance", "briefings", "history"] as const;
 type Tab = (typeof tabIds)[number];
+
+interface VendorRfp {
+  id: string;
+  title: string;
+  stage: RfpStage;
+  list: CandidateList;
+  won: boolean;
+}
+
+/** The RFPs this vendor is or was a candidate in. */
+function VendorRfps({ vendorId }: { vendorId: string }) {
+  const q = useQuery({ queryKey: ["vendor", vendorId, "rfps"], queryFn: () => api<VendorRfp[]>(`/vendors/${vendorId}/rfps`) });
+  if (!q.data) return null;
+  return (
+    <section aria-label="RFPs" className="flex flex-col gap-2">
+      <h3 className="text-base font-semibold">RFPs</h3>
+      {q.data.length === 0 ? (
+        <p className="rounded-2xl bg-sunk px-5 py-3.5 text-[13px] text-ink-2">This vendor is not a candidate in any RFP. Candidates are added on an RFP's Candidates tab.</p>
+      ) : (
+        <ul className="flex flex-col">
+          {q.data.map((r) => (
+            <li key={r.id} className="flex items-center gap-3 border-b border-line py-3">
+              <Link to={`/rfps/${r.id}`} className="min-w-0 flex-1 truncate font-medium text-accent-ink underline underline-offset-2">
+                {r.title}
+              </Link>
+              <span className="text-[13px] text-ink-2">{r.won ? "Won" : r.stage === "decided" ? "Not chosen" : candidateListLabels[r.list]}</span>
+              <Pill tone={r.stage === "decided" ? "ok" : r.stage === "cancelled" ? "none" : "brand"}>{rfpStageLabels[r.stage]}</Pill>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
 
 export function VendorPanel({ id, onClose }: { id: string; onClose: () => void }) {
   const qc = useQueryClient();
@@ -175,7 +210,7 @@ export function VendorPanel({ id, onClose }: { id: string; onClose: () => void }
               )}
               {v.description && <Fact label="What they do for us">{v.description}</Fact>}
             </dl>
-            <p className="rounded-2xl bg-sunk px-5 py-3.5 text-[13px] text-ink-2">RFPs for this vendor will appear here as that part of the app is built.</p>
+            <VendorRfps vendorId={v.id} />
           </>
         )}
         {tab === "contacts" && (

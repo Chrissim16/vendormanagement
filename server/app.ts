@@ -14,6 +14,8 @@ import { invoiceRoutes } from "./features/invoices/routes";
 import { performanceRoutes } from "./features/performance/routes";
 import type { PerformanceContext } from "./features/performance/service";
 import { overviewRoutes } from "./features/reports/routes";
+import { rfpRoutes } from "./features/rfp/routes";
+import type { RfpContext } from "./features/rfp/service";
 import { scorecardRoutes } from "./features/scorecards/routes";
 import type { ScorecardContext } from "./features/scorecards/service";
 import { getSettings, saveSettings } from "./features/settings/service";
@@ -69,6 +71,12 @@ export const scorecardContext = (config: Config, ports: Ports): ScorecardContext
   return { db: ports.database.db, ai: ports.ai, perf, today: perf.today, now: perf.now };
 };
 
+/** What the RFP feature needs: the database, the AI, the place files are kept and the clock. */
+export const rfpContext = (config: Config, ports: Ports): RfpContext => {
+  const perf = performanceContext(config, ports);
+  return { db: ports.database.db, ai: ports.ai, storage: ports.storage, today: perf.today, now: perf.now };
+};
+
 export function createApp(config: Config, ports: Ports) {
   const app = express();
   app.disable("x-powered-by");
@@ -114,6 +122,7 @@ export function createApp(config: Config, ports: Ports) {
   api.use(scorecardRoutes(scorecardContext(config, ports), config.timeZone));
   api.use(overviewRoutes(scorecardContext(config, ports)));
   api.use(briefingRoutes(scorecardContext(config, ports)));
+  api.use(rfpRoutes(rfpContext(config, ports)));
   api.get("/settings", async (_req, res) => res.json(await getSettings(db)));
   api.put("/admin/settings", requireRole("admin"), async (req, res) => res.json(await saveSettings(db, req.body, currentUser(req))));
   api.use("/admin/import", importRoutes(db, today));

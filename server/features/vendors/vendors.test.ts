@@ -42,7 +42,7 @@ describe("V-1 vendor list", () => {
     const list = (q: Record<string, string>) => t.as(MEMBER).get("/api/vendors").query(q);
     expect((await list({ q: "quillon" })).body.items.map((v: { name: string }) => v.name)).toEqual(["Quillon Consulting"]);
     expect((await list({ type: "advisory" })).body.items.map((v: { name: string }) => v.name)).toEqual(["Emberline Advisory"]);
-    expect((await list({ status: "prospect" })).body.items.map((v: { name: string }) => v.name)).toEqual(["Harrowick Partners"]);
+    expect((await list({ status: "prospect" })).body.items.map((v: { name: string }) => v.name)).toEqual(["Calderby Software", "Fennmoor Expenses", "Harrowick Partners", "Oakhollow Apps"]);
     const sanne = (await t.as(MEMBER).get("/api/people")).body.find((p: { email: string }) => p.email === "sanne@example.test").id;
     expect((await list({ owner: sanne })).body.items.every((v: { ownerName: string }) => v.ownerName === "Sanne de Wit")).toBe(true);
     expect((await list({ owner: sanne })).body.total).toBeGreaterThan(0);

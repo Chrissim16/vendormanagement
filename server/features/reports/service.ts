@@ -43,7 +43,7 @@ export async function reportData(ctx: OverviewContext, month: Month): Promise<Re
     agreementsEnding(ctx.db, asAt, addDays(asAt, REPORT_ENDING_DAYS)),
     vendorScores(ctx, asAt),
     figuresOfAll(ctx.perf, [month]),
-    openRfps(),
+    openRfps(ctx.db),
   ]);
   const missed: MissedTarget[] = figures.flatMap((v) =>
     metricKeys

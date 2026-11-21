@@ -229,15 +229,26 @@ function unpackedSize(zip: Buffer): number {
   return total;
 }
 
-async function read(buffer: Buffer) {
-  if (buffer.length > 10 * 1024 * 1024 || unpackedSize(buffer) > MAX_UNPACKED_BYTES)
-    throw new AppError(413, "workbook_too_large", "That workbook is too large to import. Keep it to the template's two sheets.");
+/** Opens an uploaded workbook, refusing one that is too large or that unpacks into far more than it seems. For other features too. */
+export async function loadWorkbook(buffer: Buffer, hint: { tooLarge: string; unreadable: string }): Promise<ExcelJS.Workbook> {
+  if (buffer.length > 10 * 1024 * 1024 || unpackedSize(buffer) > MAX_UNPACKED_BYTES) throw new AppError(413, "workbook_too_large", hint.tooLarge);
   const wb = new ExcelJS.Workbook();
   try {
     await wb.xlsx.load(buffer as unknown as ArrayBuffer);
   } catch {
-    throw new AppError(400, "not_a_workbook", "That file could not be read as an Excel workbook. Use the template.");
+    throw new AppError(400, "not_a_workbook", hint.unreadable);
   }
+  return wb;
+}
+
+/** The text of a cell as a person sees it: a formula gives its result, rich text its text. */
+export const cellText = (raw: unknown): string => str(raw);
+
+async function read(buffer: Buffer) {
+  const wb = await loadWorkbook(buffer, {
+    tooLarge: "That workbook is too large to import. Keep it to the template's two sheets.",
+    unreadable: "That file could not be read as an Excel workbook. Use the template.",
+  });
   const sheet = (name: string, columns: readonly string[]) => {
     const ws = wb.getWorksheet(name);
     if (!ws) throw new AppError(400, "sheet_missing", `The workbook has no sheet called "${name}". Use the template.`);

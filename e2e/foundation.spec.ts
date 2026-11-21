@@ -257,11 +257,10 @@ test.describe("throughout", () => {
 
   test("X-2 sections not built yet say what will live there", async ({ page, context }) => {
     await signInAs(context, MEMBER);
-    // Performance was built in M3; Ask and RFPs are still to come.
+    // Performance was built in M3 and RFPs in M6; Ask is still to come.
     await page.goto("/ask");
     await expect(page.getByRole("heading", { name: "Nothing to ask about yet" })).toBeVisible();
-    await page.getByRole("link", { name: "RFPs" }).click();
-    await expect(page.getByRole("heading", { name: "No RFPs yet" })).toBeVisible();
+    await expect(page.getByText("This part of the app has not been built yet.")).toBeVisible();
   });
 
   test("the theme switch changes to dark and is remembered", async ({ page, context }) => {

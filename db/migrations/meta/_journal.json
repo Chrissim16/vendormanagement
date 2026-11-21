@@ -64,6 +64,13 @@
       "when": 1795280834278,
       "tag": "0008_warm_ultimates",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795284408473,
+      "tag": "0009_vengeful_hex",
+      "breakpoints": true
     }
   ]
 }

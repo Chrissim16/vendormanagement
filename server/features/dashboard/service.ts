@@ -4,6 +4,7 @@ import { addQuarter, quarterOf, type Quarter, type Scorecard } from "../../../sh
 import { budgetView } from "../../../shared/sow";
 import type { Queryable } from "../../platform/ports/types";
 import { defaultPeriod, getSpend } from "../invoices/service";
+import { openRfps as listOpenRfps } from "../rfp/service";
 import { listScorecards, type ScorecardContext } from "../scorecards/service";
 import { getSettings } from "../settings/service";
 import * as repo from "./repo";
@@ -54,8 +55,8 @@ export const dueQuarter = (today: Day): Quarter => addQuarter(quarterOf(today), 
 /** Active agreements, as they stand today, whose end date falls between two days, soonest first. */
 export const agreementsEnding = repo.agreementsEnding;
 
-/** RFPs are built in a later milestone; until then none is open. */
-export const openRfps = async (): Promise<OpenRfp[]> => [];
+/** The RFPs still running, with their stage (D-1, D-2). */
+export const openRfps = (db: Queryable): Promise<OpenRfp[]> => listOpenRfps(db);
 
 /** The landing page (D-1). Warnings and risk flags come from their own list. */
 export async function getDashboard(ctx: OverviewContext): Promise<Dashboard> {
@@ -67,7 +68,7 @@ export async function getDashboard(ctx: OverviewContext): Promise<Dashboard> {
     getSpend(ctx.db, period.from, period.to),
     allScorecards(ctx),
     repo.scoredVendors(ctx.db),
-    openRfps(),
+    openRfps(ctx.db),
   ]);
   const ofQuarter = new Map(cards.filter((c) => c.quarter === quarter).map((c) => [c.vendorId, c]));
   const due: ScorecardDueRow[] = vendors

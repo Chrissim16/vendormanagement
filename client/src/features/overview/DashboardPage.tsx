@@ -292,12 +292,12 @@ export function DashboardPage() {
               {!d ? (
                 <Loading rows={1} />
               ) : d.rfps.length === 0 ? (
-                <Nothing>No RFP is open. A running RFP is listed here with its stage once the RFP part of the app is built.</Nothing>
+                <Nothing>No RFP is open. A running RFP is listed here with its stage; a new one is started under RFPs.</Nothing>
               ) : (
                 <ul aria-label="Open RFPs" className="flex flex-col">
                   {d.rfps.map((r) => (
                     <li key={r.id}>
-                      <RowLink to="/rfps">
+                      <RowLink to={`/rfps/${r.id}`}>
                         <span className="min-w-0 flex-1 truncate font-semibold">{r.title}</span>
                         <span className="text-[13px] text-ink-2">{r.stage}</span>
                       </RowLink>
