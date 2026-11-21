@@ -7,7 +7,6 @@ import { listRfps } from "../rfp/service";
 import { known, runLookup, type ChatContext } from "./lookups";
 
 export type { ChatContext };
-export { readMissingText } from "./documents";
 
 /** AI-2, said for this page: there is nothing to do by hand here, but every figure has its own page. */
 const unavailable = () =>
@@ -65,7 +64,12 @@ export async function askQuestion(ctx: ChatContext, input: unknown, by: User): P
       subjectId: by.id,
       model,
       inputSummary: question,
-      output: { ...written, lookups: lookups.map((l) => ({ name: l.name, title: l.title, count: l.count, totals: l.totals })) },
+      output: {
+        ...written,
+        sources,
+        passages: passages.map((p) => ({ document: p.document, part: p.part, where: p.where })),
+        lookups: lookups.map((l) => ({ name: l.name, title: l.title, count: l.count, totals: l.totals })),
+      },
       at,
     });
     return { id: row.id, question, answered: written.answered, answer: written.answer, sources, passages, lookups, model, createdAt: at.toISOString() };

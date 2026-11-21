@@ -48,7 +48,7 @@ export const lookupArgs = {
     endsFrom: opt(day),
     endsTo: opt(day),
   }),
-  renewals: z.object({ withinDays: opt(z.number().int().min(1).max(730)) }),
+  renewals: z.object({ withinDays: opt(z.union([z.literal(30), z.literal(60), z.literal(90), z.literal(180)])) }),
   sow: z.object({ title: name, vendor: opt(name) }),
   sow_budgets: z.object({ vendor: opt(name) }),
   invoices: z.object({ vendor: opt(name), from: opt(day), to: opt(day), search: opt(name) }),
@@ -74,7 +74,7 @@ export const lookupGuide: Record<LookupName, string> = {
   agreements:
     "The agreement list: MSAs, SOWs, subscriptions, NDAs and data processing agreements, with status, dates and value. args: vendor, kind (msa | sow | subscription | nda | dpa), status (draft | in_negotiation | out_for_signature | active | ended), search (part of a title or reference), owner, endsFrom and endsTo (YYYY-MM-DD, the end or renewal date falls on or between them).",
   renewals:
-    "Subscriptions whose notice deadline has passed or is coming up and that have no renewal decision yet. args: withinDays (how far ahead to look; left out, the team's usual window).",
+    "Subscriptions whose notice deadline has passed or is coming up and that have no renewal decision yet. args: withinDays (how far ahead to look: 30, 60, 90 or 180; left out, the team's usual window).",
   sow: "One SOW in full: budget and what was invoiced, milestones, change requests and consultants. args: title (the SOW's title or part of it), vendor.",
   sow_budgets: "Every active SOW's budget against what has been invoiced, the most used first. args: vendor.",
   invoices: "The invoice list with its totals per currency. args: vendor, from and to (YYYY-MM-DD, by invoice date), search (invoice number or description).",

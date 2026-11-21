@@ -1,9 +1,8 @@
-import { and, eq, isNotNull, or, sql } from "drizzle-orm";
-import { agreements, documents, rfpCandidates, rfps, vendors } from "../../../db/schema";
 import { agreementName } from "../../../shared/agreements";
 import { MAX_PASSAGES, type AskPassage } from "../../../shared/ask";
-import type { Queryable, StoragePort } from "../../platform/ports/types";
-import { extractText, PART_BREAK, partName } from "../../platform/text";
+import type { Queryable } from "../../platform/ports/types";
+import { PART_BREAK, partName } from "../../platform/text";
+import { documentsWithText } from "../agreements/service";
 
 /**
  * Finding the passages of uploaded documents that a question is about (C-1). The text of
@@ -74,32 +73,12 @@ export interface Found {
 }
 
 export async function findPassages(db: Queryable, text: string, vendorId?: string): Promise<Found> {
-  const candidateVendor = sql<string | null>`(select v.name from vendors v where v.id = ${rfpCandidates.vendorId})`;
-  const rows = await db
-    .select({
-      id: documents.id,
-      title: documents.title,
-      fileName: documents.fileName,
-      text: documents.extractedText,
-      agreementId: agreements.id,
-      agreementKind: agreements.kind,
-      agreementTitle: agreements.title,
-      vendorName: vendors.name,
-      rfpId: rfps.id,
-      rfpTitle: rfps.title,
-      candidateVendor,
-    })
-    .from(documents)
-    .leftJoin(agreements, eq(agreements.id, documents.agreementId))
-    .leftJoin(vendors, eq(vendors.id, agreements.vendorId))
-    .leftJoin(rfpCandidates, eq(rfpCandidates.id, documents.rfpCandidateId))
-    .leftJoin(rfps, eq(rfps.id, rfpCandidates.rfpId))
-    .where(and(isNotNull(documents.extractedText), vendorId ? or(eq(agreements.vendorId, vendorId), eq(rfpCandidates.vendorId, vendorId)) : undefined));
+  const rows = await documentsWithText(db, vendorId);
   const readable = rows.filter((r) => r.text);
   const terms = termsOf(text);
   if (!terms.length) return { passages: [], readable: readable.length, unreadable: rows.length - readable.length };
 
-  const all: { row: (typeof rows)[number]; part: string | null; text: string; has: Set<string>; opens: boolean }[] = [];
+  const all: { row: Awaited<ReturnType<typeof documentsWithText>>[number]; part: string | null; text: string; has: Set<string>; opens: boolean }[] = [];
   for (const row of readable) {
     const parts = row.text!.split(PART_BREAK);
     parts.forEach((part, i) => {
@@ -133,32 +112,4 @@ export async function findPassages(db: Queryable, text: string, vendorId?: strin
     readable: readable.length,
     unreadable: rows.length - readable.length,
   };
-}
-
-/**
- * Reads the text of documents attached before the app could read them. Safe to run twice:
- * a document that has been read, also when it held no words, is not read again.
- */
-export async function readMissingText(db: Queryable, storage: StoragePort): Promise<{ read: number; failed: number }> {
-  const rows = await db
-    .select({ id: documents.id, fileName: documents.fileName, storageKey: documents.storageKey })
-    .from(documents)
-    .where(sql`${documents.extractedText} is null`);
-  let read = 0;
-  let failed = 0;
-  for (const row of rows) {
-    try {
-      const data = await storage.get(row.storageKey);
-      await db
-        .update(documents)
-        .set({ extractedText: await extractText(row.fileName.split(".").pop()?.toLowerCase() ?? "", data) })
-        .where(eq(documents.id, row.id));
-      read++;
-    } catch (e) {
-      // The file is missing or the store cannot be reached; it is tried again next time.
-      console.error(`Could not read the document ${row.id}:`, (e as Error).message);
-      failed++;
-    }
-  }
-  return { read, failed };
 }

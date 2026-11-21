@@ -15,11 +15,12 @@ const MAX_CHARS = 400_000;
 const MAX_PARTS = 400;
 const MAX_UNPACKED = 60 * 1024 * 1024;
 
-/** The database refuses a zero byte, and control characters carry no words. */
+/** The database refuses a zero byte, and control characters carry no words. Cut to size first, so a huge text is never worked on whole. */
 const clean = (s: string) =>
-  [...s]
-    .map((c) => (c.charCodeAt(0) < 32 && c !== "\n" && c !== "\t" ? " " : c))
-    .join("")
+  s
+    .slice(0, MAX_CHARS)
+    // eslint-disable-next-line no-control-regex -- control characters are exactly what is being removed.
+    .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, " ")
     .replace(/[ \t]+/g, " ")
     .replace(/ ?\n ?/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
@@ -44,40 +45,66 @@ export function unwrapped(page: string): string {
 async function pdfParts(data: Buffer): Promise<string[]> {
   const { getDocumentProxy } = await import("unpdf");
   const doc = await getDocumentProxy(new Uint8Array(data));
-  const parts: string[] = [];
-  let chars = 0;
-  for (let n = 1; n <= Math.min(doc.numPages, MAX_PARTS) && chars < MAX_CHARS; n++) {
-    const content = await (await doc.getPage(n)).getTextContent();
-    let text = "";
-    for (const item of content.items as { str?: string; hasEOL?: boolean }[]) text += (item.str ?? "") + (item.hasEOL ? "\n" : "");
-    text = unwrapped(text);
-    parts.push(text);
-    chars += text.length;
+  try {
+    const parts: string[] = [];
+    let chars = 0;
+    for (let n = 1; n <= Math.min(doc.numPages, MAX_PARTS) && chars < MAX_CHARS; n++) {
+      const content = await (await doc.getPage(n)).getTextContent();
+      let text = "";
+      for (const item of content.items as { str?: string; hasEOL?: boolean }[]) text += (item.str ?? "") + (item.hasEOL ? "\n" : "");
+      text = unwrapped(text);
+      parts.push(text);
+      chars += text.length;
+    }
+    return parts;
+  } finally {
+    // Without this every file read would leave its parsed pages in memory.
+    await (doc as unknown as { destroy?: () => Promise<void> }).destroy?.().catch(() => undefined);
   }
-  return parts;
 }
 
 const entities: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
 const decode = (s: string) =>
-  s.replace(/&(#x?[0-9a-f]+|\w+);/gi, (m, e: string) =>
-    e[0] === "#" ? String.fromCodePoint(e[1]?.toLowerCase() === "x" ? parseInt(e.slice(2), 16) : Number(e.slice(1))) : (entities[e] ?? m),
-  );
+  s.replace(/&(#x?[0-9a-f]{1,8}|[a-z]{2,6});/gi, (m, e: string) => {
+    if (e[0] !== "#") return entities[e.toLowerCase()] ?? m;
+    const code = e[1]?.toLowerCase() === "x" ? parseInt(e.slice(2), 16) : Number(e.slice(1));
+    return Number.isInteger(code) && code > 0 && code <= 0x10ffff && !(code >= 0xd800 && code <= 0xdfff) ? String.fromCodePoint(code) : " ";
+  });
+
+/** More XML than any real contract has; what comes after is left out. */
+const MAX_XML = 8 * 1024 * 1024;
+
+/**
+ * The text of a Word file's main part, read in one pass from left to right, so that no
+ * file, however it is built, takes more than a moment. Only the words a reader sees are
+ * kept: text that was deleted with tracked changes and field codes are left out.
+ */
+export function wordText(xmlFull: string): string {
+  const xml = xmlFull.slice(0, MAX_XML);
+  let out = "";
+  let keep = false;
+  let at = 0;
+  while (at < xml.length && out.length < MAX_CHARS * 2) {
+    const open = xml.indexOf("<", at);
+    if (open < 0) break;
+    if (keep) out += xml.slice(at, open);
+    const close = xml.indexOf(">", open + 1);
+    if (close < 0) break;
+    const tag = xml.slice(open + 1, Math.min(close, open + 40));
+    const name = /^\/?[\w:]+/.exec(tag)?.[0] ?? "";
+    if (name === "w:t") keep = !xml.startsWith("/>", close - 1);
+    else if (name === "/w:t") keep = false;
+    else if (name === "w:tab") out += "\t";
+    else if (name === "w:br" || name === "w:cr" || name === "/w:p") out += "\n";
+    at = close + 1;
+  }
+  return decode(out);
+}
 
 async function wordParts(data: Buffer): Promise<string[]> {
   if (!unpacksWithin(data, MAX_UNPACKED)) return [];
   const xml = await (await JSZip.loadAsync(data)).file("word/document.xml")?.async("string");
-  if (!xml) return [];
-  // One line per paragraph; a table cell is a paragraph too.
-  const paragraphs = xml.split(/<\/w:p>/).map((p) =>
-    decode(
-      p
-        .replace(/<w:tab\/>/g, "\t")
-        .replace(/<w:br\/>/g, "\n")
-        .replace(/<w:(?!t[ >])[^>]*>|<\/w:(?!t>)[^>]*>/g, "")
-        .replace(/<[^>]+>/g, ""),
-    ),
-  );
-  return [paragraphs.join("\n")];
+  return xml ? [wordText(xml)] : [];
 }
 
 const cell = (v: unknown): string => {
@@ -115,7 +142,7 @@ export async function extractText(ext: string, data: Buffer): Promise<string> {
   try {
     const parts = ext === "pdf" ? await pdfParts(data) : ext === "docx" ? await wordParts(data) : ext === "xlsx" ? await sheetParts(data) : [];
     const text = parts.map(clean).join(PART_BREAK).slice(0, MAX_CHARS);
-    return text.replace(/\f/g, "").trim() ? text : "";
+    return text.split(PART_BREAK).some((part) => part.trim()) ? text : "";
   } catch (e) {
     console.error(`Could not read the text of a ${ext} file:`, (e as Error).message);
     return "";

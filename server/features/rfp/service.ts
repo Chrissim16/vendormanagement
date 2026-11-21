@@ -90,7 +90,21 @@ export async function getRfp(db: Queryable, id: string, today: Day): Promise<Rfp
           .innerJoin(users, eq(users.id, rfpScores.evaluatorUserId))
           .where(inArray(rfpScores.candidateId, candidateIds))
           .orderBy(asc(personName)),
-    none ? [] : db.select().from(documents).where(inArray(documents.rfpCandidateId, candidateIds)).orderBy(desc(documents.createdAt)),
+    none
+      ? []
+      : db
+          // Not the document's text, which can be long and is only needed when a question is asked.
+          .select({
+            id: documents.id,
+            rfpCandidateId: documents.rfpCandidateId,
+            fileName: documents.fileName,
+            sizeBytes: documents.sizeBytes,
+            createdAt: documents.createdAt,
+            createdBy: documents.createdBy,
+          })
+          .from(documents)
+          .where(inArray(documents.rfpCandidateId, candidateIds))
+          .orderBy(desc(documents.createdAt)),
     Promise.all(candidateRows.map((c) => getVendor(db, c.vendorId, today))),
   ]);
   const candidates: Candidate[] = candidateRows.map((c, i) => ({

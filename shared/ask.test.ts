@@ -32,6 +32,9 @@ describe("the look-ups a model may choose", () => {
     expect(lookupArgs.agreements.safeParse({ endsFrom: "2026-02-30" }).success).toBe(false);
     expect(lookupArgs.helpdesk.safeParse({ month: "2026-13" }).success).toBe(false);
     expect(lookupArgs.vendor.safeParse({}).success).toBe(false);
+    // The windows the Renewals page offers, and no other.
+    expect(lookupArgs.renewals.safeParse({ withinDays: 180 }).success).toBe(true);
+    expect(lookupArgs.renewals.safeParse({ withinDays: 500 }).success).toBe(false);
   });
   it("a question is trimmed and bounded", () => {
     expect(askSchema.parse({ question: "  How many?  " })).toEqual({ question: "How many?", earlier: [] });

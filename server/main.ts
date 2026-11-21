@@ -1,5 +1,5 @@
 import { createApp, performanceContext, scorecardContext } from "./app";
-import { readMissingText } from "./features/chat/service";
+import { readMissingText } from "./features/agreements/service";
 import { runMonthlyProposals } from "./features/scorecards/proposals";
 import { syncAll } from "./features/performance/service";
 import { every } from "./platform/jobs/schedule";

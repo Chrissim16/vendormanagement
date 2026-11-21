@@ -31,9 +31,23 @@ describe("C-1 what an answer may say", () => {
   });
   it("a figure that was not looked up is refused, also one hidden in a title", () => {
     expect(check("17 SOWs end this quarter.", ["A1"])).toContain("17");
-    expect(check("Together they are worth € 184,000.00.", ["A1", "A2"])).toContain("184000");
+    expect(check("Together they are worth € 184,000.00.", ["A1", "A2"])).toContain("€184000");
     // The digits of a title count only when the whole title is quoted.
     expect(check("The budget is 999,999.", ["A2"])).toContain("999999");
+  });
+  it("a date, a reference or an amount in another currency does not make a wrong count or amount pass", () => {
+    const pounds = [lookup({ rows: [lookup().rows[0]!, { ...lookup().rows[1]!, facts: { Vendor: "Vendor B (invented)", "End date": "15 Dec 2026", Budget: "£ 64,000.00" } }] })];
+    // 31 and 21 are days of dates in the input, 15 is a day too, and A12 would be a reference.
+    expect(check("31 SOWs end this quarter.", ["A1"], true, pounds)).toContain("31");
+    expect(check("21 SOWs end this quarter.", ["A1"], true, pounds)).toContain("21");
+    expect(check("15 SOWs end, worth € 64,000.00 in total.", ["A1"], true, pounds)).toEqual(expect.stringContaining("15"));
+    expect(check("It is worth € 64,000.00.", ["A2"], true, pounds)).toContain("€64000");
+    expect(check("It is worth £ 64,000.00 and ends on 15 December 2026.", ["A2"], true, pounds)).toBeNull();
+    expect(check("It ends on 16 Dec 2026.", ["A2"], true, pounds)).toContain("16 dec 2026");
+    expect(check("Both end in Dec 2026, in 2026, one on 9 Dec.", ["A1", "A2"], true, pounds)).toBeNull();
+    const many = [lookup({ rows: Array.from({ length: 12 }, (_, n) => ({ ref: `A${n + 1}`, label: `Thing ${"abcdefghijkl"[n]}`, href: "/a", facts: {} })), count: 40 })];
+    expect(check("12 of them matter.", ["A12"], true, many)).toContain("12");
+    expect(check("40 match.", ["A12"], true, many)).toBeNull();
   });
   it("a source must be one that was looked up, and an answer about records must name one", () => {
     expect(check("SOW 11 Reporting rebuild ends on 9 Dec 2026.", ["B7"])).toContain("B7");

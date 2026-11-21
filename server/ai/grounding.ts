@@ -39,3 +39,52 @@ export function ungrounded(text: string, given: unknown, names: string[] = []): 
   const known = new Set(numbersIn(without(typeof given === "string" ? given : JSON.stringify(given), names.map((n) => JSON.stringify(n).slice(1, -1)).concat(names))));
   return [...new Set(numbersIn(without(text, names)).filter((n) => !/^\d$/.test(n) && !known.has(n)))];
 }
+
+const MONTH = "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)";
+const DATES = new RegExp(`\\b(\\d{1,2}) (${MONTH})(?: (\\d{4}))?\\b|\\b(${MONTH}) (\\d{4})\\b|\\bQ([1-4]) (\\d{4})\\b`, "gi");
+const MONEY = /([€£])\s?(\d[\d.,]*)/g;
+const mon = (m: string) => m.slice(0, 3).toLowerCase();
+
+/** The dates and amounts in a text, each as one token, and the text without them. */
+function tokens(text: string) {
+  const dates: string[] = [];
+  const years: string[] = [];
+  const money: string[] = [];
+  let rest = text.replace(MONEY, (_m, sign: string, n: string) => {
+    money.push(sign + normal(n));
+    return " ";
+  });
+  rest = rest.replace(DATES, (_m, d?: string, m1?: string, y1?: string, m2?: string, y2?: string, q?: string, y3?: string) => {
+    if (d && m1) dates.push(y1 ? `${Number(d)} ${mon(m1)} ${y1}` : `${Number(d)} ${mon(m1)}`);
+    if (d && m1 && y1) dates.push(`${Number(d)} ${mon(m1)}`, `${mon(m1)} ${y1}`);
+    if (m2 && y2) dates.push(`${mon(m2)} ${y2}`);
+    if (q && y3) dates.push(`q${q} ${y3}`);
+    for (const y of [y1, y2, y3]) if (y) years.push(y);
+    return " ";
+  });
+  return { dates, years, money, rest };
+}
+
+/**
+ * The figures in `text` that the model was not given, judged more strictly than
+ * `ungrounded`, for an answer that states counts and amounts as facts (C-1).
+ *
+ * A date counts as one thing and an amount counts with its currency: "9 Dec 2026" in the
+ * input does not make a bare 9 or 2026 quotable as a count, and "£ 64,000.00" does not
+ * make "€ 64,000.00" quotable. A year by itself may be named when a date in the input has
+ * it. Everything else follows `ungrounded`: names people typed are not figures, and single
+ * digits are let through.
+ */
+export function ungroundedFigures(text: string, given: unknown, names: string[] = []): string[] {
+  const typed = names.filter((n) => /\p{L}/u.test(n));
+  const source = tokens(without(typeof given === "string" ? given : JSON.stringify(given), typed.map((n) => JSON.stringify(n).slice(1, -1)).concat(typed)));
+  const said = tokens(without(text, typed));
+  const [dates, money, years, plain] = [new Set(source.dates), new Set(source.money), new Set(source.years), new Set(numbersIn(source.rest))];
+  return [
+    ...new Set([
+      ...said.dates.filter((d) => !dates.has(d)),
+      ...said.money.filter((m) => !money.has(m)),
+      ...numbersIn(said.rest).filter((n) => !/^\d$/.test(n) && !plain.has(n) && !years.has(n)),
+    ]),
+  ];
+}

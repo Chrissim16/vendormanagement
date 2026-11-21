@@ -4,7 +4,7 @@ import JSZip from "jszip";
 import PDFDocument from "pdfkit";
 import { describe, expect, it } from "vitest";
 import { passagesOf } from "../features/chat/documents";
-import { extractText, PART_BREAK, partName, unwrapped } from "./text";
+import { extractText, PART_BREAK, partName, unwrapped, wordText } from "./text";
 
 const pdf = (pages: string[]) =>
   new Promise<Buffer>((resolve) => {
@@ -81,6 +81,22 @@ describe("C-1 reading the words in an uploaded document", () => {
     wb.addWorksheet("S").addRow(["a\u0000b\u0007c"]);
     const read = await extractText("xlsx", Buffer.from(await wb.xlsx.writeBuffer()));
     expect([...read].filter((c) => c.charCodeAt(0) < 9)).toEqual([]);
+  });
+});
+
+describe("C-1 reading a Word file cannot stall the app, and reads only what a reader sees", () => {
+  it("a file built of unfinished tags is read in a moment", () => {
+    const started = Date.now();
+    expect(wordText("<w:".repeat(400_000))).toBe("");
+    expect(wordText("<".repeat(1_000_000) + "<w:t>ok</w:t>")).toBe("");
+    expect(wordText(`<w:p><w:r><w:t>${"<".repeat(200_000)}</w:t></w:r></w:p>`)).toBe("\n");
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+  it("text deleted with tracked changes and field codes are left out; tabs, breaks and odd character codes are handled", () => {
+    const xml =
+      '<w:p><w:r><w:t xml:space="preserve">Liability is limited </w:t></w:r><w:del><w:r><w:delText>and unlimited for data loss</w:delText></w:r></w:del>' +
+      '<w:r><w:instrText> PAGEREF _Toc1 </w:instrText></w:r><w:r><w:t>to the fees.</w:t><w:tab/><w:t>A&amp;B &#8364; &#99999999; &#xD800;</w:t><w:br/><w:t/><w:t>Next</w:t></w:r></w:p><w:tbl><w:t>cell</w:t></w:tbl>';
+    expect(wordText(xml)).toBe("Liability is limited to the fees.\tA&B €    \nNext\ncell");
   });
 });
 

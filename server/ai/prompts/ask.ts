@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { lookupArgs, lookupGuide, lookupNames, MAX_LOOKUPS, periodsFor, type AskLookup, type LookupCall } from "../../../shared/ask";
 import { formatDay, type Day } from "../../../shared/dates";
-import { ungrounded } from "../grounding";
+import { ungroundedFigures } from "../grounding";
 import type { Prompt } from "../index";
 
 // ---------- Step one: which look-ups answer the question
@@ -89,7 +89,7 @@ const refsOf = (lookups: AskLookup[]) => new Set(lookups.flatMap((l) => [...l.ro
  */
 export const askAnswer: Prompt<AskAnswerInput, AskWritten> = {
   kind: "ask_answer",
-  version: "ask-answer/1",
+  version: "ask-answer/2",
   tier: "strong",
   maxTokens: 900,
   system: [
@@ -124,7 +124,9 @@ export const askAnswer: Prompt<AskAnswerInput, AskWritten> = {
     const stray = o.sources.filter((s) => !refs.has(s));
     if (stray.length) return `the answer names sources that were not looked up: ${stray.join(", ")}`;
     if (o.answered && !o.sources.length && refs.size) return "the answer names no source although records were looked up";
-    const extra = ungrounded(o.answer, askAnswer.input(i), i.names);
+    // What the answer may quote: the question and the look-ups as the model saw them, without the references, which are labels and not figures.
+    const given = JSON.parse(JSON.stringify(askAnswer.input(i), (key, value: unknown) => (key === "ref" ? undefined : value))) as unknown;
+    const extra = ungroundedFigures(o.answer, given, i.names);
     return extra.length ? `the answer quotes ${extra.join(", ")}, which is not among the figures the app looked up` : null;
   },
 };

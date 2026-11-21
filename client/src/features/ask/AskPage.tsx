@@ -164,12 +164,21 @@ export function AskPage() {
   const [text, setText] = useState("");
   const [fresh, setFresh] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  // "Start over" while an answer is on its way: that answer belongs to the conversation that was cleared, and is dropped.
+  const conversation = useRef(0);
   const ask = useMutation({
-    mutationFn: (question: string) => api<AskAnswer>("/ask", { body: { question, earlier: turns.slice(-MAX_EARLIER).map((t) => t.question) } }),
-    onSuccess: (a) => {
-      const next = [...turns, a];
-      setTurns(next);
-      keep(next);
+    mutationFn: async (question: string) => {
+      const started = conversation.current;
+      const answer = await api<AskAnswer>("/ask", { body: { question, earlier: turns.slice(-MAX_EARLIER).map((t) => t.question) } });
+      return { answer, current: started === conversation.current };
+    },
+    onSuccess: ({ answer: a, current }) => {
+      if (!current) return;
+      setTurns((before) => {
+        const next = [...before, a];
+        keep(next);
+        return next;
+      });
       setFresh(a.id);
       // What was typed is only cleared once it has been answered (X-3).
       setText((t) => (t.trim() === a.question ? "" : t));
@@ -185,6 +194,8 @@ export function AskPage() {
   const arrived = params.get("q");
   const asked = useRef<string | null>(null);
   useEffect(() => {
+    // Once the question is out of the address, the same one may arrive again.
+    if (!arrived) asked.current = null;
     if (!arrived || asked.current === arrived) return;
     asked.current = arrived;
     setText(arrived.slice(0, MAX_QUESTION));
@@ -198,6 +209,7 @@ export function AskPage() {
     send(text);
   };
   const clear = () => {
+    conversation.current++;
     setTurns([]);
     keep([]);
     ask.reset();

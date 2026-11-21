@@ -139,7 +139,14 @@ const documentColumns = {
 };
 export const documentsOf = (db: Queryable, agreementId: string) =>
   db.select(documentColumns).from(documents).where(eq(documents.agreementId, agreementId)).orderBy(desc(documents.createdAt));
-export const getDocument = async (db: Queryable, id: string) => (await db.select().from(documents).where(eq(documents.id, id)))[0];
+/** One document without its text. */
+export const getDocument = async (db: Queryable, id: string) =>
+  (
+    await db
+      .select({ ...documentColumns, agreementId: documents.agreementId, rfpCandidateId: documents.rfpCandidateId, storageKey: documents.storageKey })
+      .from(documents)
+      .where(eq(documents.id, id))
+  )[0];
 export const insertDocument = async (db: Queryable, d: typeof documents.$inferInsert) => (await db.insert(documents).values(d).returning(documentColumns))[0]!;
 export const deleteDocument = (db: Queryable, id: string) => db.delete(documents).where(eq(documents.id, id));
 

@@ -11,6 +11,7 @@ import { sowBudgetRows } from "../dashboard/service";
 import { defaultPeriod, getSpend, listInvoices } from "../invoices/service";
 import { getOverview, getVendorPerformance } from "../performance/service";
 import { getRfp, listRfps, rfpsOfVendor } from "../rfp/service";
+import { getSettings } from "../settings/service";
 import { listScorecards, type ScorecardContext } from "../scorecards/service";
 import { getDelivery } from "../sow/service";
 import { getVendor, listPeople, listVendors } from "../vendors/service";
@@ -30,6 +31,8 @@ export type ChatContext = ScorecardContext;
 export interface Known {
   vendors: { id: string; name: string }[];
   people: { id: string; name: string }[];
+  /** What the reader must be told about how a name was understood; filled while one look-up runs. */
+  notes: string[];
 }
 
 export async function known(ctx: ChatContext): Promise<Known> {
@@ -40,7 +43,7 @@ export async function known(ctx: ChatContext): Promise<Known> {
     if (vendors.length >= total || !items.length) break;
   }
   const people = (await listPeople(ctx.db)).map((p) => ({ id: p.id, name: p.displayName ?? p.email }));
-  return { vendors, people };
+  return { vendors, people, notes: [] };
 }
 
 /** A row before it has its reference. `names` are the names and titles people typed in it, which are not figures (see `server/ai/grounding.ts`). */
@@ -50,35 +53,30 @@ const nothing = (title: string, note: string): Result => ({ title, href: null, c
 
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 /** The one entry a name points to: the exact name, or else the only one that contains it or is contained in it. */
-function pick<T extends { name: string }>(list: T[], asked: string): T | { problem: string } {
+function pick<T extends { name: string }>(list: T[], asked: string): { found: T; exact: boolean } | { problem: string } {
   const exact = list.filter((v) => same(v.name, asked));
-  if (exact.length === 1) return exact[0]!;
+  if (exact.length === 1) return { found: exact[0]!, exact: true };
   const q = asked.trim().toLowerCase();
   const near = list.filter((v) => v.name.toLowerCase().includes(q) || q.includes(v.name.toLowerCase()));
-  if (near.length === 1) return near[0]!;
-  return {
-    problem: near.length
-      ? `more than one matches “${asked}”: ${near
-          .slice(0, 6)
-          .map((v) => v.name)
-          .join(", ")}`
-      : `none is called “${asked}”`,
-  };
+  if (near.length === 1) return { found: near[0]!, exact: false };
+  const some = near
+    .slice(0, 6)
+    .map((v) => v.name)
+    .join(", ");
+  return { problem: near.length ? `more than one matches “${asked}”: ${some}` : `none is called “${asked}”` };
 }
 
 class Unknown extends Error {}
-const vendorOf = (k: Known, asked: string | undefined) => {
+/** A name that is not written exactly as the app has it is said, so the reader knows whom the figures are about. */
+const named = (k: Known, list: { id: string; name: string }[], asked: string | undefined, what: string) => {
   if (!asked) return undefined;
-  const v = pick(k.vendors, asked);
-  if ("problem" in v) throw new Unknown(`The app could not tell which vendor is meant: ${v.problem}.`);
-  return v;
+  const v = pick(list, asked);
+  if ("problem" in v) throw new Unknown(`The app could not tell which ${what} is meant: ${v.problem}.`);
+  if (!v.exact) k.notes.push(`“${asked}” was taken to mean ${v.found.name}.`);
+  return v.found;
 };
-const personOf = (k: Known, asked: string | undefined) => {
-  if (!asked) return undefined;
-  const p = pick(k.people, asked);
-  if ("problem" in p) throw new Unknown(`The app could not tell which colleague is meant: ${p.problem}.`);
-  return p;
-};
+const vendorOf = (k: Known, asked: string | undefined) => named(k, k.vendors, asked, "vendor");
+const personOf = (k: Known, asked: string | undefined) => named(k, k.people, asked, "colleague");
 
 const query = (o: Record<string, string | number | undefined>) => {
   const p = new URLSearchParams();
@@ -94,7 +92,11 @@ const dayOr = (d: Day | null | undefined) => (d ? formatDay(d) : "–");
 const facts = (o: Record<string, string | null | undefined | false>): Record<string, string> =>
   Object.fromEntries(Object.entries(o).filter((e): e is [string, string] => typeof e[1] === "string" && e[1] !== ""));
 const page = { page: 1, pageSize: MAX_ROWS };
-const cut = (text: string, max = 400) => (text.length > max ? `${text.slice(0, text.lastIndexOf(" ", max))} …` : text);
+const cut = (text: string, max = 400) => {
+  if (text.length <= max) return text;
+  const at = text.lastIndexOf(" ", max);
+  return `${text.slice(0, at > 0 ? at : max)} …`;
+};
 
 const vendorRow = (v: Vendor): Row => ({
   label: v.name,
@@ -188,6 +190,8 @@ const runners: { [N in LookupName]: Runner<N> } = {
       rows: [
         {
           ...self,
+          // What people typed about the vendor is text, not figures.
+          names: [...(self.names ?? []), detail.legalName, detail.website, contacts.join("; "), detail.description && cut(detail.description)],
           facts: {
             ...self.facts,
             ...facts({
@@ -224,7 +228,7 @@ const runners: { [N in LookupName]: Runner<N> } = {
         a.kind ? `${kindShort[a.kind]}s` : "Agreements",
         vendor?.name,
         a.status && statusLabels[a.status],
-        a.search && `title or reference contains “${a.search}”`,
+        a.search && `title, reference or vendor contains “${a.search}”`,
         owner && `owned by ${owner.name}`,
         between("ending", endsFrom, endsTo),
       ),
@@ -238,21 +242,19 @@ const runners: { [N in LookupName]: Runner<N> } = {
   },
 
   async renewals(ctx, a) {
-    const list = await listRenewals(ctx.db, a.withinDays, undefined, ctx.today());
+    // The Renewals page offers these windows and the team's own; the same number of days is used here and said in the title.
+    const usual = (await getSettings(ctx.db)).noticeDays;
+    const days = a.withinDays ?? usual;
+    const list = await listRenewals(ctx.db, days, undefined, ctx.today());
     return {
-      title: title(
-        "Renewals without a decision",
-        a.withinDays ? `notice deadline passed or within ${a.withinDays} days` : "notice deadline passed or within the team's usual window",
-      ),
-      href: `/agreements/renewals${query({ window: a.withinDays })}`,
+      title: title("Renewals without a decision", `notice deadline passed or within ${days} days${days === usual ? ", the team's usual window" : ""}`),
+      href: `/agreements/renewals${query({ window: days === usual ? undefined : days })}`,
       count: list.length,
       totals: [{ label: "Notice deadline already passed", value: String(list.filter((r) => r.renewalState === "overdue").length) }],
-      rows: list
-        .slice(0, MAX_ROWS)
-        .map((r) => ({
-          ...agreementRow(r),
-          facts: { ...agreementRow(r).facts, "Notice deadline": `${dayOr(r.noticeDeadline)} (${r.renewalState === "overdue" ? "passed" : "coming up"})` },
-        })),
+      rows: list.slice(0, MAX_ROWS).map((r) => ({
+        ...agreementRow(r),
+        facts: { ...agreementRow(r).facts, "Notice deadline": `${dayOr(r.noticeDeadline)} (${r.renewalState === "overdue" ? "passed" : "coming up"})` },
+      })),
       more: Math.max(0, list.length - MAX_ROWS),
       note: null,
     };
@@ -345,7 +347,7 @@ const runners: { [N in LookupName]: Runner<N> } = {
             Until: c.toDate && formatDay(c.toDate),
           }),
         })),
-      ].slice(0, MAX_ROWS),
+      ],
       more: 0,
       note: null,
     };
@@ -388,7 +390,7 @@ const runners: { [N in LookupName]: Runner<N> } = {
     const filter = { q: a.search, vendorId: vendor?.id, from, to };
     const list = await listInvoices(ctx.db, { ...filter, sort: "invoiceDate", dir: "desc", ...page });
     return {
-      title: title("Invoices", vendor?.name, between("dated", from, to), a.search && `number, vendor or description contains “${a.search}”`),
+      title: title("Invoices", vendor?.name, between("dated", from, to), a.search && `number, vendor, agreement or description contains “${a.search}”`),
       href: `/money/invoices${query(filter)}`,
       count: list.total,
       totals: [
@@ -415,7 +417,8 @@ const runners: { [N in LookupName]: Runner<N> } = {
 
   async spend(ctx, a) {
     const usual = defaultPeriod(ctx.today());
-    let [from, to] = [a.from ?? usual.from, a.to ?? (a.from ? ctx.today() : usual.to)];
+    // Without a first day, the twelve months that end with the last day asked for; without a last day, up to today.
+    let [from, to] = [a.from ?? (a.to ? defaultPeriod(a.to).from : usual.from), a.to ?? (a.from ? ctx.today() : usual.to)];
     if (to < from) [from, to] = [to, from];
     const s = await getSpend(ctx.db, from, to);
     const money = (m: { EUR: number; GBP: number; eurMinor: number }) =>
@@ -436,7 +439,7 @@ const runners: { [N in LookupName]: Runner<N> } = {
           .filter((m) => m.eurMinor > 0)
           .reverse()
           .map((m) => ({ label: monthName(m.month), href: `/money${query({ period: "custom", from, to })}`, facts: money(m) })),
-      ].slice(0, MAX_ROWS),
+      ],
       more: 0,
       note: s.byVendor.length ? null : "Nothing was invoiced in this period.",
     };
@@ -450,14 +453,12 @@ const runners: { [N in LookupName]: Runner<N> } = {
       href: `/performance${query({ month: running ? undefined : o.month })}`,
       count: o.rows.length,
       totals: [{ label: "Vendors that missed a target", value: String(o.rows.filter((r) => r.metrics.missed > 0).length) }],
-      rows: o.rows
-        .slice(0, MAX_ROWS)
-        .map((r) => ({
-          label: r.vendorName,
-          names: [r.vendorName],
-          href: `/performance/${r.vendorId}${query({ month: running ? undefined : o.month })}`,
-          facts: metricFacts(r.metrics),
-        })),
+      rows: o.rows.slice(0, MAX_ROWS).map((r) => ({
+        label: r.vendorName,
+        names: [r.vendorName],
+        href: `/performance/${r.vendorId}${query({ month: running ? undefined : o.month })}`,
+        facts: metricFacts(r.metrics),
+      })),
       more: Math.max(0, o.rows.length - MAX_ROWS),
       note:
         [
@@ -476,9 +477,10 @@ const runners: { [N in LookupName]: Runner<N> } = {
     if (!p.vendor.scoringEnabled) return nothing(what, `${p.vendor.name} is not scored, so the app shows no helpdesk figures for it.`);
     if (!p.link) return nothing(what, `${p.vendor.name} has no Jira board linked, so there are no helpdesk figures for it.`);
     const months = [...p.months].reverse().slice(0, 6);
+    const last = months[0]!.month;
     return {
-      title: what,
-      href: `/performance/${v.id}`,
+      title: title(what, `the six months up to ${monthName(last)}`),
+      href: `/performance/${v.id}${query({ month: last === p.currentMonth ? undefined : last })}`,
       count: null,
       totals: [{ label: `Targets missed in ${months.length} months`, value: String(months.reduce((n, m) => n + m.missed, 0)) }],
       rows: months.map((m) => ({
@@ -487,7 +489,7 @@ const runners: { [N in LookupName]: Runner<N> } = {
         facts: metricFacts(m),
       })),
       more: 0,
-      note: null,
+      note: a.month && a.month !== last ? `There are no figures for a month that has not started, so the months up to ${monthName(last)} are shown.` : null,
     };
   },
 
@@ -526,8 +528,8 @@ const runners: { [N in LookupName]: Runner<N> } = {
         a.type && warningTypeLabels[a.type],
         vendor?.name,
       ),
-      // The warnings page shows everything, or one kind; it has no filter by vendor.
-      href: vendor ? null : `/warnings${query({ type: a.type })}`,
+      // The warnings page shows everything, or one kind that has something today; it has no filter by vendor and none for risk flags alone.
+      href: vendor || a.only || (a.type && !list.length) ? null : `/warnings${query({ type: a.type })}`,
       count: list.length,
       totals: a.type ? [] : kinds.map((t) => ({ label: warningTypeLabels[t], value: String(list.filter((w) => w.type === t).length) })),
       rows: list.slice(0, MAX_ROWS).map((w) => ({
@@ -602,7 +604,7 @@ const runners: { [N in LookupName]: Runner<N> } = {
       rows: [
         {
           label: `RFP ${r.title}`,
-          names: [r.title, r.ownerName, r.sponsor, r.decision?.winnerName],
+          names: [r.title, r.ownerName, r.sponsor, r.decision?.winnerName, cut(r.need), r.decision && cut(r.decision.rationale), r.cancelReason && cut(r.cancelReason)],
           href,
           facts: facts({
             Stage: rfpStageLabels[r.stage],
@@ -623,7 +625,7 @@ const runners: { [N in LookupName]: Runner<N> } = {
           const x = result.get(c.id);
           return {
             label: `Candidate ${c.vendorName}`,
-            names: [c.vendorName],
+            names: [c.vendorName, cut(c.reason, 250)],
             href: `${href}?tab=candidates`,
             facts: facts({
               List: candidateListLabels[c.list],
@@ -639,7 +641,7 @@ const runners: { [N in LookupName]: Runner<N> } = {
             }),
           };
         }),
-      ].slice(0, MAX_ROWS),
+      ],
       more: 0,
       note: null,
     };
@@ -671,8 +673,12 @@ const runners: { [N in LookupName]: Runner<N> } = {
   },
 };
 
+/** The words a model put into a look-up's arguments. They are repeated in titles and notes, and are not figures. */
+const typedIn = (args: object) => Object.values(args).filter((v): v is string => typeof v === "string" && /\p{L}/u.test(v));
+
 /** Runs one look-up. A name that points nowhere becomes a note the answer must pass on, never a silently dropped filter. */
-export async function runLookup(ctx: ChatContext, call: LookupCall, k: Known, letter: string): Promise<{ lookup: AskLookup; names: string[] }> {
+export async function runLookup(ctx: ChatContext, call: LookupCall, known: Known, letter: string): Promise<{ lookup: AskLookup; names: string[] }> {
+  const k: Known = { ...known, notes: [] };
   let r: Result;
   try {
     r = await (runners[call.name] as Runner<LookupName>)(ctx, call.args, k);
@@ -681,9 +687,18 @@ export async function runLookup(ctx: ChatContext, call: LookupCall, k: Known, le
     if (!(e instanceof Unknown) && !(e instanceof AppError && e.status < 500)) throw e;
     r = nothing(title(call.name === "documents" ? "Text of uploaded documents" : call.name.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase())), e.message);
   }
+  // Only the first rows are read and shown; the rest are counted as not listed, whichever look-up it is.
+  const rows = r.rows.slice(0, MAX_ROWS);
   const passages = (r.passages ?? []).map((p, i) => ({ ...p, ref: `${letter}${i + 1}` }));
   return {
-    lookup: { ...r, name: call.name, rows: r.rows.map(({ names: _names, ...row }, i) => ({ ...row, ref: `${letter}${i + 1}` })), passages },
-    names: [...r.rows.flatMap((row) => row.names ?? []), ...passages.map((p) => p.document)].filter((n): n is string => !!n),
+    lookup: {
+      ...r,
+      name: call.name,
+      rows: rows.map(({ names: _names, ...row }, i) => ({ ...row, ref: `${letter}${i + 1}` })),
+      more: r.more + (r.rows.length - rows.length),
+      passages,
+      note: [...k.notes, r.note].filter(Boolean).join(" ") || null,
+    },
+    names: [...rows.flatMap((row) => row.names ?? []), ...passages.flatMap((p) => [p.document, p.where]), ...typedIn(call.args)].filter((n): n is string => !!n),
   };
 }

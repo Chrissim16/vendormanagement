@@ -343,3 +343,5 @@ export async function removeDocument(db: Db, storage: StoragePort, id: string, b
 
 /** For other features: an agreement of this vendor with the same kind and title, if there is one. */
 export const findSameAgreement = repo.findSame;
+
+export { documentsWithText, readMissingText } from "./documents";

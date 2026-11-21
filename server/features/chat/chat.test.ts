@@ -4,7 +4,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { NOT_HELD, READ_ONLY, type AskAnswer, type AskLookup } from "../../../shared/ask";
 import type { RfpDetail } from "../../../shared/rfp";
 import type { AiRequest } from "../../platform/ports/types";
+import { scorecardContext } from "../../app";
 import { ADMIN, MEMBER, testApp } from "../../testing";
+import { known, runLookup } from "./lookups";
 
 /** C-1 through the API, on the sample data with today pinned to 21 Nov 2026 and the stand-in AI. */
 
@@ -155,11 +157,16 @@ describe("C-1 counts and amounts match the list pages for the same filter", () =
     const renewals = await ask("Which subscriptions need a renewal decision?");
     expect(renewals.lookups[0]!.count).toBe(((await listBehind(renewals.lookups[0]!, "/renewals")) as unknown[]).length);
     expect(renewals.lookups[0]!.count).toBe(2);
+    expect(renewals.lookups[0]!.title).toBe("Renewals without a decision · notice deadline passed or within 90 days, the team's usual window");
+    expect(renewals.lookups[0]!.href).toBe("/agreements/renewals");
 
     const all = (await t.as(MEMBER).get("/api/warnings")).body as { type: string }[];
     const warnings = await ask("What needs attention?");
     expect(warnings.lookups[0]!.count).toBe(all.length);
+    expect(warnings.lookups[0]!.href).toBe("/warnings");
     const flags = await ask("Which risk flags are there?");
+    // The warnings page cannot show risk flags alone, so no list is offered that would show a different number.
+    expect(flags.lookups[0]!.href).toBeNull();
     expect(flags.lookups[0]!.count).toBe(all.filter((w) => w.type.startsWith("risk_")).length);
     const nda = await ask("Which vendors have no NDA?");
     expect(nda.lookups[0]!.href).toBe("/warnings?type=nda_missing");
@@ -219,6 +226,49 @@ describe("C-1 counts and amounts match the list pages for the same filter", () =
     }
     expect(await kept()).toBe(n);
     expect((await tables()).audit_log).toBe(before);
+  });
+});
+
+describe("C-1 what a look-up says is what it did", () => {
+  const run = async (call: Parameters<typeof runLookup>[1]) => {
+    const ctx = scorecardContext(t.config, t.ports);
+    return (await runLookup(ctx, call, await known(ctx), "A")).lookup;
+  };
+
+  it("C-1 a vendor's helpdesk month is the month the linked page opens on", async () => {
+    const a = await ask("How did the helpdesk of Bluefinch do last month?");
+    const l = a.lookups[0]!;
+    expect(l.title).toBe("Helpdesk figures month by month · Bluefinch Systems · the six months up to October 2026");
+    expect(l.href).toMatch(/^\/performance\/[0-9a-f-]{36}\?month=2026-10$/);
+    expect(l.rows[0]!.label).toBe("October 2026");
+    const page = (await listBehind(l, l.href!.split("?")[0]!.replace("/performance/", "/performance/vendors/"))) as { months: { month: string; missed: number }[] };
+    expect(page.months.at(-1)!.month).toBe("2026-10");
+    expect(l.totals[0]!.value).toBe(String(page.months.slice(-6).reduce((n, m) => n + m.missed, 0)));
+    const future = await run({ name: "vendor_helpdesk", args: { vendor: "Bluefinch Systems", month: "2027-03" } });
+    expect(future.note).toBe("There are no figures for a month that has not started, so the months up to November 2026 are shown.");
+  });
+
+  it("C-1 a period with only an end, a window, and a name written loosely are each said as they were used", async () => {
+    const spend = await run({ name: "spend", args: { to: "2024-12-31" } });
+    expect(spend.title).toBe("Spend per vendor and per month · invoices dated 1 Jan 2024 to 31 Dec 2024");
+    expect(spend.href).toBe("/money?period=custom&from=2024-01-01&to=2024-12-31");
+
+    const window = await run({ name: "renewals", args: { withinDays: 180 } });
+    expect(window.title).toBe("Renewals without a decision · notice deadline passed or within 180 days");
+    expect(window.count).toBe(((await listBehind(window, "/renewals")) as unknown[]).length);
+
+    const loose = await run({ name: "agreements", args: { vendor: "bluefinch" } });
+    expect(loose.count).toBe(6);
+    expect(loose.note).toBe("“bluefinch” was taken to mean Bluefinch Systems.");
+    expect((await run({ name: "agreements", args: { vendor: "Bluefinch Systems" } })).note).toBeNull();
+    const two = await run({ name: "agreements", args: { vendor: "software" } });
+    expect(two.count).toBeNull();
+    expect(two.note).toContain("more than one matches “software”");
+
+    // A kind of warning that nothing has today: the page would show everything, so no list is offered.
+    const none = await run({ name: "warnings", args: { type: "nda_expired" } });
+    expect(none.count).toBe(0);
+    expect(none.href).toBeNull();
   });
 });
 
@@ -387,7 +437,7 @@ describe("C-1 the chat cannot change any data", () => {
         subject_type: "user",
         subject_id: me,
         model: "scripted-strong",
-        prompt_version: "ask-answer/1",
+        prompt_version: "ask-answer/2",
         input_summary: "Which RFPs are still running?",
         status: "proposed",
       },
@@ -454,5 +504,24 @@ describe("the agreement list's end-date filter, which Ask links to", () => {
     expect(csv.text).toContain("SOW 04 Payment controls");
     expect(csv.text).not.toContain("SOW 02 Close process review");
     expect((await t.as(MEMBER).get("/api/agreements").query({ endsFrom: "2027-02-30" })).status).toBe(400);
+  });
+});
+
+describe("C-1 a list longer than the answer can read", () => {
+  it("C-1 only the first 40 rows are read, the count and totals are of the whole list, and the rest is said to be left out", async () => {
+    const sow = ((await t.as(MEMBER).get("/api/agreements").query({ q: "SOW 04 Payment controls" })).body.items as { id: string }[])[0]!.id;
+    for (let i = 0; i < 45; i++) {
+      const res = await t.as(MEMBER).post("/api/invoices").send({ agreementId: sow, invoiceNumber: `LONG-${i}`, invoiceDate: "2026-11-02", amountMinor: 100 });
+      expect(res.status, JSON.stringify(res.body)).toBe(201);
+    }
+    const a = await ask("Show the invoices of Quillon this month");
+    const l = a.lookups[0]!;
+    const list = await listBehind(l, "/invoices");
+    expect(list.total).toBeGreaterThanOrEqual(46);
+    expect(l.count).toBe(list.total);
+    expect(l.rows).toHaveLength(40);
+    expect(l.more).toBe(list.total - 40);
+    expect(l.totals[0]!.value).toBe(`€ ${(list.sums.EUR / 100).toLocaleString("en-GB", { minimumFractionDigits: 2 })}`);
+    expect(a.answer).toContain("Only the first ones are listed here");
   });
 });
