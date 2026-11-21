@@ -78,17 +78,18 @@ h2{font:600 16px/1.3 var(--sans);letter-spacing:-.01em;margin:0}
 .chip{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:11px;font:600 11px var(--sans);white-space:nowrap;border:1px solid var(--line-2);color:var(--ink-2)}
 .chip.strong{background:var(--strong);color:var(--on-strong);border-color:transparent}
 .chip.blue{background:var(--tint);color:var(--accent-ink);border-color:transparent}
-.chip.bad{background:var(--crit-bg);color:var(--crit);border-color:transparent}
-.chip.warn{background:var(--warn-bg);color:var(--warn);border-color:transparent}
-.chip.ok{background:var(--ok-bg);color:var(--ok);border-color:transparent}
-.va{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;font:600 12px var(--sans);font-style:normal;margin-right:10px;vertical-align:middle}
+.chip.bad,.chip.warn,.chip.ok{background:var(--sunk);color:var(--ink-2);border-color:transparent;gap:7px}
+.chip.bad::before,.chip.warn::before,.chip.ok::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--crit-solid)}
+.chip.warn::before{background:var(--warn-solid)}
+.chip.ok::before{background:var(--ok)}
+
 .chip.ai{background:var(--tint);color:var(--accent-ink);border-color:transparent}
 
 /* dashboard */
 .trio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
 .trio button{text-align:left;padding:26px 26px 24px;display:flex;flex-direction:column;gap:10px;position:relative;background:var(--sunk);border-radius:24px;transition:transform 380ms var(--spring),background var(--fast)}
 .trio button:hover{transform:translateY(-5px)}
-.trio button:nth-child(1){background:var(--t1)}.trio button:nth-child(2){background:var(--t2)}.trio button:nth-child(3){background:var(--t3)}
+.trio button:hover{background:var(--tint)}
 .trio button:active{transform:scale(.97)}
 .trio .big{font:600 52px/1 var(--sans);letter-spacing:-.04em}
 .trio .go{position:absolute;right:24px;top:26px;opacity:0;transform:translateX(-10px);transition:all var(--med) var(--spring);color:var(--accent-ink);font-weight:600}
@@ -369,7 +370,7 @@ $("#bars").innerHTML=spend.map((v,i)=>`<i style="--v:${v/240};--i:${i}" title="â
 // ---- vendors: list narrows, panel slides in ----
 const chipFor=s=>s==="Active"?"ok":s==="On hold"?"warn":"";
 $("#list").innerHTML=`<div class="tr h"><span>Vendor</span><span>Type</span><span>Owner</span><span>Invoiced 2026</span><span>Status</span></div>`+
- vendors.map((v,i)=>`<button class="tr" data-i="${i}"><b><i class="va" style="background:var(--t${i%3+1});color:var(--${["crit","warn","accent-ink"][i%3]})">${v[0][0]}</i>${v[0]}</b><span class="muted">${v[1]}</span><span class="muted">${v[3]}</span><span class="num">${v[4]}</span><span><span class="chip ${chipFor(v[2])}">${v[2]}</span></span></button>`).join("");
+ vendors.map((v,i)=>`<button class="tr" data-i="${i}"><b>${v[0]}</b><span class="muted">${v[1]}</span><span class="muted">${v[3]}</span><span class="num">${v[4]}</span><span><span class="chip ${chipFor(v[2])}">${v[2]}</span></span></button>`).join("");
 function tab(n){const bs=$$("#tabs button");bs.forEach((b,i)=>b.setAttribute("aria-selected",i===n));
   const b=bs[n];$("#ink").style.width=b.offsetWidth+"px";$("#ink").style.transform=`translateX(${b.offsetLeft}px)`;$("#track").style.transform=`translateX(${-n*33.3334}%)`}
 $$("#tabs button").forEach((b,i)=>b.onclick=()=>tab(i));

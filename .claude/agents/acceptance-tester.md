@@ -18,6 +18,8 @@ You will be given a milestone and its requirement IDs.
 5. Check the cross-cutting requirements X-1 to X-6 on every page the milestone added.
 6. For AI features, check with the scripted AI that a proposal is labelled as AI, changes nothing until accepted, can be edited and rejected, and that the task can still be done by hand when the AI port is made to fail.
 
+Compare each new screen with `docs/design/design-guide.md` and report departures from it: colours, pills, type, spacing, and whether the motion listed there is present.
+
 Write scratch scripts and screenshots to the scratchpad directory, not the repository.
 
 Report one line per criterion: requirement ID, the criterion, PASS or FAIL, and what you

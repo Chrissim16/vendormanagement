@@ -10,7 +10,7 @@
 | Database | Lakebase (managed Postgres) when deployed; plain Postgres locally and in tests |
 | Data access | Drizzle ORM with SQL migration files |
 | Validation | Zod schemas shared by server and client |
-| UI | React, AppKit UI components, TanStack Query |
+| UI | React, shadcn/ui on Radix, Tailwind CSS, Motion, TanStack Query and Table, Recharts; see `docs/design/design-guide.md` |
 | Documents out | Word (`docx`), Excel (`exceljs`), PDF rendered from HTML |
 | Tests | Vitest for unit and API tests, Playwright for end-to-end tests |
 | Checks | ESLint, Prettier, `tsc --noEmit`, all behind `npm run check` |

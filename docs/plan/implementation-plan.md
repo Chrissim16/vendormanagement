@@ -28,6 +28,7 @@ X-1 to X-6 apply to every milestone. M2 and M3 touch different features and may 
 - Check current Databricks Apps and AppKit docs, scaffold the app, update `architecture/overview.md` to the real layout.
 - The five ports with their local implementations and contract tests. Deployed implementations are written here too, from documentation, and marked unproven.
 - Database, migrations, users, roles, audit.
+- Design tokens and motion presets from `docs/design/design-guide.md`, matching `docs/design/prototype.html`. Settle the AppKit component question noted there.
 - App shell with navigation for every section, and the reusable patterns: form, data table with URL-held filters, empty state, error state, file upload, PDF export.
 - System check page.
 - `npm run check`, CI on every push, seed script with invented data, `.env.example`.

@@ -20,6 +20,7 @@ in plain language, with no code or jargon they would have to look up.
 | Requirements with acceptance criteria | `docs/product/requirements.md` |
 | Entities, fields, business rules | `docs/product/domain-model.md` |
 | Stack, structure, conventions | `docs/architecture/overview.md` |
+| Look, feel, motion, UI libraries | `docs/design/design-guide.md` and `docs/design/prototype.html` |
 | Why a technical choice was made | `docs/architecture/decisions/` |
 | Milestones and their done criteria | `docs/plan/implementation-plan.md` |
 | Current status, what happened last | `docs/plan/progress.md` |
@@ -62,6 +63,8 @@ Read `progress.md` first in every session. Read the other files when the task to
 - Admin-only endpoints check the role on the server. Hiding a button is not access control.
 - Every create, update and delete of a business record writes an audit log entry in the
   same database transaction.
+- Every screen follows the design guide. Build new screens from the shared patterns; if a
+  screen needs something the guide does not cover, add it to the guide in the same change.
 - Money is stored as integer minor units plus an ISO currency code. Never use floats.
 - Dates without a time (contract start and end, invoice date) are stored as dates, not timestamps.
 - Schema changes go through migration files. Never edit a migration that has been committed.
