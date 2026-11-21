@@ -27,19 +27,14 @@ describe("F-1 sign-in", () => {
     expect(history.body.items[0]).toMatchObject({ action: "create", userEmail: "new.person@example.test" });
   });
   it("makes the bootstrap address an admin on first visit", async () => {
-    const other = await testApp();
-    const fresh = request.agent(other.app);
-    // admin@example.test is seeded; prove the rule with a database that has never seen the address.
-    const { users } = await import("../../../db/schema");
-    await other.ports.database.db.delete(users);
-    const res = await fresh.get("/api/me").set("x-dev-user", ADMIN);
-    expect(res.body.role).toBe("admin");
+    const other = await testApp({}, { empty: true });
+    expect((await other.as(ADMIN).get("/api/me")).body.role).toBe("admin");
+    expect((await other.as("someone@example.test").get("/api/me")).body.role).toBe("member");
     await other.close();
   });
   it("rescues the first admin when the app has been left without one", async () => {
-    const other = await testApp({ BOOTSTRAP_ADMIN_EMAIL: "owner@example.test" });
+    const other = await testApp({ BOOTSTRAP_ADMIN_EMAIL: "owner@example.test" }, { empty: true });
     const { users } = await import("../../../db/schema");
-    await other.ports.database.db.delete(users);
     // The owner first arrived while the setting was wrong, so they are a member and nobody is admin.
     await other.ports.database.db.insert(users).values({ email: "owner@example.test", role: "member" });
     const res = await other.as("owner@example.test").get("/api/me");

@@ -75,6 +75,15 @@ export function databaseContract(port: DatabasePort): ContractCase[] {
       },
     },
     {
+      name: "the audit log cannot be changed or removed",
+      async run() {
+        const marker = `locked-${Date.now()}`;
+        await port.db.execute(sql`insert into audit_log (user_email, action, entity_type, entity_id) values ('contract@example.test', 'create', 'contract', ${marker})`);
+        await assert.rejects(() => port.db.execute(sql`update audit_log set user_email = 'someone-else' where entity_id = ${marker}`));
+        await assert.rejects(() => port.db.execute(sql`delete from audit_log where entity_id = ${marker}`));
+      },
+    },
+    {
       name: "dates without a time stay the same day",
       async run() {
         const rows = (await port.db.execute(sql`select '2027-02-28'::date::text as d`)) as unknown as { rows: unknown[] };

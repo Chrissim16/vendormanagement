@@ -2,26 +2,10 @@ import { Router } from "express";
 import { z } from "zod";
 import { updateUserSchema } from "../../../shared/types";
 import { currentUser, requireRole } from "../../platform/auth";
+import { bool, day, paging, text } from "../../platform/http";
 import type { Ports } from "../../platform/ports/types";
 import { userSorts } from "./repo";
 import * as service from "./service";
-
-const paging = { page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(200).default(50) };
-const bool = z.enum(["true", "false"]).transform((v) => v === "true");
-/** Free text from a search box: trimmed, bounded, and without control characters the database rejects. */
-const text = z
-  .string()
-  .trim()
-  .max(200)
-  .refine((v) => ![...v].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127), "That contains characters that cannot be searched for.");
-/** A real calendar day, written YYYY-MM-DD. */
-const day = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-11-21.")
-  .refine((v) => {
-    const d = new Date(`${v}T00:00:00Z`);
-    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
-  }, "That date does not exist.");
 
 const usersQuery = z.object({
   q: text.optional(),

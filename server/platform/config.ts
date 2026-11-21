@@ -13,6 +13,8 @@ export interface Config {
   seedOnStart: boolean;
   /** The team's time zone: dates on screen and day filters use it. */
   timeZone: string;
+  /** A fixed "today" (YYYY-MM-DD) for tests and demos. Only honoured with stand-ins. */
+  today: string | null;
   clientDir: string;
   volumePath: string | null;
   jira: { baseUrl: string | null; email: string | null; token: string | null };
@@ -49,6 +51,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     filesDir: env.FILES_DIR || `${dataDir}/files`,
     seedOnStart: env.SEED_ON_START === "1",
     timeZone: env.APP_TIME_ZONE || "Europe/Amsterdam",
+    today: platform === "local" && env.TODAY ? env.TODAY : null,
     clientDir: env.CLIENT_DIR || "dist/client",
     volumePath: env.VOLUME_PATH || null,
     jira: { baseUrl: env.JIRA_BASE_URL || null, email: env.JIRA_EMAIL || null, token: env.JIRA_API_TOKEN || null },

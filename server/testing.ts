@@ -6,11 +6,11 @@ import { loadConfig } from "./platform/config";
 import { buildPorts } from "./platform/ports";
 
 /**
- * A fresh app on an empty database with the sample people loaded. Uses the built-in
+ * A fresh app on its own database with the sample data loaded (or nothing, with `empty`). Uses the built-in
  * database, or, when TEST_DATABASE_URL is set (always in CI), a new database on that
  * Postgres server, so the same tests prove both.
  */
-export async function testApp(env: Record<string, string> = {}) {
+export async function testApp(env: Record<string, string> = {}, options: { empty?: boolean } = {}) {
   const server = process.env.TEST_DATABASE_URL;
   let dropDatabase = async () => {};
   let databaseEnv: Record<string, string> = { DATABASE_MEMORY: "1" };
@@ -31,10 +31,11 @@ export async function testApp(env: Record<string, string> = {}) {
       await c.end();
     };
   }
-  const config = loadConfig({ PLATFORM: "local", FILES_DIR: ".data/test-files", CLIENT_DIR: "does-not-exist", ...databaseEnv, ...env });
+  // "Today" is pinned so date rules give the same answer whenever the tests run.
+  const config = loadConfig({ PLATFORM: "local", FILES_DIR: ".data/test-files", CLIENT_DIR: "does-not-exist", TODAY: TODAY, ...databaseEnv, ...env });
   const ports = await buildPorts(config);
   await ports.database.migrate();
-  await seed(ports.database.db);
+  if (!options.empty) await seed(ports.database.db, config.today!);
   const app = createApp(config, ports);
   /** Makes requests as the given person. */
   const as = (email: string) => {
@@ -45,5 +46,6 @@ export async function testApp(env: Record<string, string> = {}) {
   return { app, ports, config, as, close: async () => (await ports.database.close(), await dropDatabase()) };
 }
 
+export const TODAY = "2026-11-21";
 export const ADMIN = "admin@example.test";
 export const MEMBER = "mira@example.test";

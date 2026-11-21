@@ -5,7 +5,12 @@ import express, { type RequestHandler } from "express";
 import { asc } from "drizzle-orm";
 import { z } from "zod";
 import { users } from "../db/schema";
+import { todayIn } from "../shared/dates";
 import { adminRoutes } from "./features/admin/routes";
+import { agreementRoutes } from "./features/agreements/routes";
+import { importRoutes } from "./features/import/routes";
+import { vendorRoutes } from "./features/vendors/routes";
+import { listWarnings } from "./features/warnings/service";
 import { authenticate } from "./platform/auth";
 import type { Config } from "./platform/config";
 import { AppError, errorHandler } from "./platform/errors";
@@ -62,6 +67,13 @@ export function createApp(config: Config, ports: Ports) {
   api.get("/config", (_req, res) => res.json({ standInSignIn: ports.identity.kind === "stand-in", timeZone: config.timeZone }));
   api.use(authenticate(ports.database.db, ports.identity, config.bootstrapAdminEmail));
   api.use(adminRoutes(ports, config.timeZone));
+  // "Today" is the date in the team's time zone. Tests may pin it with TODAY.
+  const today = () => config.today ?? todayIn(config.timeZone);
+  const db = ports.database.db;
+  api.use(vendorRoutes(db, today));
+  api.use(agreementRoutes(db, ports.storage, today));
+  api.get("/warnings", async (_req, res) => res.json(await listWarnings(db, today())));
+  api.use("/admin/import", importRoutes(db, today));
   api.use((_req, _res, next) => next(new AppError(404, "not_found", "That address does not exist.")));
 
   app.use("/api", catchAsync(api));

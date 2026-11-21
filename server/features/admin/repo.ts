@@ -1,9 +1,7 @@
 import { and, asc, desc, eq, gte, ilike, lte, ne, or, sql, type SQL } from "drizzle-orm";
 import { auditLog, users } from "../../../db/schema";
+import { like } from "../../platform/http";
 import type { Queryable } from "../../platform/ports/types";
-
-/** Search text is matched literally: % and _ are not wildcards. */
-export const like = (text: string) => `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 
 const userSort = { name: sql`lower(coalesce(${users.displayName}, ${users.email}))`, email: users.email, role: users.role, active: users.active, createdAt: users.createdAt };
 export type UserSort = keyof typeof userSort;

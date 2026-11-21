@@ -8,6 +8,13 @@
       "when": 1795256281124,
       "tag": "0000_shiny_princess_powerful",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1795258748847,
+      "tag": "0001_eminent_black_widow",
+      "breakpoints": true
     }
   ]
 }

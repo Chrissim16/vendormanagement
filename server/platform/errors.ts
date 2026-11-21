@@ -28,6 +28,9 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, next) => {
     const fields: Record<string, string> = {};
     for (const issue of err.issues) fields[issue.path.join(".") || "_"] = issue.message;
     body = { error: { code: "invalid", message: "Some of what was entered is not valid.", fields } };
+  } else if (err?.name === "MulterError") {
+    status = err.code === "LIMIT_FILE_SIZE" ? 413 : 400;
+    body = { error: { code: "file_refused", message: err.code === "LIMIT_FILE_SIZE" ? "That file is larger than 25 MB." : "That file could not be received." } };
   } else if (err?.type === "entity.too.large") {
     status = 413;
     body = { error: { code: "too_large", message: "That is too much to send at once." } };

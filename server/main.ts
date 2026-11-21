@@ -7,7 +7,8 @@ const ports = await buildPorts(config);
 await ports.database.migrate();
 if (config.seedOnStart && config.platform === "local") {
   const { seed } = await import("../db/seed/run");
-  await seed(ports.database.db);
+  const { todayIn } = await import("../shared/dates");
+  await seed(ports.database.db, config.today ?? todayIn(config.timeZone));
 }
 
 const server = createApp(config, ports).listen(config.port, config.host, () => {
