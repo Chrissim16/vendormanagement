@@ -53,6 +53,15 @@ Derived, not stored:
 
 **Document**: attached to an agreement or an RFP. `title*`, `file_name*`, `content_type*`, `size_bytes*`, `storage_key*`, `kind` (signed | draft | response | other), `extracted_text`. PDF, Word and Excel only, 25 MB at most.
 
+## Import
+
+Not a stored record, a rule set for loading existing data from an Excel template (A-8, M-8).
+- Matching, so a second upload creates nothing new: vendor by name (ignoring case and spaces); contact by vendor and email, else vendor and name; agreement by vendor, kind and title; rate card line by vendor, role and valid-from; invoice by vendor and invoice number.
+- An existing match is skipped and reported. An import never changes an existing record.
+- Every row is checked by the same rules as the matching form (required fields, dates, status, currency match, duplicate invoice number).
+- Order in one file: vendors, then contacts and agreements, then rate cards and invoices.
+- The audit entry for each imported record says it was imported.
+
 ## SOW delivery and money
 
 **Milestone**: `sow_id*`, `title*`, `due_date*`, `status*` (open | delivered | cancelled), `delivered_on`, `amount_minor` (fixed-price SOWs).

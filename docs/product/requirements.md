@@ -56,7 +56,22 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 
 **A-7 Warnings.** A warnings page, and a count in the header, list: notice deadlines due or overdue, SOWs ending within 30 days, and active vendors with a required NDA or DPA missing or expired. Each warning links to its record.
 
-**A-8 Import.** An admin can download an Excel template, fill in vendors and agreements, and upload it. A preview shows valid rows and the reason for each invalid one before anything is saved. Importing the same file twice creates no duplicates.
+**A-8 Import.**
+- Any member can download an Excel template with one sheet each for vendors, contacts and agreements. Each sheet has a filled-in example row and a plain-language help sheet that explains every column and the allowed values.
+- Uploading the file shows a preview before anything is saved: rows that will be created, rows skipped because the record already exists, and rows that are invalid, each with the reason in plain words and the sheet row number.
+- A member can save the valid rows and download the invalid ones as a file with the reasons added, fix them and upload again.
+- A record already in the app is matched (vendor by name ignoring case; contact by vendor and email, or vendor and name if there is no email; agreement by vendor, kind and title) and is skipped, never changed. Importing the same file twice creates no duplicates.
+- A contact or agreement row must name a vendor that is in the file or already in the app.
+- Every imported record is in the audit log, marked as imported, with the person who ran the import.
+
+## Import of money data (M2)
+
+**M-8 Import rate cards and invoices.**
+- The template gains sheets for rate cards and for invoices.
+- A rate card row is matched by vendor, role and valid-from date. An invoice row is matched by vendor and invoice number, and names its SOW or subscription by vendor and agreement title.
+- The preview applies the same rules as manual entry: the invoice currency must match the agreement, amounts are checked, and an unknown agreement is reported as invalid.
+- After importing past invoices, budget used on each SOW is correct, and a SOW at 80% or more appears on the warnings page.
+- Skipping, previewing, fixing and re-uploading work as in A-8.
 
 ## SOW delivery and money (M2)
 

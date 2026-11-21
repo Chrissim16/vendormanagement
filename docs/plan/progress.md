@@ -21,6 +21,9 @@ Newest entry first. Written for the owner, in plain language.
 
 ## Log
 
+### 2026-11-21 Change request: bigger spreadsheet import
+Excel import was already planned for vendors and agreements. It now also loads contacts, and in the money milestone, rate cards and past invoices. Any team member can run it, not only the admin. Existing records are skipped, never overwritten. Rejected rows can be downloaded with the reasons, fixed and uploaded again. The template gets example rows and a help sheet, because your data is not in one clean spreadsheet. Nothing already built changes. M1 grows a little (contacts, rejected-rows file, help sheet) and M2 gains one requirement.
+
 ### 2026-11-21 M0 Foundation done
 The app now exists and runs. What you can do in it:
 
