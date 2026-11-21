@@ -257,7 +257,7 @@ export function SowDelivery({ agreement: a }: { agreement: AgreementDetail }) {
                   />
                   <span className="min-w-0 flex-1">
                     <span className={clsx("block truncate font-semibold", m.status === "cancelled" && "line-through")}>{m.title}</span>
-                    <span className="num block truncate text-[13px] text-ink-2">
+                    <span className="num block text-[13px] text-ink-2">
                       {m.status === "delivered"
                         ? `Delivered ${formatDay(m.deliveredOn!)}, due ${formatDay(m.dueDate)}`
                         : m.status === "cancelled"

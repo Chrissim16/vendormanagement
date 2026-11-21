@@ -108,6 +108,7 @@ First version of the brief, requirements, plan and agent workflow. No applicatio
 - Removing a contact or a document happens at once; only invoices, consultants and rates ask "Really remove?" first.
 - A cancelled milestone keeps its amount if the SOW is later switched to time and materials.
 - The rate dialog shows one problem at a time when both the role and the rate are wrong.
+- One older check (two admins demoting each other at the same instant) failed once in seven runs on the real database while the machine was busy, and passed every other time. To be watched; if it recurs it needs a proper look.
 - Two people changing the same SOW at the very same moment has been reasoned through and guarded, but not tried with two real people.
 - PDF export moved from M1 to M4, the first milestone that produces a PDF.
 - Deploy the app once at work as a rehearsal (open question Q3). With M1 done there is now something real to try there.
