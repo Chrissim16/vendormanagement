@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import request from "supertest";
 import { ADMIN, MEMBER, testApp } from "../../testing";
 
 let t: Awaited<ReturnType<typeof testApp>>;

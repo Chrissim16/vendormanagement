@@ -1,18 +1,12 @@
 import ExcelJS from "exceljs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ADMIN, MEMBER, testApp } from "../../testing";
+import { ADMIN, binary, MEMBER, testApp } from "../../testing";
 
 let t: Awaited<ReturnType<typeof testApp>>;
 beforeAll(async () => {
   t = await testApp();
 });
 afterAll(() => t.close());
-
-const binary = (r: import("node:http").IncomingMessage, cb: (e: Error | null, b: Buffer) => void) => {
-  const chunks: Buffer[] = [];
-  r.on("data", (c: Buffer) => chunks.push(c));
-  r.on("end", () => cb(null, Buffer.concat(chunks)));
-};
 
 /** Fills the real template with the given rows, the way a person would in Excel. */
 async function workbook(vendors: unknown[][], agreements: unknown[][]) {

@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import request from "supertest";
+import type { Response } from "superagent";
 import { seed } from "../db/seed/run";
 import { createApp } from "./app";
 import { loadConfig } from "./platform/config";
@@ -49,3 +50,11 @@ export async function testApp(env: Record<string, string> = {}, options: { empty
 export const TODAY = "2026-11-21";
 export const ADMIN = "admin@example.test";
 export const MEMBER = "mira@example.test";
+
+/** Reads a file download as bytes: `.buffer(true).parse(binary)`. */
+export const binary = (res: Response, done: (err: Error | null, body: unknown) => void) => {
+  const chunks: Buffer[] = [];
+  const stream = res as unknown as NodeJS.ReadableStream;
+  stream.on("data", (c: Buffer) => chunks.push(c));
+  stream.on("end", () => done(null, Buffer.concat(chunks)));
+};

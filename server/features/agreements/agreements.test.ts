@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ADMIN, MEMBER, testApp, TODAY } from "../../testing";
+import { ADMIN, binary, MEMBER, testApp, TODAY } from "../../testing";
 
 let t: Awaited<ReturnType<typeof testApp>>;
 let me: string;
@@ -122,16 +122,7 @@ describe("A-3 agreement list", () => {
   });
   it("exports the filtered list as a CSV that Excel opens correctly", async () => {
     await add({ kind: "nda", title: '=HYPERLINK("http://evil.example.test")', reference: 'Quote " and, comma' });
-    const res = await t
-      .as(MEMBER)
-      .get("/api/agreements/export.csv")
-      .query({ vendorId })
-      .buffer(true)
-      .parse((r, cb) => {
-        const chunks: Buffer[] = [];
-        r.on("data", (c: Buffer) => chunks.push(c));
-        r.on("end", () => cb(null, Buffer.concat(chunks)));
-      });
+    const res = await t.as(MEMBER).get("/api/agreements/export.csv").query({ vendorId }).buffer(true).parse(binary);
     expect(res.headers["content-type"]).toMatch(/text\/csv/);
     expect(res.headers["content-disposition"]).toBe(`attachment; filename="agreements-${TODAY}.csv"`);
     const text = (res.body as Buffer).toString("utf8");
@@ -172,15 +163,7 @@ describe("A-5 documents", () => {
     const up = await attach(a.id, "Signed NDA é.pdf", PDF);
     expect(up.status).toBe(201);
     expect(up.body).toMatchObject({ fileName: "Signed NDA é.pdf", contentType: "application/pdf", sizeBytes: PDF.length, createdBy: MEMBER });
-    const down = await t
-      .as(ADMIN)
-      .get(`/api/documents/${up.body.id}/download`)
-      .buffer(true)
-      .parse((r, cb) => {
-        const chunks: Buffer[] = [];
-        r.on("data", (c: Buffer) => chunks.push(c));
-        r.on("end", () => cb(null, Buffer.concat(chunks)));
-      });
+    const down = await t.as(ADMIN).get(`/api/documents/${up.body.id}/download`).buffer(true).parse(binary);
     expect((down.body as Buffer).equals(PDF)).toBe(true);
     expect(down.headers["content-disposition"]).toContain("filename*=UTF-8''Signed%20NDA%20%C3%A9.pdf");
     expect(down.headers["x-content-type-options"]).toBe("nosniff");
