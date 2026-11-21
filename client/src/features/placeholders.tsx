@@ -60,7 +60,6 @@ const sections = {
     "No agreements yet",
     "MSAs, SOWs, subscriptions, NDAs and data processing agreements will be listed here, with their dates, values and renewal deadlines.",
   ],
-  money: ["Money", "No invoices yet", "Invoices keyed in against a SOW or subscription will show here as spend per vendor and per month, next to each budget."],
   performance: ["Performance", "No scores yet", "Monthly helpdesk figures from Jira and the quarterly scorecards for each vendor will show here."],
   rfps: ["RFPs", "No RFPs yet", "Each RFP will be followed here from the approved demand through drafting, candidates, scoring and the decision."],
   ask: ["Ask", "Nothing to ask about yet", "You will be able to ask questions in plain language here, such as which SOWs end this quarter."],

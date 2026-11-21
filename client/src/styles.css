@@ -113,3 +113,11 @@ body {
 table {
   font-variant-numeric: tabular-nums;
 }
+
+/* Chart bars: a quiet tint, with the latest month in the full accent. */
+:root {
+  --bar: #cfe5f6;
+}
+:root[data-mode="dark"] {
+  --bar: rgba(57, 169, 240, 0.28);
+}

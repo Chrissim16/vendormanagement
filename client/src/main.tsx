@@ -8,6 +8,8 @@ import { AuditPage } from "./features/admin/AuditPage";
 import { PeoplePage } from "./features/admin/PeoplePage";
 import { SystemCheckPage } from "./features/admin/SystemCheckPage";
 import { ImportPage } from "./features/admin/ImportPage";
+import { SettingsPage } from "./features/admin/SettingsPage";
+import { InvoicesPage, SpendPage } from "./features/invoices/MoneyPage";
 import { AgreementPage } from "./features/agreements/AgreementPage";
 import { AgreementsPage } from "./features/agreements/AgreementsPage";
 import { RenewalsPage } from "./features/agreements/RenewalsPage";
@@ -34,7 +36,16 @@ const router = createBrowserRouter([
       { path: "/agreements/renewals", element: <RenewalsPage /> },
       { path: "/agreements/:id", element: <AgreementPage /> },
       { path: "/warnings", element: <WarningsPage /> },
-      { path: "/money", element: <ComingSection name="money" /> },
+      { path: "/money", element: <SpendPage /> },
+      { path: "/money/invoices", element: <InvoicesPage /> },
+      {
+        path: "/admin/settings",
+        element: (
+          <AdminOnly>
+            <SettingsPage />
+          </AdminOnly>
+        ),
+      },
       { path: "/performance", element: <ComingSection name="performance" /> },
       { path: "/rfps", element: <ComingSection name="rfps" /> },
       { path: "/ask", element: <ComingSection name="ask" /> },

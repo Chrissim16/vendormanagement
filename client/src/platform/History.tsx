@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { AuditEntry, Page } from "../../../shared/types";
 import { api, messageOf } from "../lib/api";
 import { formatDay, isDay } from "../../../shared/dates";
+import { formatRate } from "../../../shared/sow";
 import { formatDateTime } from "../lib/format";
 
 const verbs: Record<string, string> = { create: "Added", update: "Changed", delete: "Removed", import: "Imported", revert: "Reverted" };
@@ -24,6 +25,22 @@ const names: Record<string, string> = {
   autoRenews: "renews automatically",
   renewalTermMonths: "renewal term in months",
   isPrimary: "primary",
+  dueDate: "due date",
+  deliveredOn: "delivered on",
+  amountMinor: "amount",
+  requestedOn: "requested on",
+  budgetChangeMinor: "budget change",
+  newEndDate: "new end date",
+  fromDate: "from",
+  toDate: "until",
+  invoiceDate: "invoice date",
+  invoiceNumber: "invoice number",
+  milestoneId: "milestone",
+  agreementId: "agreement",
+  gbpToEurE4: "pound to euro rate",
+  noticeDays: "days of warning before a notice deadline",
+  sowEndDays: "days of warning before a SOW ends",
+  budgetWarningPct: "budget warning percentage",
   jobTitle: "job title",
 };
 /** A field name as people would say it: "signedOn" becomes "signed on". Names that already contain spaces are kept. */
@@ -32,15 +49,16 @@ const fieldName = (key: string) =>
     .split(" ")
     .map((part) => names[part] ?? (isDay(part) ? formatDay(part) : part))
     .join(" ");
-const money = new Set(["budgetMinor", "annualValueMinor"]);
+const money = new Set(["budgetMinor", "annualValueMinor", "amountMinor", "budgetChangeMinor"]);
 /** Fields whose values are the app's own codes, such as in_negotiation. */
 const codes = new Set(["status", "kind", "type", "pricing", "endReason", "role"]);
-const hidden = new Set(["ownerUserId", "parentMsaId"]);
+const hidden = new Set(["ownerUserId", "parentMsaId", "milestoneId", "agreementId", "vendorId"]);
 
 function show(key: string, v: unknown): string {
   if (v === null || v === undefined || v === "") return "nothing";
   if (v === true) return "yes";
   if (v === false) return "no";
+  if (key === "gbpToEurE4" && typeof v === "number") return formatRate(v);
   if (money.has(key) && typeof v === "number") return (v / 100).toLocaleString("en-GB", { minimumFractionDigits: 2 });
   if (isDay(v)) return formatDay(v);
   return codes.has(key) ? String(v).replace(/_/g, " ") : String(v);

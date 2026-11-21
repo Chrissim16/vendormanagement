@@ -10,6 +10,8 @@ import { formatDate } from "../../lib/format";
 import { History } from "../../platform/History";
 import { useToday } from "../../platform/session";
 import { Button, ErrorState, Loading, PageHeader, Pill } from "../../platform/ui";
+import { InvoicesSection } from "../invoices/InvoicesSection";
+import { SowDelivery } from "../sow/SowDelivery";
 import { AgreementForm } from "./AgreementForm";
 import { DecisionDialog } from "./DecisionDialog";
 import { agreementTone, day, renewalPill } from "./display";
@@ -176,7 +178,6 @@ export function AgreementPage() {
       </PageHeader>
 
       <div className="grid grid-cols-4 gap-8 border-t border-line pt-6">
-        {a.kind === "sow" && <Fact label="Budget" value={value == null ? "–" : formatMoney(value, a.currency)} />}
         {a.kind === "subscription" && <Fact label="Annual value" value={value == null ? "–" : formatMoney(value, a.currency)} />}
         <Fact label="Signed on" value={day(a.signedOn)} />
         {a.kind !== "nda" && a.kind !== "dpa" && <Fact label="Starts" value={day(a.startDate)} />}
@@ -190,6 +191,7 @@ export function AgreementPage() {
           />
         )}
         {a.kind === "subscription" && <Fact label="Notice deadline" value={day(a.noticeDeadline)} note={`${a.noticePeriodDays} days before renewal`} />}
+        {a.kind === "subscription" && <Fact label="Invoiced so far" value={formatMoney(a.invoicedMinor, a.currency)} />}
         <Fact label="Owner" value={<span className="text-[18px]">{a.ownerName}</span>} />
       </div>
 
@@ -243,18 +245,16 @@ export function AgreementPage() {
         </Section>
       )}
 
+      {a.kind === "sow" && <SowDelivery agreement={a} />}
+
       <div className="grid grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] gap-14">
         <div className="flex min-w-0 flex-col gap-10">
+          {(a.kind === "sow" || a.kind === "subscription") && <InvoicesSection agreement={a} />}
           <Documents a={a} />
           {a.notes && (
             <Section title="Notes">
               <p className="whitespace-pre-wrap text-ink-2">{a.notes}</p>
             </Section>
-          )}
-          {a.kind === "sow" && (
-            <p className="rounded-2xl bg-sunk px-5 py-3.5 text-[13px] text-ink-2">
-              Milestones, change requests, consultants and invoices for this SOW arrive with the next part of the app.
-            </p>
           )}
         </div>
         <History entityType="agreement" entityId={a.id} />

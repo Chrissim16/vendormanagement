@@ -73,9 +73,9 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 
 **M-5 Budget view.** A SOW shows budget, invoiced, remaining and percentage used. At 80% or more it appears on the warnings page; over 100% is marked as overrun.
 
-**M-6 Spend overview.** Spend per vendor and per month for a chosen period, in each currency and as a EUR total marked as converted. Exportable as CSV.
+**M-6 Spend overview.** Spend per vendor and per month for a chosen period, in each currency and as a EUR total marked as converted. The invoices behind it can be listed, filtered and exported as CSV.
 
-**M-7 Exchange rate.** An admin sets the GBP to EUR rate. Changing it changes converted totals only.
+**M-7 Exchange rate and warning thresholds.** An admin sets the GBP to EUR rate; changing it changes converted totals only. The same page sets how many days ahead to warn of a notice deadline and of a SOW ending, and at what percentage of a budget to warn.
 
 ## Performance from Jira (M3)
 

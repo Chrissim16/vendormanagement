@@ -73,29 +73,51 @@ Derived, not stored:
 | Renewal due | Active subscription, notice deadline within 90 days, no decision | Amber |
 | SOW ending | Active SOW ending within 30 days | Amber |
 | SOW past its end date | Active SOW whose end date has passed | Red |
+| Close to budget | Active SOW with the warning percentage or more of its budget invoiced | Amber |
+| Over budget | Active SOW with more invoiced than its budget | Red |
 | NDA or data processing agreement missing | Active vendor that requires one and has none in place | Amber |
 | NDA or data processing agreement expired | Active vendor whose only one is past its valid-until date | Red |
 
-Warnings are sorted with what is already wrong first, then the soonest date. The windows (90 and 30 days) are fixed for now and become admin settings in M2.
+Warnings are sorted with what is already wrong first, then the soonest date. The windows and the budget percentage are the admin's settings.
 
 **Import** (A-8): a vendor row whose name is already in the app, and an agreement row whose vendor, kind and title are already in the app, are left alone. A row that appears twice in the file is a problem, for every copy. An empty owner means the person importing. A cell showing a formula error is a problem, never read as empty. A number finer than a cent is refused, not rounded. A subscription row must say whether it renews automatically. The template's example rows are refused if left in. The preview and the import run the same analysis and always agree.
 
 ## SOW delivery and money
 
-**Milestone**: `sow_id*`, `title*`, `due_date*`, `status*` (open | delivered | cancelled), `delivered_on`, `amount_minor` (fixed-price SOWs).
-- On a fixed-price SOW the milestone amounts may not add up to more than the SOW budget.
-- **Late** = delivered after `due_date`, or open and past `due_date`.
+**Settings** (admin, one set for the whole team): `gbp_to_eur_rate*` (up to four decimals, default 1.17), `notice_days*` (default 90), `sow_end_days*` (default 30), `budget_warning_pct*` (default 80). The defaults apply until an admin first saves. Changes are recorded in the audit log.
 
-**Change request**: `sow_id*`, `title*`, `description`, `requested_on*`, `status*` (proposed | approved | rejected), `budget_change_minor`, `new_end_date`.
-- Approving one applies its budget change and new end date to the SOW and keeps the previous values in the history.
+**Milestone**: `sow_id*`, `title*`, `due_date*`, `status*` (open | delivered | cancelled), `delivered_on`, `amount_minor` (fixed-price SOWs only).
+- On a fixed-price SOW the amounts of the milestones that are not cancelled may not add up to more than the SOW budget. The budget may not be cut below that sum either.
+- A time and materials SOW has milestones without amounts.
+- Delivering without a date means today. A delivery date cannot be in the future. Reopening or cancelling clears it.
+- **Late** = delivered after `due_date`, or open and past `due_date`. A cancelled milestone is never late.
+- Milestones are cancelled, never deleted.
 
-**Consultant**: `sow_id*`, `name*`, `role*` (a role on the vendor's rate card), `from_date`, `to_date`. For information; days worked are not tracked.
+**Change request**: `sow_id*`, `title*`, `description`, `requested_on*`, `status*` (proposed | approved | rejected), `budget_change_minor` (may be negative), `new_end_date`, and once decided `decided_on`, `decided_by`, `budget_before_minor`, `end_date_before`.
+- It needs a budget change, a new end date, or both.
+- Nothing changes on the SOW until it is approved. Approving applies the budget change and the new end date, and keeps what the SOW held just before.
+- **Original budget and end date** of a SOW are what it held before its first approved change.
+- An approval is refused when it would take the budget below zero, below what the milestones add up to (fixed price), or the end date before the start date, or when the SOW has ended.
+- A decided change cannot be edited or decided again. A proposed one can be edited.
 
-**Invoice**: `agreement_id*` (sow or subscription), `milestone_id`, `invoice_number*`, `invoice_date*`, `amount_minor*`, `currency*`, `description`.
-- The same `invoice_number` cannot be entered twice for one vendor.
-- Currency must match the agreement's currency.
+**Rate card line**: `vendor_id*`, `role*`, `day_rate_minor*`, `currency*`, `valid_from*`. One line per role and start date.
+- The rate in force for a role on a day is the latest line that has started. A rate is changed by adding a newer line; the old one stays on record.
+- Role names are compared ignoring case, and keep the spelling first used.
+- The last line of a role cannot be removed while a consultant still holds that role.
 
-**Money**: whole cents plus currency. Totals are shown per currency, plus a EUR total using `gbp_to_eur_rate`, labelled as converted.
+**Consultant**: `sow_id*`, `name*`, `role*` (a role on the vendor's rate card), `from_date`, `to_date`. For information; days worked are not tracked. The SOW shows each consultant's day rate in force today.
+
+**Invoice**: `agreement_id*` (sow or subscription), `milestone_id` (a milestone of that SOW), `invoice_number*`, `invoice_date*`, `amount_minor*` (above zero), `description`. The vendor and the currency are taken from the agreement.
+- The same `invoice_number` cannot be entered twice for one vendor, ignoring case and extra spaces.
+- The invoice date cannot be in the future.
+- Once an agreement has invoices, its currency cannot be changed.
+- Invoices can be edited and removed; each is recorded in the audit log.
+
+**Budget view** (worked out): invoiced = the sum of the SOW's invoices; remaining = budget minus invoiced; used % is rounded down, so 79.9% never reads as 80%. From `budget_warning_pct` the SOW is close to budget; above 100% it is over budget. The comparison is exact, in cents.
+
+**Money**: whole cents plus currency. Totals are shown per currency, plus a euro total using `gbp_to_eur_rate`, labelled as converted. The pounds are converted once, on their sum, and rounded to the cent. Changing the rate changes converted totals only; no stored amount changes.
+
+**Spend** (worked out): invoiced amounts in a period by invoice date, per vendor and per month, per currency and as a euro total. Without dates the period is the last twelve months up to today, from the first of the month.
 
 ## Performance
 

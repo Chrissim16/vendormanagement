@@ -58,7 +58,7 @@ test.describe("A-1 add an agreement", () => {
     await dialog.getByRole("button", { name: "Add agreement" }).click();
 
     await expect(page.getByRole("heading", { name: "SOW 01 Typed in", level: 1 })).toBeVisible();
-    await expect(page.getByText("€ 12,500.00")).toBeVisible();
+    await expect(page.getByRole("region", { name: "Budget" })).toContainText("€ 12,500.00");
     await expect(page.getByText("31 Dec 2026")).toBeVisible();
     await expect(page.getByRole("link", { name: "Forms MSA" })).toBeVisible();
     await expect(page.getByText("Fixed price")).toBeVisible();
@@ -86,7 +86,7 @@ test.describe("A-1 add an agreement, changing vendor", () => {
     await dialog.getByLabel("End date").fill("2026-12-31");
     await dialog.getByRole("button", { name: "Add agreement" }).click();
     await expect(page.getByRole("heading", { name: "Second vendor SOW", level: 1 })).toBeVisible();
-    await expect(page.getByRole("link", { name: second.name })).toBeVisible();
+    await expect(page.getByRole("link", { name: second.name }).first()).toBeVisible();
   });
 });
 

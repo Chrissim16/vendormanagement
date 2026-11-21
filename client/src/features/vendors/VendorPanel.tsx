@@ -15,6 +15,7 @@ import { Panel } from "../../platform/SplitView";
 import { Tabs } from "../../platform/Tabs";
 import { Button, ErrorState, Loading, Pill, type Tone } from "../../platform/ui";
 import { AgreementForm } from "../agreements/AgreementForm";
+import { VendorMoney } from "../sow/RateCard";
 import { agreementTone } from "../agreements/display";
 import { VendorForm } from "./VendorForm";
 
@@ -77,7 +78,7 @@ export function AgreementRow({ a, indent }: { a: Agreement; indent?: boolean }) 
   );
 }
 
-type Tab = "overview" | "contacts" | "agreements" | "history";
+type Tab = "overview" | "contacts" | "agreements" | "money" | "history";
 
 export function VendorPanel({ id, onClose }: { id: string; onClose: () => void }) {
   const qc = useQueryClient();
@@ -138,6 +139,7 @@ export function VendorPanel({ id, onClose }: { id: string; onClose: () => void }
           { id: "overview", label: "Overview" },
           { id: "contacts", label: `Contacts (${v.contacts.length})` },
           { id: "agreements", label: `Agreements (${list.length})` },
+          { id: "money", label: "Money" },
           { id: "history", label: "History" },
         ]}
       >
@@ -165,9 +167,7 @@ export function VendorPanel({ id, onClose }: { id: string; onClose: () => void }
               )}
               {v.description && <Fact label="What they do for us">{v.description}</Fact>}
             </dl>
-            <p className="rounded-2xl bg-sunk px-5 py-3.5 text-[13px] text-ink-2">
-              Money, performance and RFPs for this vendor will appear here as those parts of the app are built.
-            </p>
+            <p className="rounded-2xl bg-sunk px-5 py-3.5 text-[13px] text-ink-2">Performance and RFPs for this vendor will appear here as those parts of the app are built.</p>
           </>
         )}
         {tab === "contacts" && (
@@ -225,6 +225,7 @@ export function VendorPanel({ id, onClose }: { id: string; onClose: () => void }
             )}
           </>
         )}
+        {tab === "money" && <VendorMoney vendorId={v.id} vendorName={v.name} />}
         {tab === "history" && <History entityType="vendor" entityId={v.id} />}
       </Tabs>
 

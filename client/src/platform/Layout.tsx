@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { Activity, Bell, Building2, Coins, FileText, FileUp, House, type LucideIcon, MessageSquare, Moon, ScrollText, Search, TrendingUp, Users } from "lucide-react";
+import { Activity, Bell, Building2, Coins, FileText, FileUp, House, type LucideIcon, MessageSquare, Moon, ScrollText, Search, Settings, TrendingUp, Users } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { Link, NavLink, useLocation, useOutlet } from "react-router-dom";
@@ -26,6 +26,7 @@ const main: Item[] = [
 const admin: Item[] = [
   { to: "/admin/people", label: "People", icon: Users },
   { to: "/admin/import", label: "Import", icon: FileUp },
+  { to: "/admin/settings", label: "Settings", icon: Settings },
   { to: "/admin/audit", label: "Audit log", icon: ScrollText },
   { to: "/admin/system-check", label: "System check", icon: Activity },
 ];

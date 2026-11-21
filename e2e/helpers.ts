@@ -61,3 +61,16 @@ export async function newAgreement(request: APIRequestContext, vendor: { id: str
 }
 
 export const warningCount = async (request: APIRequestContext) => ((await (await request.get(`${BASE}/api/warnings`, { headers: asAdmin })).json()) as unknown[]).length;
+
+export async function newInvoice(request: APIRequestContext, agreementId: string, fields: Record<string, unknown> = {}) {
+  const res = await request.post(`${BASE}/api/invoices`, {
+    headers: asAdmin,
+    data: { agreementId, invoiceNumber: unique("INV"), invoiceDate: "2026-11-01", amountMinor: 1_000_00, ...fields },
+  });
+  expect(res.ok(), await res.text()).toBe(true);
+  return (await res.json()) as { id: string; invoiceNumber: string };
+}
+
+/** Calls the API as the admin, to set a test up or put a setting back. */
+export const asAdminApi = (request: APIRequestContext, method: "post" | "put" | "patch", path: string, data: unknown) =>
+  request[method](`${BASE}/api${path}`, { headers: asAdmin, data });

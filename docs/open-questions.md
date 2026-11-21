@@ -18,6 +18,10 @@ wrong. Answered questions move to the bottom.
 | Q9 | When recording "renew", the box "move the renewal date to the next term" is ticked by default. Right? | Yes. Otherwise a renewed subscription would never ask for a decision again. | M1 |
 | Q10 | Two people editing the same vendor or agreement at once: the last save wins. Acceptable for five people? | Yes for now. | M1 |
 | Q11 | An amount typed as 1.234 is read as one thousand two hundred and thirty-four, and the form shows "Read as € 1,234.00" before saving. Is that the right reading for you? | Yes, since a dot before three digits is how thousands are usually written here. | M1 |
+| Q12 | Credit notes: can an invoice be negative? | No. An invoice amount is above zero; a credit is handled by correcting or removing the invoice. | M2 |
+| Q13 | Can an invoice be dated in the future? | No. | M2 |
+| Q14 | Who may approve a change request? | Any team member, like every other change. The history shows who did. | M2 |
+| Q15 | The pound to euro rate starts at 1.17 until an admin sets it. | Fine as a starting value; set the real one on the Settings page. | M2 |
 
 ## To check at work before M9
 

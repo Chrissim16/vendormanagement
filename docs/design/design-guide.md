@@ -138,7 +138,7 @@ with the fact ("Notice deadline passed 12 Nov"), not the system's term for it.
 | Motion | Motion (formerly Framer Motion) |
 | Rolling numbers | NumberFlow |
 | Tables | TanStack Table |
-| Charts | Recharts |
+| Charts | The app's own bars for now: a quiet tint with the latest month in the accent, growing from the baseline with a small bounce, always with the same figures in a table beside or below. Recharts when a chart needs more than bars |
 | Search and Ask bar | cmdk |
 | Icons | Lucide |
 | Toasts | Sonner |
