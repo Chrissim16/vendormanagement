@@ -19,7 +19,10 @@ import { VendorPerformancePage } from "./features/performance/VendorPerformanceP
 import { CriteriaPage } from "./features/scorecards/CriteriaPage";
 import { ScorecardPage } from "./features/scorecards/ScorecardPage";
 import { ScorecardsPage } from "./features/scorecards/ScorecardsPage";
-import { ComingSection, DashboardPage, NotFoundPage } from "./features/placeholders";
+import { BriefingPage } from "./features/briefings/BriefingPage";
+import { DashboardPage } from "./features/overview/DashboardPage";
+import { ReportPage } from "./features/overview/ReportPage";
+import { ComingSection, NotFoundPage } from "./features/placeholders";
 import { VendorsPage } from "./features/vendors/VendorsPage";
 import { WarningsPage } from "./features/warnings/WarningsPage";
 import { Layout } from "./platform/Layout";
@@ -37,6 +40,8 @@ const router = createBrowserRouter([
     element: <Layout />,
     children: [
       { path: "/", element: <DashboardPage /> },
+      { path: "/report", element: <ReportPage /> },
+      { path: "/briefings/:id", element: <BriefingPage /> },
       { path: "/vendors", element: <VendorsPage /> },
       { path: "/agreements", element: <AgreementsPage /> },
       { path: "/agreements/renewals", element: <RenewalsPage /> },

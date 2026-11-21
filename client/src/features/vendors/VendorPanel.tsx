@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { kindShort, statusLabels, type Agreement } from "../../../../shared/agreements";
 import { formatDay } from "../../../../shared/dates";
@@ -15,6 +15,7 @@ import { Panel } from "../../platform/SplitView";
 import { Tabs } from "../../platform/Tabs";
 import { Button, ErrorState, Loading, Pill, type Tone } from "../../platform/ui";
 import { AgreementForm } from "../agreements/AgreementForm";
+import { VendorBriefingsTab } from "../briefings/VendorBriefingsTab";
 import { VendorPerformanceTab } from "../performance/VendorPerformanceTab";
 import { VendorMoney } from "../sow/RateCard";
 import { agreementTone } from "../agreements/display";
@@ -79,11 +80,15 @@ export function AgreementRow({ a, indent }: { a: Agreement; indent?: boolean }) 
   );
 }
 
-type Tab = "overview" | "contacts" | "agreements" | "money" | "performance" | "history";
+const tabIds = ["overview", "contacts", "agreements", "money", "performance", "briefings", "history"] as const;
+type Tab = (typeof tabIds)[number];
 
 export function VendorPanel({ id, onClose }: { id: string; onClose: () => void }) {
   const qc = useQueryClient();
-  const [tab, setTab] = useState<Tab>("overview");
+  // A link may name the tab to open on (a briefing's page links back to the Briefings tab).
+  const [params] = useSearchParams();
+  const asked = params.get("tab") as Tab | null;
+  const [tab, setTab] = useState<Tab>(asked && tabIds.includes(asked) ? asked : "overview");
   const [dialog, setDialog] = useState<null | "edit" | "contact" | "agreement" | Contact>(null);
   const q = useQuery({ queryKey: ["vendor", id], queryFn: () => api<VendorDetail>(`/vendors/${id}`), retry: false });
   const agreements = useQuery({
@@ -142,6 +147,7 @@ export function VendorPanel({ id, onClose }: { id: string; onClose: () => void }
           { id: "agreements", label: `Agreements (${list.length})` },
           { id: "money", label: "Money" },
           { id: "performance", label: "Performance" },
+          { id: "briefings", label: "Briefings" },
           { id: "history", label: "History" },
         ]}
       >
@@ -229,6 +235,7 @@ export function VendorPanel({ id, onClose }: { id: string; onClose: () => void }
         )}
         {tab === "money" && <VendorMoney vendorId={v.id} vendorName={v.name} />}
         {tab === "performance" && <VendorPerformanceTab vendorId={v.id} />}
+        {tab === "briefings" && <VendorBriefingsTab vendorId={v.id} vendorName={v.name} />}
         {tab === "history" && <History entityType="vendor" entityId={v.id} />}
       </Tabs>
 

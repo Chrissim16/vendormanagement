@@ -2,7 +2,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import { aiSuggestions, briefings, vendors } from "../../../db/schema";
 import { ask, AiUnavailable, readSuggestion, recordSuggestion, reviewSuggestion } from "../../ai";
 import { briefing as briefingPrompt } from "../../ai/prompts/briefing";
-import { kindShort } from "../../../shared/agreements";
+import { agreementName } from "../../../shared/agreements";
 import { addDays, daysBetween, formatDay } from "../../../shared/dates";
 import {
   BRIEFING_DATES_DAYS,
@@ -60,11 +60,15 @@ export async function gatherFacts(ctx: OverviewContext, vendorId: string): Promi
   const milestones: BriefingFacts["milestones"] = [];
   const changeRequests: BriefingFacts["changeRequests"] = [];
   for (const a of agreements.filter((x) => x.status === "active")) {
-    const name = `${kindShort[a.kind]} ${a.title}`;
+    const name = agreementName(a.kind, a.title);
     // A notice deadline matters until someone has decided about the term, also once it has passed.
     if (a.noticeDeadline && !a.decidedForTerm && a.noticeDeadline <= until) dates.push({ date: a.noticeDeadline, what: `Last day to give notice on ${name}`, agreementId: a.id });
     if (a.endDate && (soon(a.endDate) || (a.kind === "sow" && a.endDate < today)))
-      dates.push({ date: a.endDate, what: a.kind === "subscription" ? `${name} renews` : a.kind === "sow" ? `${name} ends` : `${name} is valid until this day`, agreementId: a.id });
+      dates.push({
+        date: a.endDate,
+        what: a.kind === "subscription" ? `${name} renews` : a.kind === "sow" ? `${name} ends` : `${name} is valid until this day`,
+        agreementId: a.id,
+      });
     if (a.kind !== "sow") continue;
     const delivery = await getDelivery(ctx.db, a.id, today);
     for (const m of delivery.milestones.filter((x) => x.status === "open")) {
@@ -72,7 +76,15 @@ export async function gatherFacts(ctx: OverviewContext, vendorId: string): Promi
       if (m.dueDate <= until) dates.push({ date: m.dueDate, what: `Milestone "${m.title}" is due (${a.title})`, agreementId: a.id });
     }
     for (const c of delivery.changeRequests.filter((x) => x.status === "proposed"))
-      changeRequests.push({ sowId: a.id, sowTitle: a.title, title: c.title, requestedOn: c.requestedOn, budgetChangeMinor: c.budgetChangeMinor, newEndDate: c.newEndDate, currency: a.currency });
+      changeRequests.push({
+        sowId: a.id,
+        sowTitle: a.title,
+        title: c.title,
+        requestedOn: c.requestedOn,
+        budgetChangeMinor: c.budgetChangeMinor,
+        newEndDate: c.newEndDate,
+        currency: a.currency,
+      });
   }
   const invoiced = spend.byVendor.find((v) => v.vendorId === vendorId);
   const shown = figures.hasBoard ? figures.months.map(({ month, cells }) => ({ month, cells })) : null;
@@ -95,12 +107,25 @@ export async function gatherFacts(ctx: OverviewContext, vendorId: string): Promi
     spend: { from: period.from, to: period.to, total: invoiced ? { EUR: invoiced.EUR, GBP: invoiced.GBP, eurMinor: invoiced.eurMinor } : { EUR: 0, GBP: 0, eurMinor: 0 } },
     performance: shown && {
       months: shown,
-      trends: Object.fromEntries(metricKeys.map((k) => [k, metricTrend(k, before?.cells[k].valueTenths ?? null, latest?.cells[k].valueTenths ?? null)])) as Record<MetricKey, MetricTrend>,
+      trends: Object.fromEntries(metricKeys.map((k) => [k, metricTrend(k, before?.cells[k].valueTenths ?? null, latest?.cells[k].valueTenths ?? null)])) as Record<
+        MetricKey,
+        MetricTrend
+      >,
     },
     missed: (shown ?? []).flatMap((m) =>
-      metricKeys.filter((k) => m.cells[k].verdict === "missed").map((k) => ({ month: m.month, metric: k, valueTenths: m.cells[k].valueTenths!, targetTenths: m.cells[k].targetTenths! })),
+      metricKeys
+        .filter((k) => m.cells[k].verdict === "missed")
+        .map((k) => ({ month: m.month, metric: k, valueTenths: m.cells[k].valueTenths!, targetTenths: m.cells[k].targetTenths! })),
     ),
-    score: scores[0] ? { quarter: scores[0].quarter, overallTenths: scores[0].overallTenths, previousQuarter: scores[0].previousQuarter, previousTenths: scores[0].previousTenths, trend: scores[0].trend } : null,
+    score: scores[0]
+      ? {
+          quarter: scores[0].quarter,
+          overallTenths: scores[0].overallTenths,
+          previousQuarter: scores[0].previousQuarter,
+          previousTenths: scores[0].previousTenths,
+          trend: scores[0].trend,
+        }
+      : null,
     milestones: milestones.sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
     changeRequests,
     flags: flags.map(({ type, tone, label, title, detail }) => ({ type, tone, label, title, detail })),
@@ -112,7 +137,8 @@ const columns = {
   vendorName: vendors.name,
   suggestionStatus: aiSuggestions.status,
 };
-const rows = (db: Queryable) => db.select(columns).from(briefings).innerJoin(vendors, eq(vendors.id, briefings.vendorId)).leftJoin(aiSuggestions, eq(aiSuggestions.id, briefings.suggestionId));
+const rows = (db: Queryable) =>
+  db.select(columns).from(briefings).innerJoin(vendors, eq(vendors.id, briefings.vendorId)).leftJoin(aiSuggestions, eq(aiSuggestions.id, briefings.suggestionId));
 type Row = Awaited<ReturnType<typeof rows>>[number];
 
 const header = ({ briefing: b, vendorName, suggestionStatus }: Row): BriefingHeader => ({
@@ -175,7 +201,15 @@ export async function createBriefing(ctx: OverviewContext, vendorId: string, by:
   const id = await ctx.db.transaction(async (tx) => {
     const row = (await tx.insert(briefings).values({ vendorId, asAt: facts.asAt, facts, createdBy: by.email, updatedBy: by.email }).returning())[0]!;
     if (answer) {
-      const suggestion = await recordSuggestion(tx, { prompt: briefingPrompt, subjectType: "briefing", subjectId: row.id, model: answer.model, inputSummary: inputSummary(facts), output: answer.output, at: ctx.now() });
+      const suggestion = await recordSuggestion(tx, {
+        prompt: briefingPrompt,
+        subjectType: "briefing",
+        subjectId: row.id,
+        model: answer.model,
+        inputSummary: inputSummary(facts),
+        output: answer.output,
+        at: ctx.now(),
+      });
       await tx.update(briefings).set({ suggestionId: suggestion.id }).where(eq(briefings.id, row.id));
     }
     await audit(tx, {
@@ -204,7 +238,15 @@ export async function suggestAgain(ctx: OverviewContext, id: string, by: User): 
     const row = await find(tx, id);
     if (taken(row.suggestionStatus)) throw kept();
     if (row.suggestionStatus === "proposed") await reviewSuggestion(tx, row.briefing.suggestionId!, "rejected", "system", ctx.now());
-    const suggestion = await recordSuggestion(tx, { prompt: briefingPrompt, subjectType: "briefing", subjectId: id, model, inputSummary: inputSummary(facts), output, at: ctx.now() });
+    const suggestion = await recordSuggestion(tx, {
+      prompt: briefingPrompt,
+      subjectType: "briefing",
+      subjectId: id,
+      model,
+      inputSummary: inputSummary(facts),
+      output,
+      at: ctx.now(),
+    });
     await tx.update(briefings).set({ suggestionId: suggestion.id }).where(eq(briefings.id, id));
     await audit(tx, {
       userEmail: by.email,
@@ -212,7 +254,12 @@ export async function suggestAgain(ctx: OverviewContext, id: string, by: User): 
       entityType: "briefing",
       entityId: id,
       summary: label(row.vendorName, row.briefing.asAt),
-      changes: { "AI summary and talking points": { from: row.suggestionStatus ? words(row.suggestionStatus) : null, to: row.suggestionStatus ? "written again by the AI" : "written by the AI" } },
+      changes: {
+        "AI summary and talking points": {
+          from: row.suggestionStatus ? words(row.suggestionStatus) : null,
+          to: row.suggestionStatus ? "written again by the AI" : "written by the AI",
+        },
+      },
     });
   });
   return getBriefing(ctx, id);
@@ -266,7 +313,11 @@ export async function reviewBriefing(ctx: OverviewContext, id: string, input: un
     }
     if (!Object.keys(changes).length) return;
     await reviewSuggestion(tx, suggestion.id, status as "accepted" | "rejected", by.email, ctx.now());
-    if (action === "accept") await tx.update(briefings).set({ ...ai, updatedAt: new Date(), updatedBy: by.email }).where(eq(briefings.id, id));
+    if (action === "accept")
+      await tx
+        .update(briefings)
+        .set({ ...ai, updatedAt: new Date(), updatedBy: by.email })
+        .where(eq(briefings.id, id));
     await audit(tx, { userEmail: by.email, action: "update", entityType: "briefing", entityId: id, summary: label(row.vendorName, row.briefing.asAt), changes });
   });
   return getBriefing(ctx, id);

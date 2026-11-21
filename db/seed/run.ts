@@ -14,7 +14,9 @@ import { finaliseScorecard, saveScorecard, startScorecard, type ScorecardContext
 import { addMonth, monthOf } from "../../shared/performance";
 import { addQuarter, quarterBounds, quarterOf } from "../../shared/scorecards";
 import { createVendor, saveContact } from "../../server/features/vendors/service";
-import { jiraBoardLinks, scorecards } from "../schema";
+import { briefings, jiraBoardLinks, scorecards } from "../schema";
+import { createBriefing } from "../../server/features/briefings/service";
+import { reviewSummary, suggestSummary } from "../../server/features/reports/service";
 import type { BoardLinkInput, Targets } from "../../shared/performance";
 
 /** Invented people only. Never real names or addresses. */
@@ -385,7 +387,25 @@ export async function seed(db: Db, today: Day, ctx?: ScorecardContext) {
     const admin = (await db.select().from(users).where(eq(users.email, "admin@example.test")))[0];
     if (admin) await seedPerformance(ctx.perf, toUser(admin));
     await seedScorecards(ctx, today);
+    await seedOverview(ctx, today);
   }
+}
+
+/**
+ * A briefing for a consultancy with its AI text still waiting for someone to look at, and
+ * the report of two months ago with an AI summary a person has taken over. Last month's
+ * report is left untouched, to try from the start.
+ */
+async function seedOverview(ctx: ScorecardContext, today: Day) {
+  if (ctx.ai.kind !== "stand-in") return;
+  if ((await ctx.db.select({ n: sql<number>`count(*)::int` }).from(briefings))[0]!.n > 0) return;
+  const sanne = (await ctx.db.select().from(users).where(eq(users.email, "sanne@example.test")))[0];
+  const quillon = (await ctx.db.select({ id: vendors.id }).from(vendors).where(eq(vendors.name, "Quillon Consulting")))[0];
+  if (!sanne || !quillon) return;
+  await createBriefing(ctx, quillon.id, toUser(sanne));
+  const month = addMonth(monthOf(today), -2);
+  await suggestSummary(ctx, month, toUser(sanne));
+  await reviewSummary(ctx, month, { action: "accept" }, toUser(sanne));
 }
 
 async function seedCore(db: Db, today: Day) {

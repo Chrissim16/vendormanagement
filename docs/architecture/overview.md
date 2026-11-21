@@ -57,7 +57,7 @@ e2e/                      Playwright tests, one file per requirement group
 ```
 
 Features built so far: `admin`, `vendors`, `agreements`, `warnings`, `import`, `settings`, `sow` (milestones, change requests,
-consultants, rate cards), `invoices` (invoices and spend), `performance` (board links, Jira sync, monthly metrics, targets), `scorecards` (criteria, monthly AI proposals, quarterly scorecards, vendor PDF). Still to come: `briefings`, `rfp`, `chat`, `dashboard`. A feature imports from `platform`, `ai`
+consultants, rate cards), `invoices` (invoices and spend), `performance` (board links, Jira sync, monthly metrics, targets), `scorecards` (criteria, monthly AI proposals, quarterly scorecards, vendor PDF), `warnings` (warnings and risk flags), `dashboard` (the landing page's figures, shared with the report and briefings), `reports` (monthly management report and its PDF), `briefings` (vendor briefings and their PDF). Still to come: `rfp`, `chat`. A feature imports from `platform`, `ai`
 and `shared`, and from another feature only through that feature's `service.ts`.
 
 ## Request flow
@@ -74,6 +74,8 @@ and `shared`, and from another feature only through that feature's `service.ts`.
 - When the model cannot be reached or answers something unusable, `ask` fails with `AiUnavailable` (HTTP 502, code `ai_unavailable`), whose message is written for the person on the page. Nothing is stored.
 - Structured outputs (scores, extracted fields, RFP drafts) are requested as JSON and validated with Zod. An invalid response is retried once and then reported as a failure (AI-2).
 - Numbers are computed in code and handed to the model. The model explains and proposes; it does not do arithmetic that the app then shows as fact.
+- Free text from the model that sits next to figures (a report summary, a briefing) is checked with `server/ai/grounding.ts`: the prompt's `check` refuses an answer that quotes a number which was not in its input. The input is therefore written the way the app shows its figures.
+- A record that carries AI text keeps two things apart: the model's answer, untouched in its suggestion row, and the text a person saved on the record itself. Only the second is printed or exported.
 - Chat answers questions by calling a fixed set of read-only query tools that reuse the list endpoints' queries, plus a search over extracted document text. It has no write tools.
 - Each prompt has a small evaluation set in `server/ai/evals/` with invented inputs and checks on the output. `npm run ai:eval` runs them against the Databricks model (inside the workspace), a model reached with `AI_EVAL_URL`, `AI_EVAL_KEY` and `AI_EVAL_MODEL`, or else the stand-in. `npm run check` runs them against the stand-in only, which proves the checks work and nothing about quality; cases that need real understanding are skipped there.
 - Text sent to the model in production stays inside the Databricks workspace.
@@ -93,7 +95,7 @@ its own database sign-in; whether the app is kept running at night is a check fo
 
 ## Conventions
 
-- Business rules live in `service.ts` or as pure functions in `shared/` with unit tests, never in routes or components. `shared/agreements.ts`, `shared/vendors.ts`, `shared/dates.ts`, `shared/money.ts` and `shared/sow.ts` and `shared/performance.ts` hold the rules for agreements, paperwork, warnings, days, amounts, budgets, milestones, change requests, rates, spend, and helpdesk metrics, targets and support levels.
+- Business rules live in `service.ts` or as pure functions in `shared/` with unit tests, never in routes or components. `shared/agreements.ts`, `shared/vendors.ts`, `shared/dates.ts`, `shared/money.ts` and `shared/sow.ts`, `shared/performance.ts`, `shared/risks.ts` (risk flags) and `shared/overview.ts` (score trend, the shapes of dashboard, report and briefing) hold the rules for agreements, paperwork, warnings, days, amounts, budgets, milestones, change requests, rates, spend, and helpdesk metrics, targets and support levels.
 - "Now" comes from `clock(config)`: the real time, or noon on the pinned `TODAY`. The stand-in Jira uses the same clock, so its invented helpdesk has always "got as far as" now.
 - Figures worked out from many rows (monthly metrics) are counted in SQL, and the same SQL condition lists the rows behind each count (`inSet` in the performance repo), so a number and its drill-down cannot disagree.
 - "Today" is the date in the team's time zone, supplied by the server (`/api/config`) so screen and server agree. `TODAY=YYYY-MM-DD` pins it for tests and demos, with stand-ins only.
@@ -101,7 +103,7 @@ its own database sign-in; whether the app is kept running at night is a check fo
 - Screens are built from the patterns in `client/src/platform`: `DataTable`, `SplitView` and `Panel`, `Tabs`, `Dialog`, `form` (`useForm` and the field components), `History`.
 - List endpoints take `q`, filters, `sort`, `page`, `pageSize` and return `{ items, total }`. Filtering and sorting happen in SQL. The client keeps filters in the URL.
 - Exports are produced on the server from the same query as the screen they belong to.
-- PDFs are drawn with the building blocks in `server/platform/pdf.ts` (title, headings, paragraphs, label and value rows, tables, a footer with page numbers). The built-in fonts cover Western European characters; anything else is replaced by a question mark.
+- PDFs are drawn with the building blocks in `server/platform/pdf.ts` (title, headings, paragraphs, label and value rows, tables, a footer with page numbers). `makePdf` reports the number of pages, so a document with a page limit can be drawn again with shorter tables. The built-in fonts cover Western European characters; anything else is replaced by a question mark.
 - Timestamps are stored in UTC and shown in the team's time zone (`APP_TIME_ZONE`, default Europe/Amsterdam). "A day" in a filter means a day in that zone.
 - Date-only fields use the Postgres `date` type.
 - Search text is matched literally (`like()` in a repo escapes `%` and `_`), and free text from the address is validated with the shared `text` schema.

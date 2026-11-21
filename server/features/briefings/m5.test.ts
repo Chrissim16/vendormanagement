@@ -33,12 +33,21 @@ const pdf = async (path: string, query: Record<string, string> = {}) => {
 };
 const warnings = async () => (await t.as(MEMBER).get("/api/warnings")).body as Warning[];
 const history = async (entityType: string, entityId: string) =>
-  ((await t.as(MEMBER).get("/api/audit/history").query({ entityType, entityId })).body.items as { userEmail: string; action: string; changes: Record<string, { from: unknown; to: unknown }> | null }[]).map(
-    (e) => ({ ...e, changes: e.changes ?? {} }),
-  );
+  (
+    (await t.as(MEMBER).get("/api/audit/history").query({ entityType, entityId })).body.items as {
+      userEmail: string;
+      action: string;
+      changes: Record<string, { from: unknown; to: unknown }> | null;
+    }[]
+  ).map((e) => ({ ...e, changes: e.changes ?? {} }));
 const ai = (mode: "working" | "unavailable" | "nonsense") => t.as(MEMBER).post("/api/dev/ai").send({ mode });
 const newVendor = async (name: string) =>
-  (await t.as(MEMBER).post("/api/vendors").send({ name: `${name} ${n()}`, type: "consultancy", ownerUserId: me, ndaRequired: false, dpaRequired: false })).body.id as string;
+  (
+    await t
+      .as(MEMBER)
+      .post("/api/vendors")
+      .send({ name: `${name} ${n()}`, type: "consultancy", ownerUserId: me, ndaRequired: false, dpaRequired: false })
+  ).body.id as string;
 const newSow = async (vendorId: string, fields: Record<string, unknown>) =>
   (
     await t
@@ -58,7 +67,9 @@ describe("R-1 risk flags", () => {
     expect(flags[0]!.detail).toBe("It ends on 9 Dec 2026, in 18 days, and one milestone is still open: Recommendations (due 1 Dec 2026).");
     expect(flags[1]!.detail).toContain("€ 27,000.00 of the € 40,000.00 budget has been invoiced in 60 of 120 days.");
     expect(flags[1]!.detail).toContain("the budget runs out around 20 Dec 2026, before the end date of 20 Jan 2027");
-    expect(flags[2]!.detail).toMatch(/^SLA breaches \(resolved later than agreed\) got worse three months in a row: [\d.]+% in Jul, [\d.]+% in Aug, [\d.]+% in Sep, [\d.]+% in October 2026\. The target is 5% or less\.$/);
+    expect(flags[2]!.detail).toMatch(
+      /^SLA breaches \(resolved later than agreed\) got worse three months in a row: [\d.]+% in Jul, [\d.]+% in Aug, [\d.]+% in Sep, [\d.]+% in October 2026\. The target is 5% or less\.$/,
+    );
     expect(flags.every((w) => w.tone === "warn")).toBe(true);
     expect(flags[0]!.agreementId && flags[1]!.agreementId).toBeTruthy();
     expect(flags[2]).toMatchObject({ agreementId: null, vendorId: ids["Mossgate IT"] });
@@ -81,7 +92,12 @@ describe("R-1 risk flags", () => {
     const sow = await newSow(vendor, { budgetMinor: 100_000_00, startDate: addDays(TODAY, -100), endDate: addDays(TODAY, 100) });
     const mine = async () => (await warnings()).filter((w) => w.agreementId === sow.id).map((w) => w.type);
     const invoice = async (amountMinor: number) =>
-      (await t.as(MEMBER).post("/api/invoices").send({ agreementId: sow.id, invoiceNumber: `P-${n()}`, invoiceDate: addDays(TODAY, -10), amountMinor })).body.id as string;
+      (
+        await t
+          .as(MEMBER)
+          .post("/api/invoices")
+          .send({ agreementId: sow.id, invoiceNumber: `P-${n()}`, invoiceDate: addDays(TODAY, -10), amountMinor })
+      ).body.id as string;
     await invoice(50_000_00);
     // Exactly on course: half the budget in half the time.
     expect(await mine()).toEqual([]);
@@ -94,15 +110,29 @@ describe("R-1 risk flags", () => {
   it("a SOW about to end with an open milestone is flagged until the milestone is delivered, and follows the admin's window", async () => {
     const vendor = await newVendor("Ending Vendor");
     const sow = await newSow(vendor, { budgetMinor: 10_000_00, startDate: addDays(TODAY, -40), endDate: addDays(TODAY, 40) });
-    const delivery = (await t.as(MEMBER).post(`/api/agreements/${sow.id}/milestones`).send({ title: "Final report", dueDate: addDays(TODAY, 30) }).expect(201)).body;
+    const delivery = (
+      await t
+        .as(MEMBER)
+        .post(`/api/agreements/${sow.id}/milestones`)
+        .send({ title: "Final report", dueDate: addDays(TODAY, 30) })
+        .expect(201)
+    ).body;
     const milestone = delivery.milestones[0].id as string;
     const mine = async () => (await warnings()).filter((w) => w.agreementId === sow.id && w.type === "risk_open_milestones");
     expect(await mine()).toEqual([]);
     const settings = (await t.as(ADMIN).get("/api/settings")).body;
-    await t.as(ADMIN).put("/api/admin/settings").send({ ...settings, sowEndDays: 45 }).expect(200);
+    await t
+      .as(ADMIN)
+      .put("/api/admin/settings")
+      .send({ ...settings, sowEndDays: 45 })
+      .expect(200);
     const [flag] = await mine();
     expect(flag!.detail).toContain("in 40 days, and one milestone is still open: Final report");
-    await t.as(MEMBER).patch(`/api/milestones/${milestone}`).send({ title: "Final report", dueDate: addDays(TODAY, 30), status: "delivered" }).expect(200);
+    await t
+      .as(MEMBER)
+      .patch(`/api/milestones/${milestone}`)
+      .send({ title: "Final report", dueDate: addDays(TODAY, 30), status: "delivered" })
+      .expect(200);
     expect(await mine()).toEqual([]);
     await t.as(ADMIN).put("/api/admin/settings").send(settings).expect(200);
   });
@@ -142,7 +172,13 @@ describe("D-1 dashboard", () => {
 
   it("shows each scored vendor's latest final score with its trend, and the scorecards still due for last quarter", async () => {
     expect(d.dueQuarter).toBe("2026-Q3");
-    const cards = (await t.as(MEMBER).get("/api/scorecards").query({ pageSize: "200" })).body.items as { id: string; vendorName: string; quarter: string; status: string; overallTenths: number }[];
+    const cards = (await t.as(MEMBER).get("/api/scorecards").query({ pageSize: "200" })).body.items as {
+      id: string;
+      vendorName: string;
+      quarter: string;
+      status: string;
+      overallTenths: number;
+    }[];
     const finals = cards.filter((c) => c.status === "final");
     expect(d.scores.map((s) => [s.vendorName, s.quarter, s.overallTenths, s.trend]).sort()).toEqual(finals.map((c) => [c.vendorName, c.quarter, c.overallTenths, "first"]).sort());
     expect(d.scores.every((s) => finals.some((c) => c.id === s.scorecardId))).toBe(true);
@@ -161,7 +197,13 @@ describe("D-1 dashboard", () => {
 });
 
 describe("D-2 monthly management report", () => {
-  const report = async (month?: string) => (await t.as(MEMBER).get("/api/report").query(month ? { month } : {})).body as ManagementReport;
+  const report = async (month?: string) =>
+    (
+      await t
+        .as(MEMBER)
+        .get("/api/report")
+        .query(month ? { month } : {})
+    ).body as ManagementReport;
 
   it("opens on the last month that is over, with every section worked out as at its last day", async () => {
     const r = await report();
@@ -212,7 +254,15 @@ describe("D-2 monthly management report", () => {
   it("the PDF is one to two pages with every section, and prints the summary only once a person has saved one", async () => {
     const before = await pdf("/api/report/pdf", { month: "2026-09" });
     expect(before.pages).toBeLessThanOrEqual(2);
-    for (const heading of ["Vendors, September 2026", "Spend against budgets", "Agreements ending within 90 days", "Vendor scores", "Missed helpdesk targets", "Open RFPs", "No RFP is open."])
+    for (const heading of [
+      "Vendors, September 2026",
+      "Spend against budgets",
+      "Agreements ending within 90 days",
+      "Vendor scores",
+      "Missed helpdesk targets",
+      "Open RFPs",
+      "No RFP is open.",
+    ])
       expect(before.text).toContain(heading);
     expect(before.text).toContain("figures as at 30 Sep 2026");
     await t.as(MEMBER).put("/api/report").query({ month: "2026-09" }).send({ summary: "A quiet month, typed by hand." }).expect(200);
@@ -233,12 +283,35 @@ describe("D-2 monthly management report", () => {
     const other = await testApp();
     const who = (await other.as(MEMBER).get("/api/me")).body.id;
     for (let i = 0; i < 14; i++) {
-      const v = (await other.as(MEMBER).post("/api/vendors").send({ name: `Crowd Vendor ${String(i).padStart(2, "0")} with a rather long name`, type: "software", ownerUserId: who, ndaRequired: false, dpaRequired: false })).body.id;
-      await other.as(MEMBER).post("/api/agreements").send({
-        vendorId: v, ownerUserId: who, kind: "sow", title: `SOW ${i} with a long descriptive title for the report`, pricing: "fixed", status: "active", signedOn: "2026-01-01", budgetMinor: 10_000_00 + i, startDate: "2026-06-01", endDate: "2026-12-20",
-      }).expect(201);
+      const v = (
+        await other
+          .as(MEMBER)
+          .post("/api/vendors")
+          .send({ name: `Crowd Vendor ${String(i).padStart(2, "0")} with a rather long name`, type: "software", ownerUserId: who, ndaRequired: false, dpaRequired: false })
+      ).body.id;
+      await other
+        .as(MEMBER)
+        .post("/api/agreements")
+        .send({
+          vendorId: v,
+          ownerUserId: who,
+          kind: "sow",
+          title: `SOW ${i} with a long descriptive title for the report`,
+          pricing: "fixed",
+          status: "active",
+          signedOn: "2026-01-01",
+          budgetMinor: 10_000_00 + i,
+          startDate: "2026-06-01",
+          endDate: "2026-12-20",
+        })
+        .expect(201);
     }
-    await other.as(MEMBER).put("/api/report").query({ month: "2026-10" }).send({ summary: "Long summary. ".repeat(100).trim() }).expect(200);
+    await other
+      .as(MEMBER)
+      .put("/api/report")
+      .query({ month: "2026-10" })
+      .send({ summary: "Long summary. ".repeat(100).trim() })
+      .expect(200);
     const res = await other.as(MEMBER).get("/api/report/pdf").query({ month: "2026-10" }).buffer(true).parse(binary);
     const { pages, text } = await textOf(res.body as Buffer);
     expect(pages).toBeLessThanOrEqual(2);
@@ -264,7 +337,14 @@ describe("D-2 monthly management report", () => {
     });
     it("becomes 'accepted with changes' when the person edits the text, and the AI's own text is kept", async () => {
       const before = await report(month);
-      const edited = (await t.as(ADMIN).put("/api/report").query(q).send({ summary: `${before.summary} Reviewed with finance.` }).expect(200)).body as ManagementReport;
+      const edited = (
+        await t
+          .as(ADMIN)
+          .put("/api/report")
+          .query(q)
+          .send({ summary: `${before.summary} Reviewed with finance.` })
+          .expect(200)
+      ).body as ManagementReport;
       expect(edited.summary).toMatch(/Reviewed with finance\.$/);
       expect(edited.suggestion).toMatchObject({ status: "edited", reviewedBy: ADMIN });
       expect(edited.suggestion!.output.summary).toBe(before.suggestion!.output.summary);
@@ -296,10 +376,17 @@ describe("D-2 monthly management report", () => {
       await t.as(MEMBER).post("/api/report/suggestion/review").query({ month: "2026-05" }).send({ action: "accept" }).expect(409);
     });
     it("a summary that is too long is refused with the reason, and every change is in the audit log", async () => {
-      const res = await t.as(MEMBER).put("/api/report").query(q).send({ summary: "x".repeat(1501) });
+      const res = await t
+        .as(MEMBER)
+        .put("/api/report")
+        .query(q)
+        .send({ summary: "x".repeat(1501) });
       expect(res.status).toBe(400);
       expect(res.body.error.fields.summary).toContain("under 1500 characters");
-      const log = (await t.as(ADMIN).get("/api/admin/audit").query({ entityType: "report", pageSize: "100" })).body.items as { summary: string; changes: Record<string, unknown> }[];
+      const log = (await t.as(ADMIN).get("/api/admin/audit").query({ entityType: "report", pageSize: "100" })).body.items as {
+        summary: string;
+        changes: Record<string, unknown>;
+      }[];
       const august = log.filter((e) => e.summary === "Management report August 2026");
       expect(august.some((e) => e.changes?.["AI summary"])).toBe(true);
       expect(august.some((e) => e.changes?.Summary)).toBe(true);
@@ -308,20 +395,31 @@ describe("D-2 monthly management report", () => {
 });
 
 describe("B-1 vendor briefing", () => {
-  const prepare = async (vendor: string, as = MEMBER) => (await t.as(as).post(`/api/vendors/${ids[vendor]}/briefings`).expect(201)).body as { briefing: Briefing; aiProblem: string | null };
+  const prepare = async (vendor: string, as = MEMBER) =>
+    (await t.as(as).post(`/api/vendors/${ids[vendor]}/briefings`).expect(201)).body as { briefing: Briefing; aiProblem: string | null };
 
   it("gathers the vendor's agreements, dates, budgets, performance, missed targets, open work and flags, matching the app's own pages", async () => {
     const { briefing: b, aiProblem } = await prepare("Quillon Consulting");
     expect(aiProblem).toBeNull();
     const f = b.facts;
-    expect(f).toMatchObject({ asAt: TODAY, vendor: { name: "Quillon Consulting", type: "consultancy", status: "active", ownerName: "Sanne de Wit", nda: "in_place", dpa: "in_place" } });
+    expect(f).toMatchObject({
+      asAt: TODAY,
+      vendor: { name: "Quillon Consulting", type: "consultancy", status: "active", ownerName: "Sanne de Wit", nda: "in_place", dpa: "in_place" },
+    });
     // Agreements: everything that has not ended, also the SOW still out for signature.
-    expect(f.agreements.map((a) => a.title).sort()).toEqual(["Data processing agreement", "Framework agreement", "Mutual NDA", "SOW 02 Close process review", "SOW 03 Treasury roadmap", "SOW 04 Payment controls"]);
+    expect(f.agreements.map((a) => a.title).sort()).toEqual([
+      "Data processing agreement",
+      "Framework agreement",
+      "Mutual NDA",
+      "SOW 02 Close process review",
+      "SOW 03 Treasury roadmap",
+      "SOW 04 Payment controls",
+    ]);
     // Dates, soonest first.
     expect(f.dates.map((d) => [d.date, d.daysLeft, d.what])).toEqual([
       ["2026-12-01", 10, 'Milestone "Recommendations" is due (SOW 02 Close process review)'],
-      ["2026-12-09", 18, "SOW SOW 02 Close process review ends"],
-      ["2027-01-20", 60, "SOW SOW 04 Payment controls ends"],
+      ["2026-12-09", 18, "SOW 02 Close process review ends"],
+      ["2027-01-20", 60, "SOW 04 Payment controls ends"],
     ]);
     // Budgets equal the SOW pages.
     for (const s of f.budgets) {
@@ -346,12 +444,25 @@ describe("B-1 vendor briefing", () => {
   it("for a helpdesk vendor carries the last three whole months, their trend and the missed targets, as the performance page has them", async () => {
     const { briefing: b } = await prepare("Bluefinch Systems");
     const f = b.facts;
-    const page = (await t.as(MEMBER).get(`/api/performance/vendors/${ids["Bluefinch Systems"]}`).query({ month: "2026-10" })).body.months as { month: string; cells: Record<string, { valueTenths: number | null; verdict: string }> }[];
+    const page = (await t.as(MEMBER).get(`/api/performance/vendors/${ids["Bluefinch Systems"]}`).query({ month: "2026-10" })).body.months as {
+      month: string;
+      cells: Record<string, { valueTenths: number | null; verdict: string }>;
+    }[];
     expect(f.performance!.months.map((m) => m.month)).toEqual(["2026-08", "2026-09", "2026-10"]);
     for (const m of f.performance!.months) expect(m.cells).toEqual(page.find((p) => p.month === m.month)!.cells);
     const [sep, oct] = [page.find((p) => p.month === "2026-09")!, page.find((p) => p.month === "2026-10")!];
-    expect(f.performance!.trends.first_response).toBe(oct.cells.first_response!.valueTenths! > sep.cells.first_response!.valueTenths! ? "better" : oct.cells.first_response!.valueTenths === sep.cells.first_response!.valueTenths ? "same" : "worse");
-    const missed = f.performance!.months.flatMap((m) => Object.entries(m.cells).filter(([, c]) => c.verdict === "missed").map(([k]) => `${m.month} ${k}`));
+    expect(f.performance!.trends.first_response).toBe(
+      oct.cells.first_response!.valueTenths! > sep.cells.first_response!.valueTenths!
+        ? "better"
+        : oct.cells.first_response!.valueTenths === sep.cells.first_response!.valueTenths
+          ? "same"
+          : "worse",
+    );
+    const missed = f.performance!.months.flatMap((m) =>
+      Object.entries(m.cells)
+        .filter(([, c]) => c.verdict === "missed")
+        .map(([k]) => `${m.month} ${k}`),
+    );
     expect(f.missed.map((m) => `${m.month} ${m.metric}`).sort()).toEqual(missed.sort());
     expect(missed.length).toBeGreaterThan(0);
     // The proposed change request and the open milestones of its SOWs.
@@ -360,7 +471,9 @@ describe("B-1 vendor briefing", () => {
     // Its scorecard for last quarter is still a draft, so there is no score yet; a vendor with a final one has it.
     expect(f.score).toBeNull();
     const mossgate = (await prepare("Mossgate IT")).briefing.facts;
-    const card = ((await t.as(MEMBER).get("/api/scorecards").query({ vendorId: ids["Mossgate IT"], status: "final" })).body.items as { quarter: string; overallTenths: number }[])[0]!;
+    const card = (
+      (await t.as(MEMBER).get("/api/scorecards").query({ vendorId: ids["Mossgate IT"], status: "final" })).body.items as { quarter: string; overallTenths: number }[]
+    )[0]!;
     expect(mossgate.score).toEqual({ quarter: card.quarter, overallTenths: card.overallTenths, previousQuarter: null, previousTenths: null, trend: "first" });
   });
 
@@ -377,7 +490,13 @@ describe("B-1 vendor briefing", () => {
     expect(pointsOf(accepted.talkingPoints)).toEqual(b.suggestion!.output.talkingPoints);
     expect(accepted.suggestion).toMatchObject({ status: "accepted", reviewedBy: MEMBER });
 
-    const edited = (await t.as(ADMIN).put(`/api/briefings/${b.id}`).send({ summary: accepted.summary, talkingPoints: `${accepted.talkingPoints}\n- Ask about the holiday cover` }).expect(200)).body as Briefing;
+    const edited = (
+      await t
+        .as(ADMIN)
+        .put(`/api/briefings/${b.id}`)
+        .send({ summary: accepted.summary, talkingPoints: `${accepted.talkingPoints}\n- Ask about the holiday cover` })
+        .expect(200)
+    ).body as Briefing;
     expect(pointsOf(edited.talkingPoints).at(-1)).toBe("Ask about the holiday cover");
     expect(edited.suggestion).toMatchObject({ status: "edited", reviewedBy: ADMIN });
     expect(edited.suggestion!.output).toEqual(b.suggestion!.output);
@@ -423,7 +542,11 @@ describe("B-1 vendor briefing", () => {
     const sow = await newSow(vendor, { budgetMinor: 50_000_00, startDate: addDays(TODAY, -20), endDate: addDays(TODAY, 200) });
     const made = (await t.as(MEMBER).post(`/api/vendors/${vendor}/briefings`).expect(201)).body.briefing as Briefing;
     expect(made.facts.budgets[0]!.budget.invoicedMinor).toBe(0);
-    await t.as(MEMBER).post("/api/invoices").send({ agreementId: sow.id, invoiceNumber: `F-${n()}`, invoiceDate: TODAY, amountMinor: 20_000_00 }).expect(201);
+    await t
+      .as(MEMBER)
+      .post("/api/invoices")
+      .send({ agreementId: sow.id, invoiceNumber: `F-${n()}`, invoiceDate: TODAY, amountMinor: 20_000_00 })
+      .expect(201);
     expect(((await t.as(MEMBER).get(`/api/briefings/${made.id}`)).body as Briefing).facts.budgets[0]!.budget.invoicedMinor).toBe(0);
     const fresh = (await t.as(MEMBER).post(`/api/vendors/${vendor}/briefings`).expect(201)).body.briefing as Briefing;
     expect(fresh.facts.budgets[0]!.budget).toMatchObject({ invoicedMinor: 20_000_00, usedPct: 40 });
@@ -434,7 +557,16 @@ describe("B-1 vendor briefing", () => {
   it("the PDF carries every section with the briefing's own figures", async () => {
     const { briefing: b } = await prepare("Bluefinch Systems");
     const { text } = await pdf(`/api/briefings/${b.id}/pdf`);
-    for (const heading of ["Bluefinch Systems", "facts as at 21 Nov 2026", "Warnings and risk flags", "Agreements", "Upcoming dates", "Spend against budget", "Helpdesk performance", "Open milestones and change requests"])
+    for (const heading of [
+      "Bluefinch Systems",
+      "facts as at 21 Nov 2026",
+      "Warnings and risk flags",
+      "Agreements",
+      "Upcoming dates",
+      "Spend against budget",
+      "Helpdesk performance",
+      "Open milestones and change requests",
+    ])
       expect(text).toContain(heading);
     expect(text).toContain("SOW 07 Ledger migration € 240,000.00 € 199,200.00 83% (close)");
     expect(text).toContain("Change request waiting for a decision: Extended hypercare (SOW 07 Ledger migration)");
@@ -445,7 +577,10 @@ describe("B-1 vendor briefing", () => {
 
   it("can be removed, refuses text that is too long, and answers 404 for one that does not exist", async () => {
     const { briefing: b } = await prepare("Sedgewater Cloud");
-    const long = await t.as(MEMBER).put(`/api/briefings/${b.id}`).send({ summary: "x".repeat(2001), talkingPoints: "" });
+    const long = await t
+      .as(MEMBER)
+      .put(`/api/briefings/${b.id}`)
+      .send({ summary: "x".repeat(2001), talkingPoints: "" });
     expect(long.status).toBe(400);
     expect(long.body.error.fields.summary).toContain("under 2000 characters");
     await t.as(MEMBER).delete(`/api/briefings/${b.id}`).expect(200);

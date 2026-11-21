@@ -175,7 +175,12 @@ export function metricTrend(key: MetricKey, before: number | null, latest: numbe
   if (before === latest) return "same";
   return (metricInfo[key].direction === "at_least" ? latest > before : latest < before) ? "better" : "worse";
 }
-export const metricTrendWords: Record<MetricTrend, string> = { better: "better than the month before", worse: "worse than the month before", same: "same as the month before", none: "" };
+export const metricTrendWords: Record<MetricTrend, string> = {
+  better: "better than the month before",
+  worse: "worse than the month before",
+  same: "same as the month before",
+  none: "",
+};
 
 export interface BriefingDate {
   date: Day;

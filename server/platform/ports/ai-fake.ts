@@ -113,7 +113,8 @@ function briefing(ask: BriefingAsk): string {
   const tight = ask.budgets.filter((b) => b.state !== "within budget");
   if (tight.length) summary.push(`${tight[0]!.sow} is ${tight[0]!.state} with ${tight[0]!.used} used.`);
   else if (ask.budgets.length) summary.push("Its SOWs are within budget.");
-  if (ask.missedTargets.length) summary.push(`Helpdesk targets were missed in the last months, most recently ${ask.missedTargets.at(-1)!.measure} in ${ask.missedTargets.at(-1)!.month}.`);
+  if (ask.missedTargets.length)
+    summary.push(`Helpdesk targets were missed in the last months, most recently ${ask.missedTargets.at(-1)!.measure} in ${ask.missedTargets.at(-1)!.month}.`);
 
   const points: string[] = [];
   for (const f of flags.slice(0, 3)) points.push(`${f.about}: ${f.what.toLowerCase()}. Ask what the vendor will do about it and by when.`);

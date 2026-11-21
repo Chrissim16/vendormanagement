@@ -61,8 +61,7 @@ describe("R-1 a SOW whose invoicing points to an overrun before its end date", (
 });
 
 describe("R-1 a SOW ending within the window with open milestones", () => {
-  const ending = (o: Partial<RiskSow> = {}) =>
-    sow({ invoicedMinor: 0, endDate: "2026-12-09", openMilestones: [{ title: "Recommendations", dueDate: "2026-12-01" }], ...o });
+  const ending = (o: Partial<RiskSow> = {}) => sow({ invoicedMinor: 0, endDate: "2026-12-09", openMilestones: [{ title: "Recommendations", dueDate: "2026-12-01" }], ...o });
 
   it("names the end date and the milestones still open", () => {
     const flags = sowRiskFlags([ending()], TODAY, 30);
@@ -95,7 +94,11 @@ describe("R-1 a metric that got worse three months in a row", () => {
   const targets: Targets = { first_response: 950, first_line: null, sla_breaches: 100, backlog_age: null, csat: null };
   /** A month where `met` of 1000 first responses were in time and `late` of 1000 resolutions were late. */
   const month = (m: string, met: number | null, late: number | null = 50): MonthMetrics =>
-    monthMetrics(m, { ...emptyCounts, frMeasured: met == null ? 0 : 1000, frMet: met ?? 0, resolved: late == null ? 0 : 1000, breached: late ?? 0, firstLine: late == null ? 0 : 700 }, targets);
+    monthMetrics(
+      m,
+      { ...emptyCounts, frMeasured: met == null ? 0 : 1000, frMet: met ?? 0, resolved: late == null ? 0 : 1000, breached: late ?? 0, firstLine: late == null ? 0 : 700 },
+      targets,
+    );
   const months = (values: (number | null)[], late: (number | null)[] = [50, 50, 50, 50]) => values.map((v, i) => month(`2026-${String(7 + i).padStart(2, "0")}`, v, late[i]));
   const keys = (list: MonthMetrics[]): MetricKey[] => worseningMetrics(list).map((w) => w.key);
 

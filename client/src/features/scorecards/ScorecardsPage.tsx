@@ -85,8 +85,9 @@ function StartScorecard({ vendorId, onClose, onStarted }: { vendorId: string; on
 /** Every scorecard, newest quarter first (P-2 to P-5). */
 export function ScorecardsPage() {
   const navigate = useNavigate();
-  const [url, setUrl] = useUrlState({ q: "", status: "all", vendorId: "", sort: "quarter", dir: "desc", page: "1" });
-  const [starting, setStarting] = useState(false);
+  // `start` names a vendor to start a scorecard for straight away: the dashboard's "not started" rows lead here.
+  const [url, setUrl] = useUrlState({ q: "", status: "all", vendorId: "", sort: "quarter", dir: "desc", page: "1", start: "" });
+  const [starting, setStarting] = useState(!!url.start);
   const page = pageNumber(url.page);
   const query = { q: url.q, status: url.status === "all" ? undefined : url.status, vendorId: url.vendorId || undefined, sort: url.sort, dir: url.dir, page, pageSize: PAGE_SIZE };
   const list = useQuery({ queryKey: ["scorecard", "list", query], queryFn: () => api<Page<Scorecard>>("/scorecards", { query }), placeholderData: (p) => p });
@@ -169,8 +170,11 @@ export function ScorecardsPage() {
 
       {starting && (
         <StartScorecard
-          vendorId={url.vendorId}
-          onClose={() => setStarting(false)}
+          vendorId={url.start || url.vendorId}
+          onClose={() => {
+            setStarting(false);
+            setUrl({ start: "" });
+          }}
           onStarted={(c) => {
             toast.success(`Scorecard started for ${c.vendorName}`);
             navigate(`/performance/scorecards/${c.id}`);

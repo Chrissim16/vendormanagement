@@ -10,6 +10,9 @@ export const kindLabels: Record<Kind, string> = { msa: "MSA", sow: "SOW", subscr
 /** For pills in lists, where the full name does not fit. */
 export const kindShort: Record<Kind, string> = { ...kindLabels, dpa: "DPA" };
 
+/** An agreement named with its kind in front, unless the title already starts with it: "MSA Framework agreement", but "SOW 07 Ledger migration" as it is. */
+export const agreementName = (kind: Kind, title: string) => (title.toLowerCase().startsWith(kindShort[kind].toLowerCase()) ? title : `${kindShort[kind]} ${title}`);
+
 export const agreementStatuses = ["draft", "in_negotiation", "out_for_signature", "active", "ended"] as const;
 export type AgreementStatus = (typeof agreementStatuses)[number];
 export const statusLabels: Record<AgreementStatus, string> = {

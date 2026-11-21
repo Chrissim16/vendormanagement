@@ -1,4 +1,4 @@
-import { kindShort, statusLabels } from "../../../shared/agreements";
+import { agreementName, statusLabels } from "../../../shared/agreements";
 import { formatDay } from "../../../shared/dates";
 import { formatMoney } from "../../../shared/money";
 import { metricTrendWords, pointsOf, trendWords, type Briefing } from "../../../shared/overview";
@@ -7,7 +7,8 @@ import { formatScore, paperworkWords, quarterName } from "../../../shared/scorec
 import { vendorStatusLabels, vendorTypeLabels } from "../../../shared/vendors";
 import { makePdf } from "../../platform/pdf";
 
-const when = (daysLeft: number) => (daysLeft < 0 ? `${-daysLeft} ${daysLeft === -1 ? "day" : "days"} ago` : daysLeft === 0 ? "today" : `in ${daysLeft} ${daysLeft === 1 ? "day" : "days"}`);
+const when = (daysLeft: number) =>
+  daysLeft < 0 ? `${-daysLeft} ${daysLeft === -1 ? "day" : "days"} ago` : daysLeft === 0 ? "today" : `in ${daysLeft} ${daysLeft === 1 ? "day" : "days"}`;
 
 /**
  * A vendor briefing as a PDF (B-1), for the team's own use. The facts are the ones the
@@ -30,7 +31,11 @@ export function briefingPdf(b: Briefing): Promise<Buffer> {
             ],
           ] as [string, string][])
         : []),
-      ["Invoiced, last 12 months", [f.spend.total.EUR ? formatMoney(f.spend.total.EUR, "EUR") : null, f.spend.total.GBP ? formatMoney(f.spend.total.GBP, "GBP") : null].filter(Boolean).join(" and ") || "Nothing"],
+      [
+        "Invoiced, last 12 months",
+        [f.spend.total.EUR ? formatMoney(f.spend.total.EUR, "EUR") : null, f.spend.total.GBP ? formatMoney(f.spend.total.GBP, "GBP") : null].filter(Boolean).join(" and ") ||
+          "Nothing",
+      ],
     ]);
 
     if (b.summary) {
@@ -56,7 +61,12 @@ export function briefingPdf(b: Briefing): Promise<Buffer> {
           { header: "Ends or renews", width: 0.18 },
           { header: "Value", width: 0.2, align: "right" },
         ],
-        f.agreements.map((a) => [`${kindShort[a.kind]} ${a.title}`, statusLabels[a.status], a.endDate ? formatDay(a.endDate) : "–", a.valueMinor == null ? "–" : formatMoney(a.valueMinor, a.currency)]),
+        f.agreements.map((a) => [
+          agreementName(a.kind, a.title),
+          statusLabels[a.status],
+          a.endDate ? formatDay(a.endDate) : "–",
+          a.valueMinor == null ? "–" : formatMoney(a.valueMinor, a.currency),
+        ]),
       );
     else pdf.paragraph("No agreement is running or being prepared.", { muted: true });
 
@@ -139,6 +149,8 @@ export function briefingPdf(b: Briefing): Promise<Buffer> {
 
     const s = b.suggestion;
     if ((b.summary || points.length) && s && (s.status === "accepted" || s.status === "edited"))
-      pdf.paragraph(`The summary and talking points were drafted by the AI and ${s.status === "edited" ? "changed" : "accepted"} by ${s.reviewedBy ?? "a team member"}.`, { muted: true });
+      pdf.paragraph(`The summary and talking points were drafted by the AI and ${s.status === "edited" ? "changed" : "accepted"} by ${s.reviewedBy ?? "a team member"}.`, {
+        muted: true,
+      });
   });
 }

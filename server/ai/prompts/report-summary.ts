@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { kindShort } from "../../../shared/agreements";
+import { agreementName } from "../../../shared/agreements";
 import { formatDay } from "../../../shared/dates";
 import { formatMoney } from "../../../shared/money";
 import { trendWords, type ReportData } from "../../../shared/overview";
@@ -48,7 +48,7 @@ export const reportSummary: Prompt<ReportData, ReportSummaryOutput> = {
     })),
     agreementsEndingSoon: d.ending.map((e) => ({
       vendor: e.vendorName,
-      agreement: `${kindShort[e.kind]} ${e.title}`,
+      agreement: agreementName(e.kind, e.title),
       ends: formatDay(e.endDate),
       noticeDeadline: e.noticeDeadline ? formatDay(e.noticeDeadline) : null,
     })),

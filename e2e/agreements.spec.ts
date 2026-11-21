@@ -281,7 +281,10 @@ test.describe("A-7 warnings", () => {
     await expect(page.getByRole("link", { name: `${total} warnings` })).toBeVisible();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(`${total} things need attention`);
     const list = page.getByRole("list", { name: "Warnings" });
-    await expect(list.getByRole("listitem")).toHaveCount(total);
+    // The count covers the warnings and the risk flags (R-1), which have a list of their own on the same page.
+    const flags = await page.getByRole("list", { name: "Risk flags" }).getByRole("listitem").count();
+    expect(flags).toBeGreaterThan(0);
+    await expect(list.getByRole("listitem")).toHaveCount(total - flags);
     await expect(list.getByRole("listitem").filter({ hasText: "Warned licence" })).toContainText("Overdue");
     await expect(list.getByRole("listitem").filter({ hasText: "Ending SOW" })).toContainText("Ends in 14 days");
     await expect(list.getByRole("listitem").filter({ hasText: "Ending SOW" })).toContainText("It ends on 5 Dec 2026.");

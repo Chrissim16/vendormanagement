@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { kindShort, statusLabels } from "../../../shared/agreements";
+import { agreementName, statusLabels } from "../../../shared/agreements";
 import { formatDay } from "../../../shared/dates";
 import { formatMoney } from "../../../shared/money";
 import { metricTrendWords, trendWords, type BriefingFacts } from "../../../shared/overview";
@@ -45,7 +45,7 @@ export const briefing: Prompt<BriefingFacts, BriefingOutput> = {
       dataProcessingAgreement: paperworkWords[f.vendor.dpa],
     },
     agreements: f.agreements.map((a) => ({
-      agreement: `${kindShort[a.kind]} ${a.title}`,
+      agreement: agreementName(a.kind, a.title),
       status: statusLabels[a.status],
       ends: a.endDate ? formatDay(a.endDate) : null,
       value: a.valueMinor == null ? null : formatMoney(a.valueMinor, a.currency),
@@ -63,14 +63,28 @@ export const briefing: Prompt<BriefingFacts, BriefingOutput> = {
       ? metricKeys.map((k) => ({
           measure: metricInfo[k].label,
           measures: metricInfo[k].measures,
-          months: f.performance!.months.map((m) => ({ month: monthName(m.month), figure: formatMetric(k, m.cells[k].valueTenths), result: m.cells[k].verdict === "none" ? "not judged" : m.cells[k].verdict })),
+          months: f.performance!.months.map((m) => ({
+            month: monthName(m.month),
+            figure: formatMetric(k, m.cells[k].valueTenths),
+            result: m.cells[k].verdict === "none" ? "not judged" : m.cells[k].verdict,
+          })),
           target: f.performance!.months.at(-1)?.cells[k].targetTenths == null ? "no target" : formatTarget(k, f.performance!.months.at(-1)!.cells[k].targetTenths!),
           latestMonth: metricTrendWords[f.performance!.trends[k]] || "nothing to compare",
         }))
       : "This vendor has no helpdesk figures.",
-    missedTargets: f.missed.map((m) => ({ month: monthName(m.month), measure: metricInfo[m.metric].label, figure: formatMetric(m.metric, m.valueTenths), target: formatTarget(m.metric, m.targetTenths) })),
+    missedTargets: f.missed.map((m) => ({
+      month: monthName(m.month),
+      measure: metricInfo[m.metric].label,
+      figure: formatMetric(m.metric, m.valueTenths),
+      target: formatTarget(m.metric, m.targetTenths),
+    })),
     latestScorecard: f.score
-      ? { score: `${formatScore(f.score.overallTenths)} out of 5`, quarter: quarterName(f.score.quarter), trend: trendWords[f.score.trend], before: f.score.previousTenths == null ? null : formatScore(f.score.previousTenths) }
+      ? {
+          score: `${formatScore(f.score.overallTenths)} out of 5`,
+          quarter: quarterName(f.score.quarter),
+          trend: trendWords[f.score.trend],
+          before: f.score.previousTenths == null ? null : formatScore(f.score.previousTenths),
+        }
       : null,
     openMilestones: f.milestones.map((m) => ({ sow: m.sowTitle, milestone: m.title, due: formatDay(m.dueDate), late: m.daysLate > 0 ? `${m.daysLate} days late` : "not late" })),
     changeRequestsWaiting: f.changeRequests.map((c) => ({

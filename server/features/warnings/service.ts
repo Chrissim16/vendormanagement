@@ -76,7 +76,11 @@ export async function riskSows(db: Queryable, vendorIds?: string[]): Promise<Ris
       .where(and(inArray(milestones.sowId, ids), eq(milestones.status, "open")))
       .orderBy(asc(milestones.dueDate)),
   ]);
-  return sows.map((s) => ({ ...s, invoicedMinor: invoiced.get(s.id) ?? 0, openMilestones: open.filter((m) => m.sowId === s.id).map(({ title, dueDate }) => ({ title, dueDate })) }));
+  return sows.map((s) => ({
+    ...s,
+    invoicedMinor: invoiced.get(s.id) ?? 0,
+    openMilestones: open.filter((m) => m.sowId === s.id).map(({ title, dueDate }) => ({ title, dueDate })),
+  }));
 }
 
 /** The risk flags (R-1), for all vendors or just the given ones. Metrics are judged on whole months only. */

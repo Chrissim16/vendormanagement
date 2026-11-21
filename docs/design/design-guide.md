@@ -86,7 +86,9 @@ Figures that line up use tabular numerals. Dates read `21 Nov 2026`. Money reads
 - **Lists open records in a side panel.** The list shrinks to a narrow column of names and the panel takes the rest. The selected row is marked. Closing the panel restores the list.
 - Inside a panel, sections are tabs.
 - A record with a lot of its own content (a SOW, a scorecard, an RFP) gets a full page.
-- The dashboard opens with a greeting that states what needs doing, three neutral tiles, then what needs attention.
+- The dashboard opens with a greeting that states what needs doing, three neutral tiles (warnings, risk flags, scorecards due), then two columns: on the left what needs attention counted by kind and the SOWs by budget used, each with a thin meter; on the right spend as bars, vendor scores with their trend in words, the scorecards due and open RFPs. Every row leads to its detail. The button to the monthly report sits in the dashboard's header.
+- A section of a page that has nothing to list says so in one sentence on the sunken fill, in place of its rows.
+- A report page (the monthly report, a briefing) is a full page of plain tables between hairlines, with the download as its one primary action.
 
 ## Forms and dialogs
 
@@ -146,6 +148,12 @@ line carries the "AI proposal" label, when it was written and from what, and whe
 is not reviewed yet, accepted, accepted with changes or rejected, with who and when. Its
 buttons sit at the bottom: the primary one accepts. When the AI cannot answer, the page
 says so in the ordinary error pattern, in place, and everything else stays usable.
+
+AI writing that a person may take over as text (a report's summary, a briefing's summary
+and talking points) uses the same panel, with "Use this text" as its primary action, then
+"Reject" and "Ask again". The text the record keeps sits in ordinary boxes right below the
+panel with its own Save button and a line saying whether it is saved; taking the AI's text
+over fills those boxes, where it can still be changed. A link inside a sentence is underlined.
 
 A score from 1 to 5 is chosen on a row of five squares on the sunken fill; the chosen one
 is filled with the primary colour and its thumb snaps over with a bounce. The same square,

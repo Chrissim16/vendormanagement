@@ -46,6 +46,19 @@ wrong. Answered questions move to the bottom.
 | Q38 | Can a scorecard be removed? | A draft can, by any member, after asking once more. A final scorecard cannot. | M4 |
 | Q39 | Letters outside Western European alphabets in the PDF | They print as a question mark for now, since the PDF's built-in letters do not cover them. Say if comments are ever written in another script. | M4 |
 | Q40 | Can a scorecard be finalised while its quarter is still running? | No. It can be started and scored, and is finalised once the quarter has ended, so a final scorecard and its PDF always cover three whole months. | M4 |
+| Q41 | Which SOWs get the "heading over budget" flag? | Time and materials SOWs only, once they have run 30 days. A fixed-price SOW is invoiced by milestone, so one large early invoice would raise a false alarm; it keeps its ordinary budget warnings. Say if fixed-price SOWs should be flagged too. | M5 |
+| Q42 | How is "invoicing rate points to an overrun" worked out? | What has been invoiced so far, spread evenly over the days since the start date and carried on to the end date. The flag names the day the budget would run out. | M5 |
+| Q43 | What counts as "worsened three months in a row"? | Over the last four whole months each figure is worse than the month before, however small the step and also while the target is still met. The running month is left out. Say if a flag should only appear once the target is missed or the step is large. | M5 |
+| Q44 | Does "a SOW ending within 30 days" follow the admin's setting? | Yes, the same number of days as the "SOW ending" warning. | M5 |
+| Q45 | Which scorecards are "due this quarter"? | Those for the quarter that has just ended: every scored vendor in use without a final scorecard for it. | M5 |
+| Q46 | For a past month, which figures does the monthly report show? | The figures as they stood on the month's last day (invoices up to that day, agreements ending in the 90 days after it, scorecards final for quarters ended by then), against budgets and targets as they are today. The running month is shown up to today. | M5 |
+| Q47 | What if the report has more rows than fit on two pages? | The tables are shortened, each saying how many rows it leaves out. | M5 |
+| Q48 | Do a briefing's figures change after it is made? | No. A briefing keeps the facts of the day it was prepared; for a later meeting a new one is prepared. | M5 |
+| Q49 | How far ahead and back does a briefing look? | Dates in the next 180 days, the last three whole months of helpdesk figures, spend of the last twelve months. | M5 |
+| Q50 | What of the AI's text is printed? | Only what a person has taken over or written. An AI summary or talking point nobody has accepted is never in a PDF. | M5 |
+| Q51 | May the AI mention figures of its own? | No. It is given the app's figures and an answer quoting any other number is thrown away and asked for again. | M5 |
+| Q52 | Who may prepare, change and remove a briefing, and write the report's summary? | Any team member; the history shows who did. | M5 |
+| Q53 | Open RFPs on the dashboard and in the report | The sections are there and say that no RFP is open; they fill once the RFP part (M6) is built. | M5 |
 | Q27 | How long are tickets kept? | 24 months after they were resolved, as the data model says. Open tickets are kept however old. | M3 |
 
 ## To check at work before M9

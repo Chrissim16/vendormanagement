@@ -48,7 +48,14 @@ export async function reportData(ctx: OverviewContext, month: Month): Promise<Re
   const missed: MissedTarget[] = figures.flatMap((v) =>
     metricKeys
       .filter((k) => v.months[0]!.cells[k].verdict === "missed")
-      .map((k) => ({ vendorId: v.vendorId, vendorName: v.vendorName, month, metric: k, valueTenths: v.months[0]!.cells[k].valueTenths!, targetTenths: v.months[0]!.cells[k].targetTenths! })),
+      .map((k) => ({
+        vendorId: v.vendorId,
+        vendorName: v.vendorName,
+        month,
+        metric: k,
+        valueTenths: v.months[0]!.cells[k].valueTenths!,
+        targetTenths: v.months[0]!.cells[k].targetTenths!,
+      })),
   );
   return {
     month,
@@ -178,7 +185,8 @@ export async function reviewSummary(ctx: OverviewContext, monthAsked: string | u
     if (action === "accept" && row.summary !== suggestion.output.summary) changes.Summary = { from: row.summary, to: suggestion.output.summary };
     if (!Object.keys(changes).length) return;
     await reviewSuggestion(tx, suggestion.id, status as "accepted" | "rejected", by.email, ctx.now());
-    if (changes.Summary) await tx.update(managementReports).set({ summary: suggestion.output.summary, updatedAt: new Date(), updatedBy: by.email }).where(eq(managementReports.id, row.id));
+    if (changes.Summary)
+      await tx.update(managementReports).set({ summary: suggestion.output.summary, updatedAt: new Date(), updatedBy: by.email }).where(eq(managementReports.id, row.id));
     await audit(tx, { userEmail: by.email, action: "update", entityType: "report", entityId: row.id, summary: label(month), changes });
   });
   return build(ctx, month);

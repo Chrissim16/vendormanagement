@@ -87,11 +87,7 @@ export function WarningsPage() {
       ) : (
         <>
           <Section title="Warnings" about="A deadline, a budget or paperwork that needs a decision now." items={shown.filter((x) => !isRiskFlag(x))} />
-          <Section
-            title="Risk flags"
-            about="Not wrong yet, but heading that way. Each flag says which figures set it off."
-            items={shown.filter(isRiskFlag)}
-          />
+          <Section title="Risk flags" about="Not wrong yet, but heading that way. Each flag says which figures set it off." items={shown.filter(isRiskFlag)} />
         </>
       )}
     </>
