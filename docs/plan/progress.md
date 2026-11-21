@@ -49,6 +49,8 @@ How it was checked: an independent tester ran a whole RFP from scratch through t
 - **The AI's "quote" could have been a single word.** A proposed score must now rest on a real passage of the candidate's answer (or the whole answer when it is only a few words), and a proposed score for a candidate that does not exist is refused.
 - **The sample draft copied the internal need into the introduction**, which goes to vendors. The stand-in no longer does that, and the real model is told to reword the need for vendors and not to copy it.
 
+After the fixes the tester went through the changed points again in the running app, eleven in all, and every one passed.
+
 Other fixes worth knowing: an answer that a later upload replaces is now in the history with both texts; a row "that could not be matched" from an older upload can no longer be placed after a colleague uploaded a newer sheet; a decision cannot be dated before the RFP was issued; and an uploaded Excel file is measured by what it really unpacks into, so a file built to swell up cannot stop the app.
 
 Needs your attention:

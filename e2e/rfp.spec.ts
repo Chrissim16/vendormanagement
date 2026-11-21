@@ -488,9 +488,9 @@ test.describe("Q-7 AI comparison", () => {
     await expect(panel).toContainText(`${b.vendorName}: No answer.`);
     await expect(panel).toContainText(`Proposed scores on ${first.name}`);
     await expect(panel).toContainText(`${a.vendorName}: 4 out of 5.`);
-    await expect(panel).toContainText("From the answer: “Yes, as standard since 2019.”");
+    await expect(panel).toContainText(`From the answer of ${a.vendorName}: “Yes, as standard since 2019.”`);
     await expect(panel).toContainText(`${b.vendorName}: 2 out of 5.`);
-    await expect(panel).toContainText("From the answer: “Yes, we can.”");
+    await expect(panel).toContainText(`From the answer of ${b.vendorName}: “Yes, we can.”`);
     await expectAccessible(page);
 
     // An answer changed afterwards: the page says the comparison is behind.

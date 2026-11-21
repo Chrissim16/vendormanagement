@@ -323,7 +323,10 @@ function Comparison({ rfp, running }: { rfp: RfpDetail; running: Candidate[] }) 
                               <span className="font-semibold">
                                 {name(x.candidateId)}: <span className="num">{x.score}</span> out of 5.
                               </span>{" "}
-                              {x.reason} <span className="text-ink-2">From the answer: “{x.quote}”</span>
+                              {x.reason}{" "}
+                              <span className="text-ink-2">
+                                From the answer of {name(x.candidateId)}: “{x.quote}”
+                              </span>
                             </li>
                           ))}
                       </ul>

@@ -87,7 +87,10 @@ function CriterionRow({ rfp, candidate: c, criterion: k, canScore }: { rfp: RfpD
       )}
       {evidence && proposal && (
         <p id={evidenceId} className="rounded-2xl bg-sunk px-5 py-3.5 text-[13.5px]">
-          {proposal.reason} <span className="text-ink-2">From the answer: “{proposal.quote}”</span>
+          {proposal.reason}{" "}
+          <span className="text-ink-2">
+            From the answer of {c.vendorName}: “{proposal.quote}”
+          </span>
         </p>
       )}
       {mine && canScore && (
