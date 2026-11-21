@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { cloudJira, fakeJira, jiraClient, jiraDate, plainText, slaOutcome, type JiraTransport } from "./jira";
+import { cloudJira, fakeJira, jiraClient, jiraDate, plainText, retryWait, slaOutcome, type JiraTransport } from "./jira";
+import { fakeJiraSite } from "./jira-fake";
 import { FAKE_LABELS, FAKE_STATUSES } from "./jira-fake";
 
 const NOON = new Date("2026-11-21T12:00:00Z");
@@ -32,6 +33,16 @@ describe("reading what Jira sends", () => {
     expect(slaOutcome(value, "first").breached).toBe(false);
     expect(slaOutcome(value, "last")).toEqual({ at: new Date(2000), breached: true });
   });
+  it("puts finished cycles in time order itself, whatever order Jira sends them in", () => {
+    const value = {
+      completedCycles: [
+        { startTime: { epochMillis: 1500 }, stopTime: { epochMillis: 2000 }, breached: true },
+        { startTime: { epochMillis: 500 }, stopTime: { epochMillis: 1000 }, breached: false },
+      ],
+    };
+    expect(slaOutcome(value, "first")).toEqual({ at: new Date(1000), breached: false });
+    expect(slaOutcome(value, "last")).toEqual({ at: new Date(2000), breached: true });
+  });
   it("has no outcome while an SLA is running in time, and a late one once it has run out", () => {
     expect(slaOutcome({ completedCycles: [], ongoingCycle: { breached: false } }, "first")).toEqual({ at: null, breached: null });
     expect(slaOutcome({ completedCycles: [], ongoingCycle: { breached: true } }, "first")).toEqual({ at: null, breached: true });
@@ -60,17 +71,20 @@ describe("reading what Jira sends", () => {
     expect(plainText(null)).toBe("");
   });
 
-  it("reads a ticket's earlier statuses and labels from its history, pages of search results, and a rating sent as a number", async () => {
+  it("reads earlier statuses and labels from the history of all tickets at once, pages of search results, and a rating sent as a number", async () => {
     const calls: string[] = [];
     const site: JiraTransport = async (method, path, body) => {
-      calls.push(`${method} ${path.split("?")[0]} ${(body as { nextPageToken?: string })?.nextPageToken ?? ""}`.trim());
+      const b = (body ?? {}) as { nextPageToken?: string; jql?: string; issueIdsOrKeys?: string[] };
+      calls.push(`${method} ${path} ${b.nextPageToken ?? ""}`.trim());
       if (path === "/rest/api/3/field")
         return [
-          { id: "customfield_1", name: "Time to first response" },
+          { id: "customfield_9", name: "Time to first response", schema: { custom: "com.example:something-else" } },
+          { id: "customfield_1", name: "Time to first response", schema: { custom: "com.atlassian.servicedesk:sd-sla-field" } },
           { id: "customfield_3", name: "Satisfaction" },
         ];
       if (path === "/rest/api/3/search/jql") {
-        const issue = (key: string) => ({
+        const issue = (id: string, key: string) => ({
+          id,
           key,
           fields: {
             summary: "S",
@@ -80,51 +94,73 @@ describe("reading what Jira sends", () => {
             resolutiondate: "2026-11-02T10:00:00.000+0100",
             labels: ["now"],
             customfield_3: 4,
+            customfield_1: { completedCycles: [{ stopTime: { epochMillis: Date.UTC(2026, 10, 1, 10) }, breached: true }] },
+            customfield_9: { completedCycles: [{ stopTime: { epochMillis: 1 }, breached: false }] },
           },
         });
-        return (body as { nextPageToken?: string }).nextPageToken ? { issues: [issue("X-2")], isLast: true } : { issues: [issue("X-1")], nextPageToken: "p2", isLast: false };
+        if (b.jql!.includes("IS EMPTY")) return { issues: [], isLast: true };
+        // The last page carries no token, as Atlassian documents.
+        return b.nextPageToken ? { issues: [issue("502", "X-2")], isLast: true } : { issues: [issue("501", "X-1")], nextPageToken: "p2", isLast: false };
       }
-      if (path.includes("/changelog"))
-        return {
-          isLast: true,
-          values: [
-            { items: [{ field: "status", fromString: "Open", toString: "Escalated" }] },
-            {
-              items: [
-                { field: "labels", fromString: "old one", toString: "now" },
-                { field: "assignee", fromString: "a", toString: "b" },
+      if (path === "/rest/api/3/changelog/bulkfetch") {
+        expect(b.issueIdsOrKeys).toEqual(["501", "502"]);
+        // One ticket's history arrives spread over two pages; the answer names tickets by id, never by key.
+        return b.nextPageToken
+          ? {
+              issueChangeLogs: [
+                {
+                  issueId: "501",
+                  changeHistories: [
+                    {
+                      items: [
+                        { field: "labels", fieldId: "labels", fromString: "old one", toString: "now" },
+                        { field: "assignee", fromString: "a", toString: "b" },
+                      ],
+                    },
+                  ],
+                },
               ],
-            },
-          ],
-        };
+              nextPageToken: null,
+            }
+          : { issueChangeLogs: [{ issueId: "501", changeHistories: [{ items: [{ field: "status", fieldId: "status", fromString: "Open", toString: "Escalated" }] }] }], nextPageToken: "h2" };
+      }
       throw new Error(`unexpected ${path}`);
     };
     const tickets = await jiraClient(site, "real", "https://jira.example.test").fetchTickets("x", new Date("2026-11-21T11:00:00Z"), NOON);
     expect(tickets.map((t) => t.key)).toEqual(["X-1", "X-2"]);
-    expect(calls.filter((c) => c.includes("search"))).toEqual(["POST /rest/api/3/search/jql", "POST /rest/api/3/search/jql p2"]);
+    expect(calls.filter((c) => c.includes("search"))).toEqual(["POST /rest/api/3/search/jql", "POST /rest/api/3/search/jql p2", "POST /rest/api/3/search/jql"]);
+    // Two tickets, two pages of history: two requests, not one per ticket.
+    expect(calls.filter((c) => c.includes("changelog"))).toEqual(["POST /rest/api/3/changelog/bulkfetch", "POST /rest/api/3/changelog/bulkfetch h2"]);
     const t = tickets[0]!;
     expect(t.statusesSeen.sort()).toEqual(["Done", "Escalated", "Open"]);
     expect(t.labelsSeen.sort()).toEqual(["now", "old", "one"]);
+    // A ticket with no history has only what it carries now.
+    expect(tickets[1]!.statusesSeen).toEqual(["Done"]);
     expect(t.csat).toBe(4);
     // No satisfaction date on this site: the rating counts when the ticket was resolved.
     expect(t.csatAt?.toISOString()).toBe("2026-11-02T09:00:00.000Z");
     // No "Time to resolution" on this site: no outcome, not a breach.
     expect(t.resolutionBreached).toBeNull();
-    expect(t.firstResponseBreached).toBeNull();
+    // Of two fields with the same name, the service desk's own is read.
+    expect(t.firstResponseBreached).toBe(true);
   });
 
-  it("leaves out a ticket that vanished between the search and the reading of its history, without failing the board", async () => {
-    const site: JiraTransport = async (_m, path) => {
+  it("asks for the history of a large board a thousand tickets at a time", async () => {
+    const batches: number[] = [];
+    const site: JiraTransport = async (_m, path, body) => {
       if (path === "/rest/api/3/field") return [];
-      if (path === "/rest/api/3/search/jql")
-        return { issues: ["X-1", "X-2"].map((key) => ({ key, fields: { status: { name: "Open" }, created: "2026-11-01T10:00:00.000+0100" } })), isLast: true };
-      if (path.includes("/X-1/")) throw Object.assign(new Error("Issue does not exist"), { status: 404 });
-      return { values: [], isLast: true };
+      if (path === "/rest/api/3/search/jql") {
+        if ((body as { jql: string }).jql.includes("IS EMPTY")) return { issues: [], isLast: true };
+        return { issues: Array.from({ length: 2300 }, (_, i) => ({ id: String(i + 1), key: `X-${i + 1}`, fields: { status: { name: "Open" }, created: "2026-11-01T10:00:00.000+0100" } })), isLast: true };
+      }
+      batches.push((body as { issueIdsOrKeys: string[] }).issueIdsOrKeys.length);
+      return { issueChangeLogs: [] };
     };
-    expect((await jiraClient(site, "real", null).fetchTickets("X", null, NOON)).map((t) => t.key)).toEqual(["X-2"]);
+    expect((await jiraClient(site, "real", null).fetchTickets("X", null, NOON)).length).toBe(2300);
+    expect(batches).toEqual([1000, 1000, 300]);
   });
 
-  it("asks for changes as 'the last N minutes' with ten minutes of overlap, and for everything the first time", async () => {
+  it("asks two plain questions: what changed in 'the last N minutes' with ten minutes of overlap (everything the first time), and what is unresolved", async () => {
     const asked: string[] = [];
     const site: JiraTransport = async (_m, path, body) => {
       if (path === "/rest/api/3/field") return [];
@@ -136,9 +172,21 @@ describe("reading what Jira sends", () => {
     await client.fetchTickets("BLU", null, NOON);
     // Unresolved tickets are always asked for; the first time, so are those resolved in the last two years.
     expect(asked).toEqual([
-      'project = "BLU" AND (updated >= "-70m" OR resolution IS EMPTY) ORDER BY updated ASC',
-      'project = "BLU" AND (resolved >= "-105w" OR resolution IS EMPTY) ORDER BY updated ASC',
+      'project = "BLU" AND updated >= "-70m" ORDER BY updated ASC',
+      'project = "BLU" AND resolution IS EMPTY ORDER BY updated ASC',
+      'project = "BLU" AND resolved >= "-105w" ORDER BY updated ASC',
+      'project = "BLU" AND resolution IS EMPTY ORDER BY updated ASC',
     ]);
+  });
+
+  it("waits at least as long as Jira asks after 'slow down', a little longer each try, and gives up when the wait is an hourly allowance", () => {
+    expect(retryWait("20", 0, () => 0)).toBe(20);
+    expect(retryWait("45", 2, () => 1)).toBeCloseTo(58.5);
+    for (let i = 0; i < 20; i++) expect(retryWait("7", 1)).toBeGreaterThanOrEqual(7);
+    // No header: 1, 2, 4 seconds, never less.
+    expect([0, 1, 2].map((n) => retryWait(null, n, () => 0))).toEqual([1, 2, 4]);
+    expect(retryWait("not a number", 1, () => 0)).toBe(2);
+    expect(retryWait("1800", 0)).toBeNull();
   });
 
   it("gives the address of a ticket on the real site, and none on the stand-in", () => {
@@ -224,6 +272,27 @@ describe("the stand-in Jira", () => {
       expect(t.updatedAt.getTime()).toBeLessThanOrEqual(NOON.getTime());
     }
     expect(new Set(all.map((t) => t.csat))).toEqual(new Set([null, 1, 2, 3, 4, 5]));
+  });
+
+  it("answers ticket history in pages that cut across tickets, by ticket id, and refuses more than a thousand tickets", async () => {
+    const site = fakeJiraSite(() => NOON);
+    const found = (await site("POST", "/rest/api/3/search/jql", { jql: 'project = "BLU" AND resolved >= "-4w"', maxResults: 100 })) as { issues: { id: string; key: string }[] };
+    const ids = found.issues.map((i) => i.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.some((id) => id.includes("BLU"))).toBe(false);
+    const whole = (await site("POST", "/rest/api/3/changelog/bulkfetch", { issueIdsOrKeys: ids })) as { issueChangeLogs: { issueId: string; changeHistories: unknown[] }[]; nextPageToken?: string };
+    expect(whole.nextPageToken).toBeUndefined();
+    const total = whole.issueChangeLogs.reduce((n, l) => n + l.changeHistories.length, 0);
+    expect(total).toBeGreaterThan(ids.length);
+    let seen = 0;
+    let token: string | undefined;
+    do {
+      const page = (await site("POST", "/rest/api/3/changelog/bulkfetch", { issueIdsOrKeys: ids, maxResults: 7, nextPageToken: token })) as typeof whole;
+      seen += page.issueChangeLogs.reduce((n, l) => n + l.changeHistories.length, 0);
+      token = page.nextPageToken;
+    } while (token);
+    expect(seen).toBe(total);
+    await expect(site("POST", "/rest/api/3/changelog/bulkfetch", { issueIdsOrKeys: Array.from({ length: 1001 }, (_, i) => String(i)) })).rejects.toMatchObject({ status: 400 });
   });
 
   it("fails every second fetch of the flaky demo board, and not found for a board that does not exist", async () => {

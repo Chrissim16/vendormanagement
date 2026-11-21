@@ -21,6 +21,23 @@ Newest entry first. Written for the owner, in plain language.
 
 ## Log
 
+### 2026-11-21 Jira connection checked against Atlassian's documentation
+The check left open at the end of M3 is done: this build environment can open Atlassian's developer documentation, and the Jira connection was compared with it point by point.
+
+**Confirmed as written:** the call that searches for tickets and how its pages follow each other; the call that lists Jira's fields (where the app finds the response-time and satisfaction measurements by name); the three calls about boards; the shape of a response-time (SLA) result, with finished rounds and a running one; how Jira writes dates and times; and the way of signing in with an email address and an API token.
+
+**Changed, because the documentation showed a better or safer way:**
+
+- **Ticket history is now fetched for a thousand tickets at a time**, where it used to be one request per ticket. Linking a large board for the first time now takes a handful of requests, so the worry about a first sync taking minutes is largely gone.
+- **Tickets are asked for in two plain questions** ("changed lately" and "not yet resolved") where it used to be one combined question. There are reports of Jira returning too few tickets for that kind of combined question (not confirmed in the documentation itself); two plain questions cannot be affected.
+- **When Jira asks the app to slow down**, the app now waits at least as long as Jira says (it could wait less before), a little longer at each try, and gives up until the next sync when Jira says its hourly allowance is used up.
+- **A reopened ticket's rounds are put in time order by the app itself**, since the documentation does not promise the order they arrive in.
+- **If two measurements carry the same name**, the app takes the one that belongs to the service desk.
+
+The stand-in Jira used for building and testing was changed in the same way, so it still answers exactly as the documentation says the real one does.
+
+**Still only visible at work** (open question W8), because Atlassian does not document them: what the four measurements are called on the company's Jira, how a satisfaction rating is written on a ticket, how status and label changes are named in a ticket's history, and whether the company's kind of API token works on the Jira address itself. One Test link and one Sync now on a real board answer all four. Until then the connection stays marked unproven; a wrong name leaves a figure empty, never wrong.
+
 ### 2026-11-21 M3 Performance from Jira done
 The app now shows how each helpdesk vendor is performing, from its Jira tickets. Because the company's Jira cannot be reached from here, it runs on a stand-in Jira with invented boards and tickets; the real connection is written but has never run (see "Needs your attention").
 
@@ -39,7 +56,7 @@ How it was checked: an independent tester used the running app against all five 
 
 Needs your attention:
 
-- **The Jira documentation could not be opened from here.** The plan said to confirm Jira's field names from Atlassian's documentation before building. That site is blocked in this build environment; a separate environment that allows it was created with your approval, but this session could not be moved to it. The Jira connection is therefore written from general knowledge and proven only against the stand-in. It is built so that a wrong name gives empty figures, never wrong ones, and Test link and the System check page now say which measurement is missing. Either start the next session in the "vendormanagement" environment so the check can be done, or check at work with one Test link (open question W8).
+- **The Jira documentation could not be opened from here.** (Since done: see the entry above.) The Jira connection was written from general knowledge and proven only against the stand-in, built so that a wrong name gives empty figures, never wrong ones.
 - **Three requirements were reworded slightly** to match what was built: any member may press Sync now and the schedule is hourly (J-2); whether a figure must be at least or at most its target follows from the metric (J-4); the overview covers scored vendors that have a board and names the others (J-5).
 
 Decided on your behalf (see `docs/open-questions.md`, Q19 to Q27):
@@ -132,7 +149,8 @@ architecture and plan were rewritten to match. The plan now has ten milestones.
 First version of the brief, requirements, plan and agent workflow. No application code yet.
 
 ## Follow-ups
-- Linking a board fetches its tickets while the admin waits. That is fine for a few thousand tickets; a board with tens of thousands could take minutes the first time, because Jira is asked once per ticket for its history. To be measured at work, and moved to the background if slow.
+- Linking a board fetches its tickets while the admin waits. Since the documentation check this takes a handful of requests even for a large board (history is asked for a thousand tickets at a time, not ticket by ticket), so it should be seconds, not minutes. To be measured once at work.
+- Jira connection, still to be seen at work (open question W8): the names of the four measurements on the company's Jira, how a satisfaction rating is written on a ticket, the names "status" and "labels" in a ticket's history, and whether the company's kind of API token works on the Jira address itself. One Test link and one Sync now on a real board answer all four.
 - A board whose sync is switched off keeps its tickets beyond 24 months, since the clean-up runs with the sync.
 - A reopened ticket is judged on its final resolution; an earlier late resolution of the same ticket is not counted.
 - The median first response time leaves out tickets still waiting for an answer, so it reads slightly low while answers are slipping.

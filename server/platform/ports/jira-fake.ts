@@ -203,6 +203,11 @@ function storiesOfDay(board: Board, dayIndex: number, firstNumber: number): Stor
   return out;
 }
 
+/** Jira's own number for a ticket: different for every ticket, and nothing like its key. */
+const ticketId = (key: string) => {
+  const [board = "", number = "0"] = key.split("-");
+  return String((boards.findIndex((b) => b.key === board) + 1) * 1_000_000 + Number(number));
+};
 const jiraTime = (ms: number) => new Date(ms).toISOString().replace("Z", "+0000");
 const slaTime = (ms: number) => ({ iso8601: jiraTime(ms), epochMillis: ms });
 const FIELDS = { firstResponse: "customfield_10030", resolution: "customfield_10031", satisfaction: "customfield_10032", satisfactionDate: "customfield_10033" };
@@ -246,7 +251,7 @@ function issueAt(board: Board, s: Story, now: number) {
     updated,
     changes,
     issue: {
-      id: String(hash(s.key)),
+      id: ticketId(s.key),
       key: s.key,
       fields: {
         summary: s.summary,
@@ -292,8 +297,7 @@ export function fakeJiraSite(now: () => Date): JiraTransport {
 
   return async (method, path, body) => {
     const at = now().getTime();
-    const [route, query = ""] = path.split("?");
-    const params = new URLSearchParams(query);
+    const [route] = path.split("?");
     let m: RegExpMatchArray | null;
 
     if (method === "GET" && route === "/rest/api/3/project/search") {
@@ -323,7 +327,9 @@ export function fakeJiraSite(now: () => Date): JiraTransport {
       const jql = q.jql ?? "";
       const board = boardOf(jql.match(/project\s*=\s*"?([A-Za-z0-9_]+)"?/)?.[1] ?? "");
       const descending = /ORDER BY updated DESC/i.test(jql);
-      if (board.flaky && !descending && !q.nextPageToken) {
+      const unresolved = /resolution\s+IS\s+EMPTY/i.test(jql);
+      // A fetch asks two questions; the flaky board fails on the second one of every other fetch.
+      if (board.flaky && unresolved && !q.nextPageToken) {
         const n = (fetches.get(board.key) ?? 0) + 1;
         fetches.set(board.key, n);
         if (n % 2 === 0) throw refuse(503, "Service Unavailable");
@@ -331,7 +337,6 @@ export function fakeJiraSite(now: () => Date): JiraTransport {
       // The conditions the app uses, joined by OR: changed lately, resolved lately, or not resolved.
       const minutes = jql.match(/updated\s*>=\s*"-(\d+)m"/)?.[1];
       const weeks = jql.match(/resolved\s*>=\s*"-(\d+)w"/)?.[1];
-      const unresolved = /resolution\s+IS\s+EMPTY/i.test(jql);
       const wanted = (i: ReturnType<typeof issueAt>, s: Story) =>
         (!minutes && !weeks && !unresolved) ||
         (minutes !== undefined && i.updated >= at - Number(minutes) * MIN) ||
@@ -347,18 +352,27 @@ export function fakeJiraSite(now: () => Date): JiraTransport {
       const last = from + size >= all.length;
       return { issues: all.slice(from, from + size).map((i) => i.issue), isLast: last, ...(last ? {} : { nextPageToken: String(from + size) }) };
     }
-    if (method === "GET" && (m = route!.match(/^\/rest\/api\/3\/issue\/([^/]+)\/changelog$/))) {
-      const key = decodeURIComponent(m[1]!);
-      const board = boardOf(key.split("-")[0] ?? "");
-      const story = stories(board, at).find((s) => s.key === key);
-      if (!story) throw refuse(404, "Issue does not exist or you do not have permission to see it.");
-      const all = issueAt(board, story, at).changes;
-      const startAt = Number(params.get("startAt") ?? 0);
-      const size = Math.min(Number(params.get("maxResults") ?? 100), 100);
-      const values = all
-        .slice(startAt, startAt + size)
-        .map((c, i) => ({ id: String(startAt + i + 1), created: jiraTime(c.at), items: [{ field: c.field, fieldtype: "jira", fromString: c.from, toString: c.to }] }));
-      return { startAt, maxResults: size, total: all.length, isLast: startAt + size >= all.length, values };
+    if (method === "POST" && route === "/rest/api/3/changelog/bulkfetch") {
+      const q = body as { issueIdsOrKeys?: string[]; maxResults?: number; nextPageToken?: string };
+      const asked = q.issueIdsOrKeys ?? [];
+      if (asked.length < 1 || asked.length > 1000) throw refuse(400, "issueIdsOrKeys must hold between 1 and 1000 items.");
+      // Every change of every ticket asked for, oldest first, cut into pages that pay no attention to where one ticket ends.
+      const byId = new Map(boards.flatMap((b) => stories(b, at).map((s) => [ticketId(s.key), { b, s }] as const)));
+      const all = asked
+        .flatMap((id) => {
+          const hit = byId.get(id);
+          return hit ? issueAt(hit.b, hit.s, at).changes.map((c) => ({ id, c })) : [];
+        })
+        .sort((x, y) => x.c.at - y.c.at || x.id.localeCompare(y.id));
+      const size = Math.min(Math.max(q.maxResults ?? 1000, 1), 10000);
+      const from = Number(q.nextPageToken ?? 0) || 0;
+      const logs = new Map<string, { id: string; created: string; items: unknown[] }[]>();
+      all.slice(from, from + size).forEach(({ id, c }, i) => {
+        const list = logs.get(id) ?? [];
+        logs.set(id, list);
+        list.push({ id: String(from + i + 1), created: jiraTime(c.at), items: [{ field: c.field, fieldtype: "jira", fieldId: c.field, fromString: c.from, toString: c.to }] });
+      });
+      return { issueChangeLogs: [...logs].map(([issueId, changeHistories]) => ({ issueId, changeHistories })), ...(from + size < all.length ? { nextPageToken: String(from + size) } : {}) };
     }
     throw refuse(404, `The stand-in Jira has no answer for ${method} ${route}.`);
   };

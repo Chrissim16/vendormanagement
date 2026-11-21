@@ -10,13 +10,14 @@ import type { JiraBoard, JiraPort, JiraTicket, PortKind } from "./types";
  */
 export type JiraTransport = (method: "GET" | "POST", path: string, body?: unknown) => Promise<unknown>;
 
-// ---------- The shapes Jira sends. Written from Atlassian's documentation; see the notes on `jiraClient`.
+// ---------- The shapes Jira sends, as Atlassian's published API description gives them; see the notes on `jiraClient`.
 
 interface JiraTime {
   iso8601?: string;
   epochMillis?: number;
 }
 interface SlaCycle {
+  startTime?: JiraTime;
   stopTime?: JiraTime;
   breached?: boolean;
 }
@@ -25,6 +26,8 @@ interface SlaValue {
   ongoingCycle?: SlaCycle;
 }
 interface JiraIssue {
+  /** Jira's own number for the ticket. The history call answers by this, not by the key. */
+  id?: string;
   key: string;
   fields: Record<string, unknown> & {
     summary?: string;
@@ -41,9 +44,15 @@ interface SearchPage {
   nextPageToken?: string;
   isLast?: boolean;
 }
-interface ChangelogPage {
-  values?: { items?: { field?: string; fromString?: string | null; toString?: string | null }[] }[];
-  isLast?: boolean;
+interface ChangeItem {
+  field?: string;
+  fieldId?: string;
+  fromString?: string | null;
+  toString?: string | null;
+}
+interface BulkChangelogPage {
+  issueChangeLogs?: { issueId?: string; changeHistories?: { items?: ChangeItem[] }[] }[];
+  nextPageToken?: string | null;
 }
 
 /** Jira writes "+0100"; a colon makes it a time every JavaScript engine reads. */
@@ -60,7 +69,11 @@ const slaTime = (t: JiraTime | undefined) => (t?.epochMillis != null ? new Date(
  */
 export function slaOutcome(value: unknown, which: "first" | "last"): { at: Date | null; breached: boolean | null } {
   const v = (value ?? {}) as SlaValue;
-  const done = which === "first" ? v.completedCycles?.[0] : v.completedCycles?.at(-1);
+  // Atlassian does not say in which order the finished cycles come, so they are put in time order here.
+  const when = (c: SlaCycle) => (slaTime(c.stopTime) ?? slaTime(c.startTime))?.getTime();
+  const cycles = [...(v.completedCycles ?? [])];
+  if (cycles.every((c) => when(c) != null)) cycles.sort((a, b) => when(a)! - when(b)!);
+  const done = which === "first" ? cycles[0] : cycles.at(-1);
   if (done) return { at: slaTime(done.stopTime), breached: done.breached === true };
   if (v.ongoingCycle?.breached === true) return { at: null, breached: true };
   return { at: null, breached: null };
@@ -77,32 +90,46 @@ export function plainText(node: unknown): string {
 }
 
 const PAGE = 100;
+/** The most tickets Jira gives the history of in one request. */
+const HISTORY_BATCH = 1000;
 /** A little over 24 months, the time tickets are kept after they are resolved. */
 const KEEP_WEEKS = 105;
 const MAX_PAGES = 2000;
 const FIELD_NAMES = { firstResponse: "time to first response", resolution: "time to resolution", satisfaction: "satisfaction", satisfactionDate: "satisfaction date" } as const;
 type FieldIds = Partial<Record<keyof typeof FIELD_NAMES, string>>;
+type Past = { statuses: string[]; labels: string[] };
 const quote = (key: string) => `"${key.replace(/[^A-Za-z0-9_]/g, "")}"`;
 
 /**
  * The Jira port on top of a transport.
  *
- * UNPROVEN against a real Jira until the first deployment. Atlassian's documentation could
- * not be opened from the build environment when this was written (open question W8), so
- * these points are from general knowledge of the API and must be checked at work with the
- * system check page and one "Test link":
- * - search is `POST /rest/api/3/search/jql`, paged with `nextPageToken`;
- * - SLA results and the satisfaction rating are custom fields, found by their names through
- *   `GET /rest/api/3/field`: "Time to first response", "Time to resolution", "Satisfaction", "Satisfaction date";
- * - a ticket's earlier statuses and labels come from `GET /rest/api/3/issue/{key}/changelog`.
+ * UNPROVEN against a real Jira until the first deployment. Checked on 21 Nov 2026 against
+ * Atlassian's published API description (developer.atlassian.com); open question W8 lists
+ * what was confirmed and what can only be seen on the company's own Jira.
+ * Confirmed there:
+ * - search is `POST /rest/api/3/search/jql` (`jql`, `fields`, `maxResults`, `nextPageToken`); the answer has `issues`,
+ *   `isLast` and a `nextPageToken` that is absent on the last page, and no total. A page may hold fewer tickets than asked for;
+ * - ticket history for up to 1000 tickets at once is `POST /rest/api/3/changelog/bulkfetch`, answered per ticket id;
+ * - `GET /rest/api/3/field` is one plain list; `GET /rest/api/3/project/search` gives at most 100 per page;
+ * - an SLA has `completedCycles` (each with `stopTime` and `breached`) and an `ongoingCycle` (`breached`, no `stopTime`);
+ * - times are written like 2026-01-05T09:12:33.000+0100.
+ * Not in the documentation, so still to be seen at work with one "Test link" and one "Sync now":
+ * - the names of the SLA and satisfaction fields ("Time to first response", "Time to resolution", "Satisfaction",
+ *   "Satisfaction date") and the exact value of the satisfaction field on a ticket;
+ * - that a status or label change is called "status" or "labels" in the history.
+ * A name that differs leaves that figure empty; it never makes one wrong.
  */
 export function jiraClient(call: JiraTransport, kind: PortKind, browseBase: string | null): JiraPort {
   let fieldIds: Promise<FieldIds> | null = null;
   const fields = () =>
     (fieldIds ??= (async () => {
-      const all = (await call("GET", "/rest/api/3/field")) as { id: string; name: string }[];
+      const all = (await call("GET", "/rest/api/3/field")) as { id: string; name: string; schema?: { custom?: string } }[];
       const out: FieldIds = {};
-      for (const [k, name] of Object.entries(FIELD_NAMES) as [keyof typeof FIELD_NAMES, string][]) out[k] = all.find((f) => f.name?.toLowerCase() === name)?.id;
+      for (const [k, name] of Object.entries(FIELD_NAMES) as [keyof typeof FIELD_NAMES, string][]) {
+        // Two fields can carry the same name; the one that belongs to the service desk is the one meant.
+        const named = all.filter((f) => f.name?.trim().toLowerCase() === name);
+        out[k] = (named.find((f) => f.schema?.custom?.includes("servicedesk")) ?? named[0])?.id;
+      }
       return out;
     })().catch((e) => {
       fieldIds = null;
@@ -121,39 +148,44 @@ export function jiraClient(call: JiraTransport, kind: PortKind, browseBase: stri
     throw new Error("Jira kept sending more pages than a board can hold.");
   }
 
-  /** Every status and label the ticket carried before the ones it has now. */
-  async function history(key: string): Promise<{ statuses: string[]; labels: string[] }> {
-    const statuses: string[] = [];
-    const labels: string[] = [];
-    for (let startAt = 0, page = 0; page < MAX_PAGES; page++) {
-      const res = (await call("GET", `/rest/api/3/issue/${encodeURIComponent(key)}/changelog?startAt=${startAt}&maxResults=${PAGE}`)) as ChangelogPage;
-      const entries = res.values ?? [];
-      for (const item of entries.flatMap((v) => v.items ?? [])) {
-        const both = [item.fromString, item.toString].filter((s): s is string => typeof s === "string" && s.length > 0);
-        if (item.field === "status") statuses.push(...both);
-        // A label change lists all labels before and after, separated by spaces.
-        if (item.field === "labels") labels.push(...both.flatMap((s) => s.split(/\s+/)).filter(Boolean));
+  /**
+   * Every status and label each ticket carried before the ones it has now, by Jira's ticket id.
+   * Asked for a thousand tickets at a time, so a large board takes a handful of requests, not one per ticket.
+   */
+  async function histories(ids: string[]): Promise<Map<string, Past>> {
+    const out = new Map<string, Past>();
+    for (let from = 0; from < ids.length; from += HISTORY_BATCH) {
+      const issueIdsOrKeys = ids.slice(from, from + HISTORY_BATCH);
+      let nextPageToken: string | undefined;
+      for (let page = 0; ; page++) {
+        if (page >= MAX_PAGES) throw new Error("Jira kept sending more pages of ticket history than a board can hold.");
+        const res = (await call("POST", "/rest/api/3/changelog/bulkfetch", { issueIdsOrKeys, maxResults: HISTORY_BATCH, ...(nextPageToken ? { nextPageToken } : {}) })) as BulkChangelogPage;
+        for (const log of res.issueChangeLogs ?? []) {
+          if (!log.issueId) continue;
+          // One ticket's history can be spread over several pages.
+          const past = out.get(log.issueId) ?? { statuses: [], labels: [] };
+          out.set(log.issueId, past);
+          for (const item of (log.changeHistories ?? []).flatMap((h) => h.items ?? [])) {
+            const both = [item.fromString, item.toString].filter((s): s is string => typeof s === "string" && s.length > 0);
+            const names = [item.fieldId, item.field].map((n) => n?.toLowerCase());
+            if (names.includes("status")) past.statuses.push(...both);
+            // A label change lists all labels before and after, separated by spaces.
+            if (names.includes("labels")) past.labels.push(...both.flatMap((s) => s.split(/\s+/)).filter(Boolean));
+          }
+        }
+        nextPageToken = res.nextPageToken ?? undefined;
+        if (!nextPageToken) break;
       }
-      startAt += entries.length;
-      if (res.isLast !== false || entries.length === 0) break;
     }
-    return { statuses, labels };
+    return out;
   }
 
   const unique = (list: string[]) => [...new Map(list.map((s) => [s.toLowerCase(), s])).values()];
 
-  async function toTicket(issue: JiraIssue, ids: FieldIds): Promise<JiraTicket | null> {
+  function toTicket(issue: JiraIssue, ids: FieldIds, past: Past): JiraTicket | null {
     const f = issue.fields;
     const createdAt = jiraDate(f.created);
     if (!createdAt) return null;
-    let past;
-    try {
-      past = await history(issue.key);
-    } catch (e) {
-      // Deleted or hidden between the search and this request: it is no longer a ticket of this board.
-      if ((e as { status?: number }).status === 404) return null;
-      throw e;
-    }
     const first = slaOutcome(ids.firstResponse ? f[ids.firstResponse] : null, "first");
     const resolution = slaOutcome(ids.resolution ? f[ids.resolution] : null, "last");
     const resolvedAt = jiraDate(f.resolutiondate);
@@ -218,22 +250,19 @@ export function jiraClient(call: JiraTransport, kind: PortKind, browseBase: stri
       // an open ticket that no longer comes back has been deleted or moved away. The first time, tickets resolved more than
       // two years ago are left where they are.
       const changed = minutes ? `updated >= "-${minutes}m"` : `resolved >= "-${KEEP_WEEKS}w"`;
-      const jql = `project = ${quote(projectKey.toUpperCase())} AND (${changed} OR resolution IS EMPTY) ORDER BY updated ASC`;
+      const project = `project = ${quote(projectKey.toUpperCase())}`;
       const wanted = ["summary", "description", "status", "created", "updated", "resolutiondate", "labels", ...Object.values(ids).filter((v): v is string => !!v)];
-      const issues = await search(jql, wanted);
-      const byKey = new Map(issues.map((i) => [i.key, i]));
-      const out: JiraTicket[] = [];
-      // A few at a time: each ticket's history is a request of its own.
-      const queue = [...byKey.values()];
-      await Promise.all(
-        Array.from({ length: 4 }, async () => {
-          for (let issue = queue.shift(); issue; issue = queue.shift()) {
-            const t = await toTicket(issue, ids);
-            if (t) out.push(t);
-          }
-        }),
-      );
-      return out.sort((a, b) => a.key.localeCompare(b.key, "en", { numeric: true }));
+      // Two plain questions instead of one joined by OR: every ticket that matches either comes back, whatever Jira makes of the combination.
+      const byKey = new Map<string, JiraIssue>();
+      for (const condition of [changed, "resolution IS EMPTY"])
+        for (const issue of await search(`${project} AND ${condition} ORDER BY updated ASC`, wanted)) byKey.set(issue.key, issue);
+      const issues = [...byKey.values()];
+      const past = await histories(issues.map((i) => i.id).filter((id): id is string => !!id));
+      const none: Past = { statuses: [], labels: [] };
+      return issues
+        .map((issue) => toTicket(issue, ids, (issue.id ? past.get(issue.id) : undefined) ?? none))
+        .filter((t): t is JiraTicket => !!t)
+        .sort((a, b) => a.key.localeCompare(b.key, "en", { numeric: true }));
     },
     ticketUrl: (ticketKey) => (browseBase ? `${browseBase}/browse/${encodeURIComponent(ticketKey)}` : null),
     async check() {
@@ -263,6 +292,19 @@ export function jiraClient(call: JiraTransport, kind: PortKind, browseBase: stri
 /** Local stand-in: invented boards and tickets, answered in Jira's own shapes. `now` is the moment the invented helpdesk has reached. */
 export const fakeJira = (now: () => Date = () => new Date()): JiraPort => jiraClient(fakeJiraSite(now), "stand-in", null);
 
+/**
+ * How many seconds to wait before asking Jira again after a "slow down" answer, or null when it is
+ * better to give up and let the next sync try. Atlassian's guidance: never wait less than Retry-After,
+ * back off further at each attempt, and add some randomness so callers do not all return at once.
+ * A wait of more than a minute means an hourly allowance is used up; waiting inside a request is no use then.
+ */
+export function retryWait(retryAfter: string | null, attempt: number, random: () => number = Math.random): number | null {
+  const asked = Number(retryAfter);
+  if (Number.isFinite(asked) && asked > 60) return null;
+  const base = Number.isFinite(asked) && asked > 0 ? asked : 2 ** attempt;
+  return base * (1 + 0.3 * random());
+}
+
 /** Deployed: Jira Cloud REST API with a service account's email and API token. UNPROVEN until first deployment. */
 export function cloudJira(baseUrl: string, email: string, token: string): JiraPort {
   const auth = "Basic " + Buffer.from(`${email}:${token}`).toString("base64");
@@ -275,11 +317,13 @@ export function cloudJira(baseUrl: string, email: string, token: string): JiraPo
         body: body === undefined ? undefined : JSON.stringify(body),
         signal: limit(),
       });
-      // Jira asks callers to slow down with 429 and says for how long.
+      // Jira asks callers to slow down with 429, and says in Retry-After (seconds) how long to wait at the least.
       if (res.status === 429 && attempt < 3) {
-        const wait = Math.min(Number(res.headers.get("Retry-After")) || 2 ** attempt, 30);
-        await new Promise((r) => setTimeout(r, wait * 1000));
-        continue;
+        const wait = retryWait(res.headers.get("Retry-After"), attempt);
+        if (wait != null) {
+          await new Promise((r) => setTimeout(r, wait * 1000));
+          continue;
+        }
       }
       if (!res.ok) throw Object.assign(new Error(`Jira answered ${res.status} ${res.statusText}`), { status: res.status });
       return res.json() as Promise<unknown>;
