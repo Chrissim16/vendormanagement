@@ -100,6 +100,7 @@ architecture and plan were rewritten to match. The plan now has ten milestones.
 First version of the brief, requirements, plan and agent workflow. No application code yet.
 
 ## Follow-ups
+- A second branch from another session (`claude/adoring-curie-k6ewvw`) holds a wider spreadsheet import (contacts, rate cards, past invoices). It was started from M0, before M1 and M2, and is not part of the app yet. Decide whether to bring it in; it will need rework first.
 - Search and sorting do not ignore accents: searching "beta" does not find "Béta", and "École" sorts after "Z".
 - The app allows two agreements with the same vendor, kind and title; the import treats that combination as "already there".
 - The date boxes in forms follow the browser's own date format, which may be month-first on some machines. Everything the app itself writes is day month year.
