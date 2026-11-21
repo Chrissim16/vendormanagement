@@ -19,7 +19,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env server/platform/db/migrate.ts",
     "db:seed": "tsx --env-file-if-exists=.env db/seed/cli.ts",
-    "job": "tsx server/platform/jobs/run.ts"
+    "job": "tsx --env-file-if-exists=.env server/platform/jobs/run.ts"
   },
   "dependencies": {
     "@databricks/lakebase": "^0.7.0",

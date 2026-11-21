@@ -294,3 +294,91 @@ export const invoices = pgTable(
     check("invoices_amount_check", sql`${t.amountMinor} > 0`),
   ],
 );
+
+/** Which Jira board holds a vendor's helpdesk tickets, and how escalation is read from it (J-1). */
+export const jiraBoardLinks = pgTable(
+  "jira_board_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    vendorId: uuid("vendor_id")
+      .notNull()
+      .references(() => vendors.id),
+    projectKey: text("project_key").notNull(),
+    projectName: text("project_name"),
+    serviceDeskId: text("service_desk_id"),
+    escalationMethod: text("escalation_method", { enum: ["status", "label"] }).notNull(),
+    /** Statuses or labels that mean each support level. Stored trimmed; compared ignoring case. */
+    l1Values: text("l1_values").array().notNull().default(sql`'{}'`),
+    l2Values: text("l2_values").array().notNull().default(sql`'{}'`),
+    l3Values: text("l3_values").array().notNull().default(sql`'{}'`),
+    active: boolean("active").notNull().default(true),
+    /** When tickets were last fetched successfully: the next sync asks Jira for changes since then. */
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    /** The last attempt, successful or not, and what came of it. */
+    lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
+    lastSyncOk: boolean("last_sync_ok"),
+    lastSyncMessage: text("last_sync_message"),
+    lastSyncUpdated: integer("last_sync_updated"),
+    ...stamps,
+  },
+  (t) => [
+    uniqueIndex("jira_links_one_per_vendor").on(t.vendorId),
+    uniqueIndex("jira_links_one_per_board").on(sql`upper(${t.projectKey})`),
+    check("jira_links_method_check", sql`${t.escalationMethod} in ('status', 'label')`),
+  ],
+);
+
+/** A copy of a Jira ticket, overwritten at each sync. Times are Jira's own, not when the copy was made. */
+export const tickets = pgTable(
+  "tickets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    boardLinkId: uuid("board_link_id")
+      .notNull()
+      .references(() => jiraBoardLinks.id),
+    key: text("key").notNull(),
+    summary: text("summary"),
+    description: text("description"),
+    status: text("status"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    firstResponseAt: timestamp("first_response_at", { withTimezone: true }),
+    /** Null while Jira has no outcome for the SLA (not answered yet and still in time, or no SLA on the ticket). */
+    firstResponseBreached: boolean("first_response_breached"),
+    resolutionBreached: boolean("resolution_breached"),
+    highestLevel: integer("highest_level").notNull().default(1),
+    csat: integer("csat"),
+    csatAt: timestamp("csat_at", { withTimezone: true }),
+    /** Every status and label the ticket has carried, lower case, so the level can be worked out again when the link's values change. */
+    statusesSeen: text("statuses_seen").array().notNull().default(sql`'{}'`),
+    labelsSeen: text("labels_seen").array().notNull().default(sql`'{}'`),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("tickets_key_per_board").on(t.boardLinkId, t.key),
+    index("tickets_created_idx").on(t.boardLinkId, t.createdAt),
+    index("tickets_resolved_idx").on(t.boardLinkId, t.resolvedAt),
+    index("tickets_csat_idx").on(t.boardLinkId, t.csatAt),
+    check("tickets_level_check", sql`${t.highestLevel} in (1, 2, 3)`),
+    check("tickets_csat_check", sql`${t.csat} is null or ${t.csat} between 1 and 5`),
+  ],
+);
+
+/** A vendor's contractual target for one metric, in tenths (95% is 950, 4.2 stars is 42, 30 days is 300). */
+export const performanceTargets = pgTable(
+  "performance_targets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    vendorId: uuid("vendor_id")
+      .notNull()
+      .references(() => vendors.id),
+    metric: text("metric", { enum: ["first_response", "first_line", "sla_breaches", "backlog_age", "csat"] }).notNull(),
+    targetTenths: integer("target_tenths").notNull(),
+    ...stamps,
+  },
+  (t) => [
+    uniqueIndex("targets_one_per_metric").on(t.vendorId, t.metric),
+    check("targets_metric_check", sql`${t.metric} in ('first_response', 'first_line', 'sla_breaches', 'backlog_age', 'csat')`),
+    check("targets_value_check", sql`${t.targetTenths} >= 0`),
+  ],
+);

@@ -44,10 +44,51 @@ export interface JiraProject {
   name: string;
 }
 
-/** Jira Service Management. Grows in milestone M3 with ticket search. */
+/** What "Test link" needs to know about a board. */
+export interface JiraBoard {
+  key: string;
+  name: string;
+  /** Whether it is a Jira Service Management project; only those have SLAs and satisfaction ratings. */
+  serviceDesk: boolean;
+  /** Every status tickets on this board can have. */
+  statuses: string[];
+  /** Labels found on the board's most recently changed tickets. */
+  labels: string[];
+  /** Whether this Jira has each of the measurements the metrics are built on. */
+  measures: { firstResponse: boolean; resolution: boolean; satisfaction: boolean };
+}
+
+/** One ticket as the app needs it, whatever shape Jira sent it in. */
+export interface JiraTicket {
+  key: string;
+  summary: string;
+  description: string | null;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+  resolvedAt: Date | null;
+  firstResponseAt: Date | null;
+  /** Null while Jira has no outcome: not answered yet and still in time, or no SLA on the ticket. */
+  firstResponseBreached: boolean | null;
+  resolutionBreached: boolean | null;
+  /** 1 to 5, when the person who asked gave a rating. */
+  csat: number | null;
+  csatAt: Date | null;
+  /** Every status and every label the ticket has carried, now or earlier. */
+  statusesSeen: string[];
+  labelsSeen: string[];
+}
+
+/** Jira Service Management: the boards, and the tickets on them. */
 export interface JiraPort {
   kind: PortKind;
   listProjects(): Promise<JiraProject[]>;
+  /** Fails with `status: 404` when the board does not exist or the account cannot see it. */
+  describeBoard(projectKey: string): Promise<JiraBoard>;
+  /** The board's tickets changed since `since` (all of them when null), as they stand at `now`. Asking twice gives the same tickets. */
+  fetchTickets(projectKey: string, since: Date | null, now: Date): Promise<JiraTicket[]>;
+  /** Where a person can open the ticket, or null when there is nowhere. */
+  ticketUrl(ticketKey: string): string | null;
   check(): Promise<CheckResult>;
 }
 

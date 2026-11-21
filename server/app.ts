@@ -10,12 +10,14 @@ import { adminRoutes } from "./features/admin/routes";
 import { agreementRoutes } from "./features/agreements/routes";
 import { importRoutes } from "./features/import/routes";
 import { invoiceRoutes } from "./features/invoices/routes";
+import { performanceRoutes } from "./features/performance/routes";
+import type { PerformanceContext } from "./features/performance/service";
 import { getSettings, saveSettings } from "./features/settings/service";
 import { sowRoutes } from "./features/sow/routes";
 import { vendorRoutes } from "./features/vendors/routes";
 import { listWarnings } from "./features/warnings/service";
 import { authenticate, currentUser, requireRole } from "./platform/auth";
-import type { Config } from "./platform/config";
+import { clock, type Config } from "./platform/config";
 import { AppError, errorHandler } from "./platform/errors";
 import type { Ports } from "./platform/ports/types";
 
@@ -46,6 +48,16 @@ function catchAsync(router: express.Router) {
   }
   return router;
 }
+
+/** What the performance feature needs, from the app's configuration and connections. */
+export const performanceContext = (config: Config, ports: Ports): PerformanceContext => ({
+  db: ports.database.db,
+  jira: ports.jira,
+  timeZone: config.timeZone,
+  now: clock(config),
+  today: () => config.today ?? todayIn(config.timeZone),
+  syncEveryMinutes: config.jiraSyncMinutes,
+});
 
 export function createApp(config: Config, ports: Ports) {
   const app = express();
@@ -78,6 +90,7 @@ export function createApp(config: Config, ports: Ports) {
   api.get("/warnings", async (_req, res) => res.json(await listWarnings(db, today())));
   api.use(sowRoutes(db, today));
   api.use(invoiceRoutes(db, today));
+  api.use(performanceRoutes(performanceContext(config, ports)));
   api.get("/settings", async (_req, res) => res.json(await getSettings(db)));
   api.put("/admin/settings", requireRole("admin"), async (req, res) => res.json(await saveSettings(db, req.body, currentUser(req))));
   api.use("/admin/import", importRoutes(db, today));

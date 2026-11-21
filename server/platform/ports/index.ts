@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { Config } from "../config";
+import { clock, type Config } from "../config";
 import { scriptedAi, servingAi } from "./ai";
 import { embeddedDatabase, postgresDatabase } from "./database";
 import { provisionedLakebasePassword, workspaceToken } from "./databricks";
@@ -19,7 +19,7 @@ async function localPorts(config: Config): Promise<Ports> {
   const database = config.databaseUrl
     ? await postgresDatabase({ connectionString: config.databaseUrl }, "stand-in")
     : await embeddedDatabase(config.databaseMemory ? null : path.join(config.dataDir, "pg"));
-  return { identity: devIdentity(config.devUserEmail), database, storage: diskStorage(config.filesDir), jira: fakeJira(), ai: scriptedAi() };
+  return { identity: devIdentity(config.devUserEmail), database, storage: diskStorage(config.filesDir), jira: fakeJira(clock(config)), ai: scriptedAi() };
 }
 
 /** The real services inside the company's Databricks workspace. UNPROVEN until first deployment. */

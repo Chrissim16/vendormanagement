@@ -8,7 +8,10 @@ import type { Db } from "../../server/platform/ports/types";
 import { createAgreement } from "../../server/features/agreements/service";
 import { saveInvoice } from "../../server/features/invoices/service";
 import { decideChange, getDelivery, saveChange, saveConsultant, saveMilestone, saveRateLine } from "../../server/features/sow/service";
+import { saveLink, saveTargets, type PerformanceContext } from "../../server/features/performance/service";
 import { createVendor, saveContact } from "../../server/features/vendors/service";
+import { jiraBoardLinks } from "../schema";
+import type { BoardLinkInput, Targets } from "../../shared/performance";
 
 /** Invented people only. Never real names or addresses. */
 export const seedUsers = [
@@ -243,8 +246,47 @@ const sampleDelivery: Record<string, Delivery> = {
   "Research membership": { invoices: [["EA-2026-77", 62_000_00, -65]] },
 };
 
-/** Loads the sample people, vendors and agreements. Safe to run more than once. */
-export async function seed(db: Db, today: Day) {
+/**
+ * Which invented Jira board each helpdesk vendor uses, how escalation shows on it, and the
+ * targets from its contract, in tenths. One board escalates by status, one by label.
+ */
+const sampleBoards: Record<string, { link: Omit<BoardLinkInput, "active">; targets: Partial<Targets> }> = {
+  "Bluefinch Systems": {
+    link: { projectKey: "BLU", escalationMethod: "status", l1Values: ["Waiting for support", "In progress"], l2Values: ["Escalated to second line"], l3Values: ["With vendor engineering"] },
+    targets: { first_response: 950, first_line: 650, sla_breaches: 50, backlog_age: 300, csat: 40 },
+  },
+  "Mossgate IT": {
+    link: { projectKey: "MOS", escalationMethod: "label", l1Values: [], l2Values: ["tier-2"], l3Values: ["tier-3"] },
+    targets: { first_response: 950, first_line: 750, sla_breaches: 50, backlog_age: 300, csat: 42 },
+  },
+  "Tarnwick Software": {
+    link: { projectKey: "TAR", escalationMethod: "status", l1Values: ["Waiting for support", "In progress"], l2Values: ["Escalated to second line"], l3Values: ["With vendor engineering"] },
+    targets: { first_response: 900, first_line: 600 },
+  },
+};
+
+/** Links the sample helpdesk vendors to the stand-in Jira's boards and fetches their invented tickets. */
+async function seedPerformance(perf: PerformanceContext, admin: ReturnType<typeof toUser>) {
+  if (perf.jira.kind !== "stand-in") return;
+  if ((await perf.db.select({ n: sql<number>`count(*)::int` }).from(jiraBoardLinks))[0]!.n > 0) return;
+  for (const [name, sample] of Object.entries(sampleBoards)) {
+    const vendor = (await perf.db.select({ id: vendors.id }).from(vendors).where(eq(vendors.name, name)))[0];
+    if (!vendor) continue;
+    await saveLink(perf, vendor.id, sample.link, admin);
+    await saveTargets(perf, vendor.id, sample.targets, admin);
+  }
+}
+
+/** Loads the sample people, vendors, agreements and helpdesk boards. Safe to run more than once. */
+export async function seed(db: Db, today: Day, perf?: PerformanceContext) {
+  await seedCore(db, today);
+  if (perf) {
+    const admin = (await db.select().from(users).where(eq(users.email, "admin@example.test")))[0];
+    if (admin) await seedPerformance(perf, toUser(admin));
+  }
+}
+
+async function seedCore(db: Db, today: Day) {
   await db
     .insert(users)
     .values(seedUsers.map((u) => ({ ...u, createdBy: "seed", updatedBy: "seed" })))

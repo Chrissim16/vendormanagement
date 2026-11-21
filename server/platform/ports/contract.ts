@@ -94,7 +94,10 @@ export function databaseContract(port: DatabasePort): ContractCase[] {
   ];
 }
 
-export function jiraContract(jira: JiraPort): ContractCase[] {
+/** Reads only; a week of one board's tickets, so it is quick against a real Jira too. */
+export function jiraContract(jira: JiraPort, now: Date = new Date()): ContractCase[] {
+  const weekAgo = new Date(now.getTime() - 7 * 86_400_000);
+  const firstBoard = async () => (await jira.listProjects())[0]!.key;
   return [
     {
       name: "boards can be listed, each with a key and a name",
@@ -102,6 +105,52 @@ export function jiraContract(jira: JiraPort): ContractCase[] {
         const projects = await jira.listProjects();
         assert.ok(projects.length > 0, "no boards visible");
         for (const p of projects) assert.ok(p.key && p.name);
+      },
+    },
+    {
+      name: "a board can be described, with the statuses its tickets can have",
+      async run() {
+        const key = await firstBoard();
+        const board = await jira.describeBoard(key);
+        assert.equal(board.key.toUpperCase(), key.toUpperCase());
+        assert.ok(board.name);
+        assert.ok(board.statuses.length > 0, "the board has no statuses");
+        assert.equal(typeof board.serviceDesk, "boolean");
+      },
+    },
+    {
+      name: "a board that does not exist is reported as not found",
+      async run() {
+        await assert.rejects(
+          () => jira.describeBoard("ZZNOBOARD9"),
+          (e: { status?: number }) => e.status === 404,
+        );
+      },
+    },
+    {
+      name: "the tickets changed in the last week can be fetched, each with a key, a status and a creation time",
+      async run() {
+        const key = await firstBoard();
+        for (const t of await jira.fetchTickets(key, weekAgo, now)) {
+          assert.ok(t.key.toUpperCase().startsWith(`${key.toUpperCase()}-`), `unexpected ticket key ${t.key}`);
+          assert.ok(t.status, `${t.key} has no status`);
+          assert.ok(t.createdAt instanceof Date && !Number.isNaN(t.createdAt.getTime()), `${t.key} has no creation time`);
+          assert.ok(t.updatedAt.getTime() >= t.createdAt.getTime(), `${t.key} changed before it was created`);
+          assert.ok(t.statusesSeen.some((s) => s.toLowerCase() === t.status.toLowerCase()), `${t.key}: the current status is missing from its history`);
+          assert.ok(t.csat === null || (t.csat >= 1 && t.csat <= 5), `${t.key} has a rating outside 1 to 5`);
+          assert.ok([true, false, null].includes(t.firstResponseBreached) && [true, false, null].includes(t.resolutionBreached));
+        }
+      },
+    },
+    {
+      name: "fetching the same tickets twice gives the same answer",
+      async run() {
+        const key = await firstBoard();
+        const [a, b] = [await jira.fetchTickets(key, weekAgo, now), await jira.fetchTickets(key, weekAgo, now)];
+        assert.deepEqual(
+          a.map((t) => t.key),
+          b.map((t) => t.key),
+        );
       },
     },
   ];

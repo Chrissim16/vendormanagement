@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import request from "supertest";
 import type { Response } from "superagent";
 import { seed } from "../db/seed/run";
-import { createApp } from "./app";
+import { createApp, performanceContext } from "./app";
 import { loadConfig } from "./platform/config";
 import { buildPorts } from "./platform/ports";
 
@@ -36,7 +36,7 @@ export async function testApp(env: Record<string, string> = {}, options: { empty
   const config = loadConfig({ PLATFORM: "local", FILES_DIR: ".data/test-files", CLIENT_DIR: "does-not-exist", TODAY: TODAY, ...databaseEnv, ...env });
   const ports = await buildPorts(config);
   await ports.database.migrate();
-  if (!options.empty) await seed(ports.database.db, config.today!);
+  if (!options.empty) await seed(ports.database.db, config.today!, performanceContext(config, ports));
   const app = createApp(config, ports);
   /** Makes requests as the given person. */
   const as = (email: string) => {

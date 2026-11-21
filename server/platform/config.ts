@@ -18,6 +18,8 @@ export interface Config {
   clientDir: string;
   volumePath: string | null;
   jira: { baseUrl: string | null; email: string | null; token: string | null };
+  /** Tickets are fetched from Jira this often without anyone asking. Zero switches that off. */
+  jiraSyncMinutes: number;
   ai: { strongEndpoint: string | null; fastEndpoint: string | null };
 }
 
@@ -26,6 +28,16 @@ function pinnedDay(value: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== value) throw new Error("TODAY must be a real date written YYYY-MM-DD.");
   return value;
 }
+
+function syncMinutes(value: string | undefined): number {
+  if (value === undefined || value === "") return 60;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 0 || n > 7 * 24 * 60) throw new Error("JIRA_SYNC_EVERY_MINUTES must be a whole number of minutes, or 0 to switch the automatic sync off.");
+  return n;
+}
+
+/** The present moment. With a pinned "today" (tests and demos) it is noon on that day, so nothing depends on when a test runs. */
+export const clock = (config: Pick<Config, "today">) => (): Date => (config.today ? new Date(`${config.today}T12:00:00Z`) : new Date());
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const platform = env.PLATFORM === "databricks" ? "databricks" : "local";
@@ -61,6 +73,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     clientDir: env.CLIENT_DIR || "dist/client",
     volumePath: env.VOLUME_PATH || null,
     jira: { baseUrl: env.JIRA_BASE_URL || null, email: env.JIRA_EMAIL || null, token: env.JIRA_API_TOKEN || null },
+    jiraSyncMinutes: syncMinutes(env.JIRA_SYNC_EVERY_MINUTES),
     ai: { strongEndpoint: env.AI_STRONG_ENDPOINT || null, fastEndpoint: env.AI_FAST_ENDPOINT || null },
   };
 }
