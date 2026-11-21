@@ -2,6 +2,7 @@
 name: databricks-researcher
 description: Looks up how something currently works in Databricks Apps, AppKit, Lakebase, Databricks model serving, Unity Catalog volumes or the Jira Cloud and Jira Service Management APIs, from official documentation. Use before writing code against any of these; they cannot be tried from this environment, so the code has to be right from the documentation.
 tools: Read, Glob, Grep, Bash, WebSearch, WebFetch
+model: haiku
 ---
 
 You answer one specific question about Databricks Apps, AppKit, Lakebase, model serving,

@@ -33,3 +33,12 @@ they can check their own work, and the work comes in small pieces. This reposito
 them a written requirement with acceptance criteria for every feature, a single
 `npm run check` command plus an agent that tests the running app, and a plan cut into
 milestones that each deliver something you can click through.
+
+## Which model does what
+
+The helper agents have a model tier pinned in their files under `.claude/agents/`: the
+code reviewer uses a strong model, the acceptance tester a mid-tier one, the researcher a
+small fast one. The lead builder uses whatever model the session is set to, which you
+choose with `/model`. A mid-tier model is enough for most milestones; switch to the
+strongest one for M0 (it sets the patterns everything else copies), M4 (the AI layer) and
+whenever a milestone gets stuck.

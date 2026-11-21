@@ -2,6 +2,7 @@
 name: acceptance-tester
 description: Verifies a milestone against its acceptance criteria by using the running app in a browser, as a user would. Use after a milestone's code is written and `npm run check` passes, before calling it done.
 tools: Read, Glob, Grep, Bash
+model: sonnet
 ---
 
 You verify that the vendor management app does what the requirements say. You did not write

@@ -1,0 +1,386 @@
+<title>Vendor App Prototype</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: fixed left rail, one roomy scrolling canvas; records open in a panel that slides in while the list narrows to a name column. */
+:root{
+  --bg:#FFFFFF; --rail:#F7F9FC; --surface:#FFFFFF; --sunk:#F3F6FA;
+  --ink:#09142D; --ink-2:#4A5672; --ink-3:#8791A8;
+  --line:rgba(9,20,45,.09); --line-2:rgba(9,20,45,.16);
+  --accent:#0089DD; --accent-ink:#006FB4; --tint:#EBF5FC;
+  --strong:#152468; --on-strong:#FFFFFF;
+  --shadow:0 1px 2px rgba(9,20,45,.04),0 12px 32px rgba(9,20,45,.07);
+  --sans:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  --ease:cubic-bezier(.2,.8,.2,1); --fast:180ms; --med:300ms;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#080F28; --rail:#0A1330; --surface:#0E1A3E; --sunk:#0C1635;
+  --ink:#F1F5FF; --ink-2:#B1BCD8; --ink-3:#7785A8;
+  --line:rgba(190,210,255,.11); --line-2:rgba(190,210,255,.22);
+  --accent:#39A9F0; --accent-ink:#7CC6F6; --tint:rgba(0,137,221,.16);
+  --strong:#F1F5FF; --on-strong:#0C1A42;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 16px 40px rgba(0,0,0,.35); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#080F28; --rail:#0A1330; --surface:#0E1A3E; --sunk:#0C1635;
+  --ink:#F1F5FF; --ink-2:#B1BCD8; --ink-3:#7785A8;
+  --line:rgba(190,210,255,.11); --line-2:rgba(190,210,255,.22);
+  --accent:#39A9F0; --accent-ink:#7CC6F6; --tint:rgba(0,137,221,.16);
+  --strong:#F1F5FF; --on-strong:#0C1A42;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 16px 40px rgba(0,0,0,.35); color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font:400 14px/1.5 var(--sans);-webkit-font-smoothing:antialiased;overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+.num{font-variant-numeric:tabular-nums}
+.eyebrow{font:700 10.5px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--accent-ink)}
+.eyebrow::before{content:"// "}
+.muted{color:var(--ink-2)} .faint{color:var(--ink-3)}
+
+.app{display:grid;grid-template-columns:236px minmax(0,1fr);height:100%}
+/* rail */
+.rail{background:var(--rail);border-right:1px solid var(--line);padding:22px 14px;display:flex;flex-direction:column;gap:26px;min-width:0}
+.brand{display:flex;align-items:center;gap:10px;padding:0 10px;font-weight:700;letter-spacing:-.01em}
+.brand i{width:12px;height:12px;border-radius:3px;background:var(--accent);display:block;transition:transform var(--med) var(--ease)}
+.brand:hover i{transform:rotate(90deg) scale(1.15)}
+.nav{position:relative;display:flex;flex-direction:column;gap:2px}
+.nav .pill{position:absolute;left:0;right:0;height:38px;border-radius:9px;background:var(--surface);box-shadow:0 0 0 1px var(--line),0 2px 6px rgba(9,20,45,.05);transition:transform var(--med) var(--ease);pointer-events:none}
+.nav button{position:relative;height:38px;padding:0 12px;border-radius:9px;display:flex;align-items:center;gap:11px;color:var(--ink-2);font-weight:500;text-align:left;transition:color var(--fast)}
+.nav button:hover{color:var(--ink)}
+.nav button[aria-current="page"]{color:var(--ink)}
+.nav svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;transition:transform var(--fast) var(--ease)}
+.nav button:hover svg{transform:translateX(2px)}
+.nav .soon{margin-left:auto;font:500 9.5px var(--mono);letter-spacing:.1em;color:var(--ink-3)}
+.rail .foot{margin-top:auto;display:flex;align-items:center;gap:10px;padding:0 10px;color:var(--ink-2);font-size:13px}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--strong);color:var(--on-strong);display:grid;place-items:center;font:600 11px var(--sans)}
+/* main */
+.main{min-width:0;display:flex;flex-direction:column;height:100%}
+.top{display:flex;align-items:center;gap:10px;padding:16px max(16px,env(safe-area-inset-right,0px)) 16px max(16px,env(safe-area-inset-left,0px));padding-inline:40px;border-bottom:1px solid var(--line)}
+.search{flex:1;max-width:420px;height:38px;border-radius:10px;background:var(--sunk);display:flex;align-items:center;gap:10px;padding:0 14px;color:var(--ink-3)}
+.search kbd{margin-left:auto;font:500 10.5px var(--mono);border:1px solid var(--line-2);border-radius:5px;padding:1px 5px}
+.iconbtn{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;position:relative;color:var(--ink-2);transition:background var(--fast),transform var(--fast) var(--ease)}
+.iconbtn:hover{background:var(--sunk);color:var(--ink)} .iconbtn:active{transform:scale(.92)}
+.iconbtn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.bell:hover svg{animation:ring .5s var(--ease)}
+@keyframes ring{30%{transform:rotate(14deg)}60%{transform:rotate(-10deg)}100%{transform:none}}
+.badge{position:absolute;top:5px;right:4px;min-width:16px;height:16px;border-radius:8px;background:var(--strong);color:var(--on-strong);font:600 10px/16px var(--sans);text-align:center;padding:0 4px}
+.spacer{flex:1}
+.stage{flex:1;min-height:0;position:relative;overflow:hidden}
+.view{position:absolute;inset:0;overflow:auto;padding:44px 40px 72px;transition:transform var(--med) var(--ease),opacity var(--fast) linear}
+.view.pre{transform:translateX(36px);opacity:0} .view.out{transform:translateX(-28px);opacity:0}
+.wrap{max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:40px}
+h1{font:600 30px/1.15 var(--sans);letter-spacing:-.025em;margin:8px 0 0;text-wrap:balance}
+h2{font:600 16px/1.3 var(--sans);letter-spacing:-.01em;margin:0}
+.head{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.btn{height:38px;padding:0 16px;border-radius:10px;font-weight:600;font-size:13.5px;border:1px solid var(--line-2);transition:transform var(--fast) var(--ease),background var(--fast),box-shadow var(--fast)}
+.btn:hover{background:var(--sunk)} .btn:active{transform:scale(.96)}
+.btn.primary{background:var(--strong);color:var(--on-strong);border-color:transparent}
+.btn.primary:hover{box-shadow:0 6px 18px rgba(21,36,104,.28);transform:translateY(-1px)}
+.btn[disabled]{opacity:.4;pointer-events:none}
+.chip{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:11px;font:600 11px var(--sans);white-space:nowrap;border:1px solid var(--line-2);color:var(--ink-2)}
+.chip.strong{background:var(--strong);color:var(--on-strong);border-color:transparent}
+.chip.blue{background:var(--tint);color:var(--accent-ink);border-color:transparent}
+.chip.ai{font:700 10px var(--mono);letter-spacing:.08em;background:var(--tint);color:var(--accent-ink);border-color:transparent}
+
+/* dashboard */
+.trio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.trio button{text-align:left;padding:28px 28px 26px 0;display:flex;flex-direction:column;gap:10px;position:relative}
+.trio button+button{padding-left:28px;border-left:1px solid var(--line)}
+.trio .big{font:600 52px/1 var(--sans);letter-spacing:-.04em}
+.trio .go{position:absolute;right:24px;top:30px;opacity:0;transform:translateX(-10px);transition:all var(--med) var(--ease);color:var(--accent-ink)}
+.trio button:hover .go{opacity:1;transform:none}
+.cols{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:56px}
+.block{display:flex;flex-direction:column;gap:18px;min-width:0}
+.rows{display:flex;flex-direction:column}
+.row{display:flex;align-items:center;gap:14px;padding:15px 0;border-bottom:1px solid var(--line);text-align:left;width:100%;transition:padding var(--med) var(--ease)}
+.row:hover{padding-left:10px}
+.row .t{min-width:0;flex:1} .row .t b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .t span{color:var(--ink-2);font-size:13px}
+.in .stag>*{animation:rise var(--med) var(--ease) both}
+.in .stag>*:nth-child(2){animation-delay:40ms}.in .stag>*:nth-child(3){animation-delay:80ms}.in .stag>*:nth-child(4){animation-delay:120ms}.in .stag>*:nth-child(5){animation-delay:160ms}.in .stag>*:nth-child(n+6){animation-delay:200ms}
+@keyframes rise{from{transform:translateX(22px);opacity:0}}
+.chart{display:grid;grid-template-columns:auto minmax(0,1fr);gap:0 12px}
+.chart .y{display:flex;flex-direction:column;justify-content:space-between;font:500 10.5px var(--mono);color:var(--ink-3);height:150px;text-align:right}
+.bars{height:150px;display:flex;align-items:flex-end;gap:8px;border-bottom:1px solid var(--line-2);background:linear-gradient(var(--line),var(--line)) 0 0/100% 1px no-repeat,linear-gradient(var(--line),var(--line)) 0 50%/100% 1px no-repeat}
+.bars i{flex:1;background:var(--line-2);border-radius:4px 4px 0 0;height:calc(var(--v)*100%);transform-origin:bottom;transform:scaleY(0);transition:transform 520ms var(--ease);transition-delay:calc(var(--i)*28ms)}
+.bars i:last-child{background:var(--accent)} .in .bars i{transform:none}
+.chart .x{grid-column:2;display:flex;gap:8px;font:500 10.5px var(--mono);color:var(--ink-3);padding-top:8px}
+.chart .x span{flex:1;text-align:center}
+.score{font:600 15px var(--sans);width:34px;text-align:right}
+.spark{width:64px;height:22px;flex:none} .spark path{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.spark circle{fill:var(--accent)}
+.stages{display:flex;gap:6px;align-items:center}
+.stages i{height:4px;flex:1;border-radius:2px;background:var(--line-2)} .stages i.on{background:var(--accent)}
+
+/* vendors split */
+.split{display:flex;gap:0;min-height:520px}
+.list{flex:0 0 100%;min-width:0;transition:flex-basis 380ms var(--ease)}
+.split.open .list{flex-basis:232px}
+.tr{display:grid;grid-template-columns:minmax(0,2.2fr) 1fr 1fr 1fr 90px;gap:16px;align-items:center;width:100%;text-align:left;padding:15px 12px;border-bottom:1px solid var(--line);border-radius:0;position:relative;transition:background var(--fast)}
+.tr.h{font:700 10px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);padding-block:10px}
+button.tr:hover{background:var(--sunk)}
+.tr>*{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:opacity var(--fast)}
+.tr b{font-weight:600}
+.split.open .tr{grid-template-columns:minmax(0,1fr)} .split.open .tr>*:not(:first-child){display:none}
+.tr.sel{background:var(--tint)} .tr.sel::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:2px;background:var(--accent)}
+.panel{flex:1 1 0;min-width:0;overflow:hidden;opacity:0;transform:translateX(48px);transition:transform 380ms var(--ease),opacity 240ms linear;pointer-events:none}
+.split.open .panel{opacity:1;transform:none;pointer-events:auto}
+.sheet{margin-left:28px;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:30px 32px;display:flex;flex-direction:column;gap:24px;min-width:420px}
+.sheet h3{font:600 24px/1.2 var(--sans);letter-spacing:-.02em;margin:6px 0 0}
+.tabs{position:relative;display:flex;gap:26px;border-bottom:1px solid var(--line)}
+.tabs button{padding:10px 0;color:var(--ink-2);font-weight:500} .tabs button[aria-selected="true"]{color:var(--ink)}
+.tabs .ink{position:absolute;bottom:-1px;left:0;height:2px;background:var(--accent);border-radius:2px;transition:transform var(--med) var(--ease),width var(--med) var(--ease)}
+.panes{overflow:hidden} .track{display:flex;width:300%;transition:transform 360ms var(--ease)}
+.track>div{width:33.3334%;padding-right:2px;display:flex;flex-direction:column;gap:18px}
+.kv{display:grid;grid-template-columns:150px minmax(0,1fr);gap:12px 16px} .kv dt{color:var(--ink-2)} .kv dd{margin:0}
+.tree{display:flex;flex-direction:column}
+.tree .child{margin-left:22px;padding-left:16px;border-left:1px solid var(--line-2)}
+.meter{height:6px;border-radius:3px;background:var(--line);overflow:hidden;flex:1;min-width:60px}
+.meter i{display:block;height:100%;border-radius:3px;background:var(--accent);width:0;transition:width 700ms var(--ease) 120ms}
+.in .meter i,.split.open .meter i{width:calc(var(--p)*1%)}
+.meter.hot i{background:var(--strong)}
+
+/* sow */
+.facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:32px;border-top:1px solid var(--line);padding-top:26px}
+.facts .v{font:600 26px/1.1 var(--sans);letter-spacing:-.02em;margin-top:8px}
+.timeline{display:flex;flex-direction:column}
+.ms{display:grid;grid-template-columns:18px minmax(0,1fr) auto auto;gap:14px;align-items:center;padding:13px 0;border-bottom:1px solid var(--line)}
+.dot{width:10px;height:10px;border-radius:50%;border:2px solid var(--line-2)} .dot.done{background:var(--accent);border-color:var(--accent)} .dot.late{background:var(--strong);border-color:var(--strong)}
+/* scorecard */
+.crit{border-bottom:1px solid var(--line);padding:22px 0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px 24px;align-items:start}
+.crit p{margin:4px 0 0;color:var(--ink-2);max-width:62ch}
+.seg{position:relative;display:grid;grid-template-columns:repeat(5,40px);height:40px;border-radius:11px;background:var(--sunk)}
+.seg .thumb{position:absolute;top:3px;left:3px;width:34px;height:34px;border-radius:9px;background:var(--strong);transition:transform var(--med) var(--ease),opacity var(--fast);opacity:0}
+.seg[data-v] .thumb{opacity:1}
+.seg button{position:relative;font-weight:600;color:var(--ink-2);transition:color var(--fast)} .seg button.on{color:var(--on-strong)}
+.seg.ghost .thumb{background:transparent;box-shadow:inset 0 0 0 1.5px var(--accent);opacity:1} .seg.ghost button.on{color:var(--accent-ink)}
+.proposal{grid-column:1/-1;background:var(--tint);border-radius:12px;padding:14px 16px;display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;overflow:hidden;max-height:200px;transition:max-height var(--med) var(--ease),opacity var(--fast),padding var(--med) var(--ease),transform var(--med) var(--ease)}
+.proposal.gone{max-height:0;opacity:0;padding-block:0;transform:translateX(40px)}
+.proposal .txt{flex:1;min-width:240px}
+.linkbtn{color:var(--accent-ink);font-weight:600;font-size:13px}
+.evi{grid-column:1/-1;display:grid;grid-template-rows:0fr;transition:grid-template-rows var(--med) var(--ease)} .evi.open{grid-template-rows:1fr}
+.evi>div{overflow:hidden} .evi table{border-collapse:collapse;width:100%;margin-top:4px;font-size:13px}
+.evi td,.evi th{text-align:left;padding:8px 10px 8px 0;border-bottom:1px solid var(--line);font-weight:400} .evi th{color:var(--ink-3);font:700 10px var(--mono);letter-spacing:.12em;text-transform:uppercase}
+.sticky{position:sticky;bottom:-72px;margin-top:8px;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:18px 22px;display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.overall{font:600 34px/1 var(--sans);letter-spacing:-.03em}
+.toast{position:absolute;left:50%;bottom:28px;transform:translate(-50%,80px);background:var(--strong);color:var(--on-strong);padding:11px 18px;border-radius:11px;font-weight:600;transition:transform var(--med) var(--ease);z-index:5}
+.toast.show{transform:translate(-50%,0)}
+.note{font-size:12.5px;color:var(--ink-3)}
+
+@media (max-width:860px){
+  body{overflow:auto} .app{grid-template-columns:minmax(0,1fr);height:auto;min-height:100%}
+  .rail{flex-direction:row;align-items:center;padding:10px 16px;gap:12px;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line)}
+  .nav{flex-direction:row} .nav .pill,.rail .foot,.nav .soon,.search{display:none} .nav button[aria-current="page"]{background:var(--surface)}
+  .top{padding-inline:16px} .stage{overflow:visible;min-height:80vh} .view{position:relative;padding:28px 16px 60px}
+  .view[hidden]{display:none} .trio,.cols,.facts{grid-template-columns:minmax(0,1fr);gap:0} .cols{gap:36px} .facts{gap:20px}
+  .trio button+button{padding-left:0;border-left:0;border-top:1px solid var(--line)}
+  .split.open .list{display:none} .sheet{margin-left:0;min-width:0;padding:22px 18px} .tr{grid-template-columns:minmax(0,1fr) 90px} .tr>*:nth-child(n+2):not(:last-child){display:none}
+  .crit{grid-template-columns:minmax(0,1fr)} .kv{grid-template-columns:minmax(0,1fr);gap:2px 0} .kv dd{margin-bottom:10px}
+}
+@media (prefers-reduced-motion:reduce){*{transition-duration:1ms!important;animation-duration:1ms!important;transition-delay:0ms!important;animation-delay:0ms!important}}
+</style>
+
+<div class="app">
+  <aside class="rail">
+    <div class="brand"><i></i>Vendor App</div>
+    <nav class="nav" id="nav" aria-label="Sections">
+      <span class="pill" id="pill"></span>
+      <button data-go="dashboard"><svg viewBox="0 0 16 16"><path d="M2 7l6-5 6 5v7H2z"/></svg>Dashboard</button>
+      <button data-go="vendors"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M5 7h6M5 10h4"/></svg>Vendors</button>
+      <button data-go="sow"><svg viewBox="0 0 16 16"><path d="M4 2h6l3 3v9H4z"/><path d="M10 2v3h3"/></svg>Agreements</button>
+      <button data-soon><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 5v6M6 9.5c.5 1 3.5 1 3.5-.5S6.300 7.500 6.500 6.500 9 5.500 9.500 6.500"/></svg>Money<span class="soon">LATER</span></button>
+      <button data-go="scorecard"><svg viewBox="0 0 16 16"><path d="M2 13l4-5 3 3 5-7"/></svg>Performance</button>
+      <button data-soon><svg viewBox="0 0 16 16"><path d="M3 3h10v8H7l-4 3z"/></svg>RFPs<span class="soon">LATER</span></button>
+      <button data-soon><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.500"/><path d="M10.500 10.500L14 14"/></svg>Ask<span class="soon">LATER</span></button>
+    </nav>
+    <div class="foot"><span class="avatar">VF</span>VS Finance · Admin</div>
+  </aside>
+
+  <div class="main">
+    <div class="top">
+      <div class="search"><span>Search vendors, agreements, invoices</span><kbd>/</kbd></div>
+      <span class="spacer"></span>
+      <button class="iconbtn" id="theme" aria-label="Switch light and dark"><svg viewBox="0 0 16 16"><path d="M13 9.500A5.500 5.500 0 016.500 3 5.500 5.500 0 1013 9.500z"/></svg></button>
+      <button class="iconbtn bell" aria-label="6 warnings" data-go="dashboard"><svg viewBox="0 0 16 16"><path d="M4 11V7a4 4 0 018 0v4l1 1.500H3zM6.500 14h3"/></svg><span class="badge">6</span></button>
+    </div>
+    <div class="stage" id="stage">
+
+      <section class="view" id="dashboard"><div class="wrap">
+        <div><span class="eyebrow">Saturday 21 Nov 2026</span><h1>Six things need a decision.</h1></div>
+        <div class="trio">
+          <button data-go="sow"><span class="eyebrow">Renewals</span><span class="big num" data-count="3">3</span><span class="muted">subscriptions inside their notice period</span><span class="go">Open →</span></button>
+          <button data-go="sow"><span class="eyebrow">Budgets</span><span class="big num" data-count="2">2</span><span class="muted">SOWs above 80% invoiced</span><span class="go">Open →</span></button>
+          <button data-go="vendors"><span class="eyebrow">Paperwork</span><span class="big num" data-count="1">1</span><span class="muted">vendor without a signed NDA</span><span class="go">Open →</span></button>
+        </div>
+        <div class="cols">
+          <div class="block">
+            <h2>Needs attention</h2>
+            <div class="rows stag">
+              <button class="row" data-go="sow"><span class="chip strong">Overdue</span><span class="t"><b>Kestrel Software · Reporting suite</b><span>Notice deadline passed 12 Nov, renews 10 Feb 2027</span></span><span class="num muted">€ 48,000</span></button>
+              <button class="row" data-go="sow"><span class="chip strong">83% used</span><span class="t"><b>Halden Systems · SOW 07 Ledger migration</b><span>Ends 28 Feb 2027, 2 milestones open</span></span><span class="num muted">€ 240,000</span></button>
+              <button class="row" data-go="scorecard"><span class="chip blue">Target missed</span><span class="t"><b>Halden Systems · First response</b><span>88% in October against a 95% target, second month running</span></span></button>
+              <button class="row" data-go="sow"><span class="chip blue">27 days</span><span class="t"><b>Varo Cloud · Data platform licence</b><span>Notice deadline 18 Dec 2026</span></span><span class="num muted">£ 31,500</span></button>
+              <button class="row" data-go="vendors"><span class="chip blue">NDA missing</span><span class="t"><b>Tessera Partners</b><span>Shortlisted for the treasury RFP</span></span></button>
+            </div>
+          </div>
+          <div class="block">
+            <h2>Spend, last 12 months</h2>
+            <div class="chart">
+              <div class="y"><span>€240k</span><span>€120k</span><span>0</span></div>
+              <div class="bars" id="bars"></div>
+              <div class="x"><span>D</span><span>J</span><span>F</span><span>M</span><span>A</span><span>M</span><span>J</span><span>J</span><span>A</span><span>S</span><span>O</span><span>N</span></div>
+            </div>
+            <h2 style="margin-top:14px">Vendor scores</h2>
+            <div class="rows stag">
+              <button class="row" data-go="scorecard"><span class="t"><b>Halden Systems</b></span><svg class="spark" viewBox="0 0 64 22"><path d="M2 6L17 7 32 9 47 14 60 16"/><circle cx="60" cy="16" r="2.500"/></svg><span class="score num">3.2</span></button>
+              <button class="row" data-go="scorecard"><span class="t"><b>Northgate IT Services</b></span><svg class="spark" viewBox="0 0 64 22"><path d="M2 14L17 12 32 11 47 8 60 6"/><circle cx="60" cy="6" r="2.500"/></svg><span class="score num">4.4</span></button>
+              <button class="row" data-go="scorecard"><span class="t"><b>Brightline Consulting</b></span><svg class="spark" viewBox="0 0 64 22"><path d="M2 10L17 9 32 10 47 9 60 9"/><circle cx="60" cy="9" r="2.500"/></svg><span class="score num">3.9</span></button>
+            </div>
+            <h2 style="margin-top:14px">Open RFP</h2>
+            <div><div class="row" style="border:0;padding:0 0 10px"><span class="t"><b>Treasury implementation partner</b><span>Evaluating · 3 candidates · decision by 15 Jan 2027</span></span></div>
+            <div class="stages"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div></div>
+          </div>
+        </div>
+      </div></section>
+
+      <section class="view" id="vendors" hidden><div class="wrap">
+        <div class="head"><div><span class="eyebrow">8 vendors · 7 active</span><h1>Vendors</h1></div><span class="spacer"></span><button class="btn">Filter</button><button class="btn primary">Add vendor</button></div>
+        <div class="split" id="split">
+          <div class="list" id="list"></div>
+          <div class="panel" id="panel"><div class="sheet">
+            <div style="display:flex;align-items:flex-start;gap:12px"><div style="flex:1;min-width:0"><span class="eyebrow" id="p-type"></span><h3 id="p-name"></h3></div><button class="iconbtn" id="close" aria-label="Close panel"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+            <div class="tabs" id="tabs" role="tablist"><button role="tab">Overview</button><button role="tab">Agreements</button><button role="tab">Performance</button><span class="ink" id="ink"></span></div>
+            <div class="panes"><div class="track" id="track">
+              <div><dl class="kv"><dt>Owner</dt><dd id="p-owner"></dd><dt>Primary contact</dt><dd id="p-contact"></dd><dt>NDA</dt><dd id="p-nda"></dd><dt>Data processing agreement</dt><dd>In place until 30 Jun 2027</dd><dt>Invoiced this year</dt><dd class="num" id="p-spend"></dd><dt>Scored</dt><dd id="p-scored"></dd></dl></div>
+              <div><div class="tree">
+                <div class="row"><span class="chip">MSA</span><span class="t"><b>Master services agreement</b><span>Signed 3 Mar 2023 · runs indefinitely</span></span></div>
+                <div class="child">
+                  <button class="row" data-go="sow"><span class="chip blue">SOW</span><span class="t"><b>SOW 07 Ledger migration</b><span>Fixed price · ends 28 Feb 2027</span></span><span class="meter hot" style="--p:83"><i></i></span><span class="num muted">83%</span></button>
+                  <button class="row" data-go="sow"><span class="chip blue">SOW</span><span class="t"><b>SOW 09 Helpdesk run</b><span>Time and materials · ends 31 Dec 2027</span></span><span class="meter" style="--p:41"><i></i></span><span class="num muted">41%</span></button>
+                </div>
+                <div class="row"><span class="chip">NDA</span><span class="t"><b>Mutual NDA</b><span>Signed 14 Feb 2023</span></span></div>
+              </div></div>
+              <div><dl class="kv"><dt>Latest score</dt><dd><b class="num">3.2</b> of 5, down from 3.8</dd><dt>First response</dt><dd class="num">88% within SLA · target 95%</dd><dt>First-line closure</dt><dd class="num">71% · target 65%</dd><dt>Satisfaction</dt><dd class="num">4.3 from 118 ratings</dd></dl><div><button class="btn primary" data-go="scorecard">Review Q3 scorecard</button></div></div>
+            </div></div>
+          </div></div>
+        </div>
+      </div></section>
+
+      <section class="view" id="sow" hidden><div class="wrap">
+        <div class="head"><div><span class="eyebrow">Halden Systems · under MSA 2023</span><h1>SOW 07 Ledger migration</h1></div><span class="spacer"></span><span class="chip blue">Active</span><span class="chip">Fixed price</span><button class="btn">Add invoice</button></div>
+        <div>
+          <div style="display:flex;align-items:center;gap:16px"><span class="meter hot" style="--p:83;height:10px"><i></i></span><b class="num">83% invoiced</b></div>
+          <div class="facts">
+            <div><span class="eyebrow">Budget</span><div class="v num">€ 240,000</div><span class="note">€ 210,000 plus one change</span></div>
+            <div><span class="eyebrow">Invoiced</span><div class="v num">€ 199,200</div><span class="note">6 invoices</span></div>
+            <div><span class="eyebrow">Remaining</span><div class="v num">€ 40,800</div><span class="note">2 milestones still to pay</span></div>
+            <div><span class="eyebrow">Ends</span><div class="v num">28 Feb 2027</div><span class="note">moved from 30 Nov 2026</span></div>
+          </div>
+        </div>
+        <div class="cols">
+          <div class="block"><h2>Milestones</h2><div class="timeline stag">
+            <div class="ms"><span class="dot done"></span><span><b>Design sign-off</b></span><span class="muted num">15 Apr</span><span class="num">€ 42,000</span></div>
+            <div class="ms"><span class="dot done"></span><span><b>Data model and mapping</b></span><span class="muted num">30 Jun</span><span class="num">€ 58,000</span></div>
+            <div class="ms"><span class="dot late"></span><span><b>First trial migration</b> <span class="chip strong" style="margin-left:6px">19 days late</span></span><span class="muted num">30 Sep</span><span class="num">€ 60,000</span></div>
+            <div class="ms"><span class="dot"></span><span><b>Parallel run</b></span><span class="muted num">15 Jan</span><span class="num">€ 45,000</span></div>
+            <div class="ms"><span class="dot"></span><span><b>Go-live and handover</b></span><span class="muted num">28 Feb</span><span class="num">€ 35,000</span></div>
+          </div></div>
+          <div class="block"><h2>Changes</h2><div class="rows stag">
+            <div class="row"><span class="chip blue">Approved</span><span class="t"><b>Extra entity in scope</b><span>+ € 30,000 · end date to 28 Feb 2027</span></span></div>
+            <div class="row"><span class="chip">Proposed</span><span class="t"><b>Extended hypercare</b><span>+ € 12,000 · no date change</span></span></div>
+          </div>
+          <h2 style="margin-top:14px">Consultants</h2><div class="rows stag">
+            <div class="row"><span class="t"><b>Lead architect</b><span>Ines Varga</span></span><span class="num muted">€ 1,350 a day</span></div>
+            <div class="row"><span class="t"><b>Data engineer</b><span>Tomas Reuel</span></span><span class="num muted">€ 980 a day</span></div>
+          </div></div>
+        </div>
+      </div></section>
+
+      <section class="view" id="scorecard" hidden><div class="wrap">
+        <div class="head"><div><span class="eyebrow">Halden Systems · Q3 2026 · draft</span><h1>Quarterly scorecard</h1></div><span class="spacer"></span><button class="btn">Vendor PDF</button></div>
+        <div id="crits"></div>
+        <div class="sticky"><div><span class="eyebrow">Overall</span><div class="overall num" id="overall">–</div></div><span class="muted" id="left" style="flex:1;min-width:160px"></span><button class="btn primary" id="final" disabled>Finalise scorecard</button></div>
+      </div></section>
+
+      <div class="toast" id="toast" role="status"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+// ---- sample data (invented) ----
+const vendors=[
+ ["Halden Systems","Software","Active","M. Okafor","€ 412,600","Lena Hartog, Service Director","In place, signed 14 Feb 2023",true],
+ ["Brightline Consulting","Consultancy","Active","S. de Wit","€ 188,000","Pieter Aalto, Partner","In place, signed 2 Sep 2024",true],
+ ["Northgate IT Services","Software","Active","M. Okafor","€ 96,400","Dana Whitlow, Account Lead","In place, signed 9 Jan 2022",true],
+ ["Kestrel Software","Software","Active","J. Brandt","€ 48,000","Ruth Emery, Customer Success","In place, signed 20 May 2021",true],
+ ["Varo Cloud","Software","Active","J. Brandt","£ 31,500","Sam Idris, Account Manager","In place, signed 11 Nov 2023",true],
+ ["Orbis Advisory","Advisory","Active","S. de Wit","€ 62,000","Client desk","In place, signed 1 Mar 2020",false],
+ ["Lumen Analytics","Software","On hold","J. Brandt","€ 0","Farah Lund, Sales","In place, signed 7 Jul 2025",true],
+ ["Tessera Partners","Consultancy","Prospect","S. de Wit","€ 0","Noor Castell, Partner","Missing",true]];
+const spend=[92,118,104,131,150,142,168,121,139,176,203,187]; // € thousands, Dec to Nov
+const crits=[
+ {n:"Quality of delivery",d:"How well tickets are solved the first time, and how users rate the result.",ai:4,why:"First-line closure was above target all quarter and satisfaction held at 4.3.",ev:[["First-line closure","71%","65% or more","Met"],["Satisfaction","4.3 from 118 ratings","4.0 or more","Met"],["Reopened tickets","9 of 231","no target","–"]]},
+ {n:"Timeliness",d:"Speed of first response and resolution against the contract.",ai:2,why:"First response missed its target in August and September. A service credit may apply.",ev:[["First response within SLA","88%","95% or more","Missed"],["Resolution SLA breaches","14 of 231","5% or less","Missed"],["Oldest open ticket","41 days","30 days or less","Missed"]]},
+ {n:"Responsiveness and communication",d:"Your judgement. How easy they are to reach and how clearly they report."},
+ {n:"Value for money",d:"Your judgement. Both SOWs are within budget; one is 19 days late on a milestone."},
+ {n:"Compliance and security",d:"Your judgement. NDA and data processing agreement are both in place."}];
+const scores=crits.map(()=>null);
+
+// ---- routing with slide transitions ----
+let cur="dashboard";
+function movePill(){const b=$(`#nav [data-go="${cur}"]`);if(b)$("#pill").style.transform=`translateY(${b.offsetTop}px)`;
+  $$("#nav button").forEach(x=>x.toggleAttribute("aria-current",false));b&&b.setAttribute("aria-current","page")}
+function enter(v){v.classList.remove("in");void v.offsetWidth;v.classList.add("in");
+  $$("[data-count]",v).forEach(el=>{const to=+el.dataset.count,t0=performance.now();(function f(t){const k=Math.min(1,(t-t0)/600);el.textContent=Math.round(to*(1-Math.pow(1-k,3)));k<1&&requestAnimationFrame(f)})(t0)})}
+function go(id,instant){if(id===cur&&!instant)return;const a=$("#"+cur),b=$("#"+id);cur=id;movePill();
+  if(instant){$$(".view").forEach(v=>v.hidden=v!==b);enter(b);return}
+  a.classList.add("out");setTimeout(()=>{a.hidden=true;a.classList.remove("out");b.classList.add("pre");b.hidden=false;b.scrollTop=0;void b.offsetWidth;b.classList.remove("pre");enter(b)},170);
+  try{history.replaceState(null,"","#"+id)}catch(e){}}
+document.addEventListener("click",e=>{const g=e.target.closest("[data-go]");if(g)go(g.dataset.go);
+  if(e.target.closest("[data-soon]"))toast("Not in this mockup yet")});
+function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove("show"),1800)}
+$("#theme").onclick=()=>{const r=document.documentElement,dark=r.dataset.theme?r.dataset.theme==="dark":matchMedia("(prefers-color-scheme:dark)").matches;r.dataset.theme=dark?"light":"dark"};
+
+// ---- dashboard chart ----
+$("#bars").innerHTML=spend.map((v,i)=>`<i style="--v:${v/240};--i:${i}" title="€${v}k"></i>`).join("");
+
+// ---- vendors: list narrows, panel slides in ----
+const chipFor=s=>s==="Active"?"blue":s==="Prospect"?"":"";
+$("#list").innerHTML=`<div class="tr h"><span>Vendor</span><span>Type</span><span>Owner</span><span>Invoiced 2026</span><span>Status</span></div>`+
+ vendors.map((v,i)=>`<button class="tr" data-i="${i}"><b>${v[0]}</b><span class="muted">${v[1]}</span><span class="muted">${v[3]}</span><span class="num">${v[4]}</span><span><span class="chip ${chipFor(v[2])}">${v[2]}</span></span></button>`).join("");
+function tab(n){const bs=$$("#tabs button");bs.forEach((b,i)=>b.setAttribute("aria-selected",i===n));
+  const b=bs[n];$("#ink").style.width=b.offsetWidth+"px";$("#ink").style.transform=`translateX(${b.offsetLeft}px)`;$("#track").style.transform=`translateX(${-n*33.3334}%)`}
+$$("#tabs button").forEach((b,i)=>b.onclick=()=>tab(i));
+function openVendor(i){const v=vendors[i];$$("#list .tr").forEach(r=>r.classList.toggle("sel",r.dataset.i==i));
+  $("#p-type").textContent=v[1]+" · "+v[2];$("#p-name").textContent=v[0];$("#p-owner").textContent=v[3];$("#p-contact").textContent=v[5];
+  $("#p-nda").innerHTML=v[6]==="Missing"?'<span class="chip strong">Missing</span>':v[6];$("#p-spend").textContent=v[4];$("#p-scored").textContent=v[7]?"Yes, monthly from Jira":"No";
+  $("#split").classList.add("open");setTimeout(()=>tab(0),30)}
+$("#list").onclick=e=>{const r=e.target.closest("button.tr");if(r)openVendor(r.dataset.i)};
+$("#close").onclick=()=>{$("#split").classList.remove("open");$$("#list .tr").forEach(r=>r.classList.remove("sel"))};
+
+// ---- scorecard: AI proposes, person confirms ----
+$("#crits").innerHTML=crits.map((c,i)=>`<div class="crit" data-i="${i}">
+  <div><h2>${c.n}</h2><p>${c.d}</p></div>
+  <div class="seg ${c.ai?"ghost":""}" ${c.ai?`data-v="${c.ai}"`:""} role="group" aria-label="Score for ${c.n}"><span class="thumb" ${c.ai?`style="transform:translateX(${(c.ai-1)*40}px)"`:""}></span>${[1,2,3,4,5].map(n=>`<button class="${c.ai===n?"on":""}" data-n="${n}">${n}</button>`).join("")}</div>
+  ${c.ai?`<div class="proposal"><span class="chip ai">AI PROPOSAL · ${c.ai}</span><span class="txt">${c.why}</span><button class="linkbtn" data-ev>Show evidence</button><button class="btn primary" data-accept style="height:32px">Accept ${c.ai}</button></div>
+  <div class="evi"><div><table><tr><th>Measure</th><th>Q3 result</th><th>Target</th><th></th></tr>${c.ev.map(r=>`<tr><td>${r[0]}</td><td class="num">${r[1]}</td><td class="num muted">${r[2]}</td><td>${r[3]==="Missed"?'<span class="chip strong">Missed</span>':r[3]==="Met"?'<span class="chip blue">Met</span>':""}</td></tr>`).join("")}</table></div></div>`:""}
+ </div>`).join("");
+function setScore(i,n){scores[i]=n;const el=$(`.crit[data-i="${i}"]`),seg=$(".seg",el);seg.classList.remove("ghost");seg.dataset.v=n;
+  $(".thumb",seg).style.transform=`translateX(${(n-1)*40}px)`;$$("button",seg).forEach(b=>b.classList.toggle("on",+b.dataset.n===n));
+  const p=$(".proposal",el);if(p){p.classList.add("gone");$(".evi",el).classList.remove("open")}
+  const done=scores.filter(s=>s!=null),avg=done.reduce((a,b)=>a+b,0)/(done.length||1),o=$("#overall"),from=parseFloat(o.textContent)||0,t0=performance.now();
+  (function f(t){const k=Math.min(1,(t-t0)/400);o.textContent=(from+(avg-from)*(1-Math.pow(1-k,3))).toFixed(1);k<1&&requestAnimationFrame(f)})(t0);
+  const left=scores.length-done.length;$("#left").textContent=left?`${left} of 5 still to score`:"All five scored. Internal notes stay out of the vendor PDF.";$("#final").disabled=!!left}
+$("#left").textContent="5 of 5 still to score";
+$("#crits").onclick=e=>{const c=e.target.closest(".crit");if(!c)return;const i=+c.dataset.i;
+  if(e.target.closest("[data-accept]"))return setScore(i,crits[i].ai);
+  const ev=e.target.closest("[data-ev]");if(ev){const o=$(".evi",c).classList.toggle("open");ev.textContent=o?"Hide evidence":"Show evidence";return}
+  const b=e.target.closest(".seg button");if(b)setScore(i,+b.dataset.n)};
+$("#final").onclick=()=>{toast("Scorecard finalised");$("#final").disabled=true;$("#final").textContent="Final"};
+
+// ---- boot ----
+const start=(location.hash||"").slice(1);go(["dashboard","vendors","sow","scorecard"].includes(start)?start:"dashboard",true);
+addEventListener("resize",movePill);document.fonts&&document.fonts.ready.then(()=>{movePill()});
+</script>
