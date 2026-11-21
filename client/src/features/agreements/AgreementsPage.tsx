@@ -33,12 +33,13 @@ export function AgreementTabs() {
 const columns: Column<Agreement>[] = [
   { key: "title", header: "Agreement", sort: "title", cell: (a) => a.title, className: "w-[24%]" },
   { key: "vendor", header: "Vendor", sort: "vendor", cell: (a) => <span className="text-ink-2">{a.vendorName}</span>, className: "w-[17%]" },
-  { key: "kind", header: "Kind", sort: "kind", cell: (a) => <Pill tone={a.kind === "sow" ? "brand" : "none"}>{kindShort[a.kind]}</Pill>, className: "w-[130px]" },
-  { key: "status", header: "Status", sort: "status", cell: (a) => <Pill tone={agreementTone(a.status)}>{statusLabels[a.status]}</Pill>, className: "w-[160px]" },
-  { key: "endDate", header: "End date", sort: "endDate", cell: (a) => <span className="num text-ink-2">{day(a.endDate)}</span> },
-  { key: "owner", header: "Owner", sort: "owner", cell: (a) => <span className="text-ink-2">{a.ownerName}</span> },
+  { key: "kind", fit: true, header: "Kind", sort: "kind", cell: (a) => <Pill tone={a.kind === "sow" ? "brand" : "none"}>{kindShort[a.kind]}</Pill> },
+  { key: "status", fit: true, header: "Status", sort: "status", cell: (a) => <Pill tone={agreementTone(a.status)}>{statusLabels[a.status]}</Pill> },
+  { key: "endDate", fit: true, header: "End date", sort: "endDate", cell: (a) => <span className="num text-ink-2">{day(a.endDate)}</span> },
+  { key: "owner", fit: true, header: "Owner", sort: "owner", cell: (a) => <span className="text-ink-2">{a.ownerName}</span> },
   {
     key: "value",
+    fit: true,
     header: "Value or budget",
     sort: "value",
     cell: (a) => <span className="num">{(a.budgetMinor ?? a.annualValueMinor) == null ? "–" : formatMoney((a.budgetMinor ?? a.annualValueMinor)!, a.currency)}</span>,

@@ -11,6 +11,8 @@ export interface Column<T> {
   sort?: string;
   cell: (row: T) => ReactNode;
   className?: string;
+  /** A short value that must never be cut off (a date, a pill, a name): the column takes exactly the room it needs. */
+  fit?: boolean;
 }
 
 interface Props<T> {
@@ -69,7 +71,7 @@ export function DataTable<T>({ label, rows, columns, rowId, rowLabel, sort, dir,
               className={clsx("group relative border-t border-line transition-colors", onOpen && "hover:bg-sunk", selected && "bg-tint hover:bg-tint")}
             >
               {shown.map((c, i) => (
-                <td key={c.key} className={clsx("max-w-0 truncate px-3 py-[15px]", c.className)}>
+                <td key={c.key} className={clsx("px-3 py-[15px]", c.fit ? "w-px whitespace-nowrap" : "max-w-0 truncate", c.className)}>
                   {i === 0 && selected && <span aria-hidden className="absolute bottom-2.5 left-0 top-2.5 w-[3px] rounded-full bg-accent" />}
                   {i === 0 && onOpen ? (
                     <button

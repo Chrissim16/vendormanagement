@@ -14,9 +14,9 @@ import { EmptyState, ErrorState, Field, Loading, PageHeader, Pill, Segmented, Se
 const columns: Column<User>[] = [
   { key: "name", header: "Person", sort: "name", cell: (u) => u.displayName ?? u.email, className: "w-[30%]" },
   { key: "email", header: "Email", cell: (u) => <span className="text-ink-2">{u.email}</span>, className: "w-[30%]" },
-  { key: "role", header: "Role", sort: "role", cell: (u) => (u.role === "admin" ? "Admin" : "Member") },
-  { key: "active", header: "Access", sort: "active", cell: (u) => <Pill tone={u.active ? "ok" : "warn"}>{u.active ? "Has access" : "Switched off"}</Pill> },
-  { key: "createdAt", header: "First seen", sort: "createdAt", cell: (u) => <span className="num text-ink-2">{formatDate(u.createdAt)}</span> },
+  { key: "role", fit: true, header: "Role", sort: "role", cell: (u) => (u.role === "admin" ? "Admin" : "Member") },
+  { key: "active", fit: true, header: "Access", sort: "active", cell: (u) => <Pill tone={u.active ? "ok" : "warn"}>{u.active ? "Has access" : "Switched off"}</Pill> },
+  { key: "createdAt", fit: true, header: "First seen", sort: "createdAt", cell: (u) => <span className="num text-ink-2">{formatDate(u.createdAt)}</span> },
 ];
 
 const PAGE_SIZE = 25;
