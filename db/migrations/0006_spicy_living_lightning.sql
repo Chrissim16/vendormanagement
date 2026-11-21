@@ -1,0 +1,1 @@
+ALTER TABLE "scorecards" ADD CONSTRAINT "scorecards_final_check" CHECK ("scorecards"."status" <> 'final' or "scorecards"."snapshot" is not null);

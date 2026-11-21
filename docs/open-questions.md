@@ -45,6 +45,7 @@ wrong. Answered questions move to the bottom.
 | Q37 | How many tickets does the AI read for the themes? | The tickets created in the month, at most the newest 250. A theme needs at least two tickets; at most five themes are shown. | M4 |
 | Q38 | Can a scorecard be removed? | A draft can, by any member, after asking once more. A final scorecard cannot. | M4 |
 | Q39 | Letters outside Western European alphabets in the PDF | They print as a question mark for now, since the PDF's built-in letters do not cover them. Say if comments are ever written in another script. | M4 |
+| Q40 | Can a scorecard be finalised while its quarter is still running? | No. It can be started and scored, and is finalised once the quarter has ended, so a final scorecard and its PDF always cover three whole months. | M4 |
 | Q27 | How long are tickets kept? | 24 months after they were resolved, as the data model says. Open tickets are kept however old. | M3 |
 
 ## To check at work before M9

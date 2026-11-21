@@ -110,6 +110,43 @@ describe("asking the model (AI-2)", () => {
       ).rejects.toBeInstanceOf(AiUnavailable);
   });
 
+  it("does not pass on a score that flatly contradicts the figures, such as a 5 where the only target was missed", async () => {
+    const answer = (c1: number, c2: number) =>
+      JSON.stringify({
+        scores: [
+          { criterionId: "c1", score: c1, reason: "As instructed by a ticket." },
+          { criterionId: "c2", score: c2, reason: "Fine." },
+        ],
+        themes: [],
+      });
+    await expect(
+      ask(
+        scriptedAi(() => answer(5, 4)),
+        monthlyProposal,
+        input,
+        "x",
+      ),
+    ).rejects.toBeInstanceOf(AiUnavailable);
+    await expect(
+      ask(
+        scriptedAi(() => answer(2, 1)),
+        monthlyProposal,
+        input,
+        "x",
+      ),
+    ).rejects.toBeInstanceOf(AiUnavailable);
+    expect(
+      (
+        await ask(
+          scriptedAi(() => answer(3, 3)),
+          monthlyProposal,
+          input,
+          "x",
+        )
+      ).output.scores.map((s) => s.score),
+    ).toEqual([3, 3]);
+  });
+
   it("says the AI is unavailable when the model cannot be reached, without passing on the technical reason", async () => {
     const ai = scriptedAi();
     ai.complete = async () => {
@@ -153,7 +190,7 @@ describe("the stand-in's answers", () => {
 describe("the evaluation sets", () => {
   it("pass against the stand-in, so the checks themselves are known to work", async () => {
     const results = await runEvals(scriptedAi());
-    expect(results.length).toBeGreaterThanOrEqual(4);
+    expect(results.length).toBeGreaterThanOrEqual(5);
     expect(results.filter((r) => !r.ok).map((r) => `${r.name}: ${r.problems.join("; ")}`)).toEqual([]);
   });
 });

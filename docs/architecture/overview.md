@@ -46,7 +46,7 @@ Rules:
 server/
   features/<feature>/     routes.ts, service.ts, repo.ts, schema.ts, *.test.ts
   platform/               auth, roles, audit, db, errors, config, ports/, jobs/
-  ai/                     prompts/ (versioned), suggestions.ts, evals/
+  ai/                     prompts/ (versioned), index.ts (ask, record, review), evals/
 client/src/
   features/<feature>/     pages, components, hooks
   platform/               layout, session, shared components (ui, DataTable, SplitView, History)

@@ -9,6 +9,7 @@ import {
   quarterName,
   sourceLabels,
   suggestionStatusLabels,
+  quarterOver,
   unscored,
   type Facts,
   type QuarterMonth,
@@ -20,7 +21,7 @@ import { api, ApiError, messageOf } from "../../lib/api";
 import { burst } from "../../lib/burst";
 import { formatDate, formatDateTime } from "../../lib/format";
 import { History } from "../../platform/History";
-import { useMe } from "../../platform/session";
+import { useMe, useToday } from "../../platform/session";
 import { Button, ConfirmButton, ErrorState, Loading, PageHeader, Pill } from "../../platform/ui";
 import { NotFoundPage } from "../placeholders";
 import { AiLabel, linkClass, ScoreSelector } from "./parts";
@@ -168,6 +169,7 @@ function NoteBox({
   value,
   readOnly,
   onSave,
+  onUnsaved,
 }: {
   id: string;
   label: string;
@@ -175,6 +177,8 @@ function NoteBox({
   value: string | null;
   readOnly: boolean;
   onSave: (text: string) => Promise<boolean>;
+  /** Tells the page that this box holds text the server does not have, or no longer does. */
+  onUnsaved?: (id: string, unsaved: boolean) => void;
 }) {
   const [text, setText] = useState(value ?? "");
   const [failed, setFailed] = useState(false);
@@ -210,6 +214,7 @@ function NoteBox({
           if (text.trim() === saved.current.trim()) return;
           const ok = await onSave(text);
           setFailed(!ok);
+          onUnsaved?.(id, !ok);
           if (ok) saved.current = text;
         }}
         className={`min-w-0 rounded-2xl border bg-surface px-4 py-2.5 text-sm placeholder:text-ink-3 hover:border-ink-3 ${failed ? "border-crit" : "border-line-2"}`}
@@ -227,21 +232,24 @@ function CriterionRow({
   line,
   share,
   readOnly,
-  busy,
   onChange,
+  onUnsaved,
 }: {
   card: ScorecardDetail;
   line: ScorecardLine;
   share: number;
   readOnly: boolean;
-  busy: boolean;
   onChange: (change: LineChange) => Promise<boolean>;
+  onUnsaved: (id: string, unsaved: boolean) => void;
 }) {
   const [evidence, setEvidence] = useState(false);
   const acceptRef = useRef<HTMLButtonElement>(null);
   const s = line.suggestion;
   // Only what changed is sent, so a score and a note saved at the same moment do not overwrite each other.
   const current = { criterionId: line.criterionId };
+  // Once scored, the line says what the AI suggested at that moment, which a later change to a monthly proposal does not rewrite.
+  const then = line.score == null ? (s?.score ?? null) : line.suggestedWhenScored;
+  const waiting = s?.months.filter((m) => m.status === "proposed").length ?? 0;
   const hasEvidence = !!s || (!!card.helpdesk && line.metrics.length > 0);
   const evidenceId = `evidence-${line.criterionId}`;
   const toggle = hasEvidence && (
@@ -264,7 +272,6 @@ function CriterionRow({
           label={`Score for ${line.name}`}
           value={line.score}
           suggested={s?.score}
-          busy={busy}
           onChange={readOnly ? undefined : (score) => void onChange({ ...current, score, acceptedSuggestion: false })}
         />
       </div>
@@ -274,32 +281,33 @@ function CriterionRow({
           <AiLabel>AI suggests {s.score}</AiLabel>
           <p className="min-w-[240px] flex-1">
             The average of {plural(s.months.length, "monthly proposal")}: {s.months.map((m) => `${monthShort(m.month)} ${m.score}`).join(", ")}.
+            {waiting > 0 &&
+              ` ${waiting === s.months.length ? (waiting === 1 ? "It has" : "None has") : `${waiting} of them ${waiting === 1 ? "has" : "have"}`} not been reviewed by anyone yet.`}
           </p>
           {toggle}
           <Button
             ref={acceptRef}
             variant="primary"
             className="h-8"
-            aria-disabled={busy || undefined}
             onClick={async () => {
-              if (!busy && (await onChange({ ...current, score: s.score, acceptedSuggestion: true }))) burst(acceptRef.current, 9);
+              if (await onChange({ ...current, score: s.score, acceptedSuggestion: true })) burst(acceptRef.current, 9);
             }}
           >
             Accept {s.score}
           </Button>
         </div>
       )}
-      {(!s || line.score != null || readOnly) && (s || hasEvidence) && (
+      {(!s || line.score != null || readOnly) && (then != null || hasEvidence) && (
         <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-2">
-          {s && (
+          {then != null && (
             <>
-              <AiLabel>AI suggested {s.score}</AiLabel>
+              <AiLabel>AI suggested {then}</AiLabel>
               <span>
                 {line.score == null
                   ? "Not scored."
                   : line.acceptedSuggestion
                     ? "Accepted as it was."
-                    : line.score === s.score
+                    : line.score === then
                       ? "The reviewer chose the same score."
                       : `Not followed: the reviewer chose ${line.score}.`}
               </span>
@@ -322,6 +330,7 @@ function CriterionRow({
           value={line.vendorComment}
           readOnly={readOnly}
           onSave={(vendorComment) => onChange({ ...current, vendorComment })}
+          onUnsaved={onUnsaved}
         />
         <NoteBox
           id={`note-${line.criterionId}`}
@@ -330,6 +339,7 @@ function CriterionRow({
           value={line.internalNote}
           readOnly={readOnly}
           onSave={(internalNote) => onChange({ ...current, internalNote })}
+          onUnsaved={onUnsaved}
         />
       </div>
     </li>
@@ -349,9 +359,23 @@ export function ScorecardPage() {
     qc.setQueryData(key, c);
     await Promise.all([qc.invalidateQueries({ queryKey: ["history"] }), qc.invalidateQueries({ queryKey: ["scorecard", "list"] })]);
   };
+  // Several saves can be on their way at once and their answers can arrive in any order. Only when the last one is in
+  // is the page brought up to date, and then from a fresh read, so an older answer never puts older text back.
+  const saving = useRef(0);
   const save = useMutation({
-    mutationFn: (body: { summary?: string; lines?: LineChange[] }) => api<ScorecardDetail>(`/scorecards/${id}`, { method: "PUT", body }),
-    onSuccess: took,
+    mutationFn: async (body: { summary?: string; lines?: LineChange[] }) => {
+      saving.current++;
+      try {
+        return await api<ScorecardDetail>(`/scorecards/${id}`, { method: "PUT", body });
+      } finally {
+        saving.current--;
+      }
+    },
+    onSuccess: async (c) => {
+      if (saving.current > 0) return;
+      await took(c);
+      void qc.invalidateQueries({ queryKey: key, exact: true });
+    },
   });
   const act = useMutation({
     mutationFn: (what: "finalise" | "reopen") => api<ScorecardDetail>(`/scorecards/${id}/${what}`, { method: "POST" }),
@@ -362,6 +386,10 @@ export function ScorecardPage() {
     },
     onError: (e) => toast.error(messageOf(e)),
   });
+  const today = useToday();
+  // Boxes whose text could not be saved. While there is one, the scorecard is not finalised over it.
+  const [unsaved, setUnsaved] = useState<string[]>([]);
+  const markUnsaved = (box: string, on: boolean) => setUnsaved((list) => (on ? [...new Set([...list, box])] : list.filter((b) => b !== box)));
   const remove = useMutation({
     mutationFn: () => api(`/scorecards/${id}`, { method: "DELETE" }),
     onSuccess: async () => {
@@ -376,6 +404,7 @@ export function ScorecardPage() {
   const c = q.data;
   const final = c?.status === "final";
   const left = c ? unscored(c.lines) : [];
+  const running = !!c && !quarterOver(c.quarter, today);
   const weights = c?.lines.reduce((n, l) => n + l.weight, 0) ?? 0;
   /** Saves one change at once. On failure the page says so and nothing typed is lost. */
   const change = async (body: { summary?: string; lines?: LineChange[] }): Promise<boolean> => {
@@ -403,14 +432,14 @@ export function ScorecardPage() {
       >
         {c && (final ? <Pill tone="ok">Final</Pill> : <Pill>Draft</Pill>)}
         {c && !final && (
-          <ConfirmButton label={`Remove the draft scorecard for ${c.vendorName}`} onConfirm={() => remove.mutate()}>
+          <ConfirmButton label={`Remove draft: the scorecard for ${c.vendorName}`} onConfirm={() => remove.mutate()}>
             Remove draft
           </ConfirmButton>
         )}
         {c && final && me.role === "admin" && (
-          <Button onClick={() => !act.isPending && act.mutate("reopen")} aria-disabled={act.isPending || undefined}>
+          <ConfirmButton label={`Reopen the scorecard for ${c.vendorName}`} confirm="Really reopen?" onConfirm={() => !act.isPending && act.mutate("reopen")}>
             Reopen
-          </Button>
+          </ConfirmButton>
         )}
         {c && final && (
           <a
@@ -450,8 +479,8 @@ export function ScorecardPage() {
                   line={line}
                   share={Math.round((line.weight * 100) / weights)}
                   readOnly={final}
-                  busy={save.isPending}
                   onChange={(lineChange) => change({ lines: [lineChange] })}
+                  onUnsaved={markUnsaved}
                 />
               ))}
             </ul>
@@ -465,12 +494,13 @@ export function ScorecardPage() {
               value={c!.summary}
               readOnly={final}
               onSave={(summary) => change({ summary })}
+              onUnsaved={markUnsaved}
             />
           </div>
 
           <div className="sticky bottom-4 z-10 flex flex-wrap items-center gap-x-6 gap-y-3 rounded-tile border border-line bg-surface px-6 py-4 shadow-float">
             <div>
-              <p className="text-[12.5px] font-medium text-ink-2">{final ? "Overall" : "Overall so far"}</p>
+              <p className="text-[12.5px] font-medium text-ink-2">{final ? "Overall" : `Overall so far, ${c!.scored} of ${c!.lines.length} scored`}</p>
               <p aria-label={`Overall score ${formatScore(c!.overallTenths)}`} className="num text-[26px] font-semibold leading-tight tracking-[-0.02em]">
                 {formatScore(c!.overallTenths)}
               </p>
@@ -478,15 +508,19 @@ export function ScorecardPage() {
             <p role="status" className="min-w-[160px] flex-1 text-ink-2">
               {final
                 ? "Internal notes stay out of the vendor PDF."
-                : left.length
-                  ? `${left.length} of ${c!.lines.length} still to score: ${left.join(", ")}.`
-                  : `All ${c!.lines.length} scored. Internal notes stay out of the vendor PDF.`}
+                : unsaved.length
+                  ? "A text on this page could not be saved (marked in red). Click in that box and outside it again to save it before finalising."
+                  : left.length
+                    ? `${left.length} of ${c!.lines.length} still to score: ${left.join(", ")}.`
+                    : running
+                      ? `All ${c!.lines.length} scored. ${quarterName(c!.quarter)} runs until ${formatDate(c!.periodEnd)}; the scorecard can be finalised after that.`
+                      : `All ${c!.lines.length} scored. Internal notes stay out of the vendor PDF.`}
             </p>
             {!final && (
               <Button
                 ref={finaliseRef}
                 variant="primary"
-                disabled={left.length > 0}
+                disabled={left.length > 0 || running || unsaved.length > 0}
                 aria-disabled={act.isPending || undefined}
                 onClick={() => !act.isPending && act.mutate("finalise")}
               >

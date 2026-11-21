@@ -1,4 +1,4 @@
-import type { Day } from "../../../shared/dates";
+import { formatDay, type Day } from "../../../shared/dates";
 import { metricKeys, type MetricKey, type Month } from "../../../shared/performance";
 import {
   checkCriterion,
@@ -7,6 +7,7 @@ import {
   quarterBounds,
   quarterName,
   quarterOf,
+  quarterOver,
   scorecardSaveSchema,
   startScorecardSchema,
   suggestedScore,
@@ -20,7 +21,7 @@ import {
   type ScorecardDetail,
   type ScorecardLine,
 } from "../../../shared/scorecards";
-import { budgetView } from "../../../shared/sow";
+import { budgetView, daysLate } from "../../../shared/sow";
 import type { Page, User } from "../../../shared/types";
 import { audit } from "../../platform/audit";
 import { AppError, notFound } from "../../platform/errors";
@@ -125,7 +126,7 @@ export async function factsFor(ctx: ScorecardContext, db: Queryable, vendorId: s
     return { agreementId: s.agreementId, title: s.title, usedPct: view.usedPct, over: view.state === "over" };
   });
   const delivered = due.filter((m) => m.status === "delivered");
-  const late = delivered.filter((m) => (m.deliveredOn ?? m.dueDate) > m.dueDate).length;
+  const late = delivered.filter((m) => daysLate(m, today) > 0).length;
   const open = due.filter((m) => m.status === "open");
   const overdue = open.filter((m) => m.dueDate < today).length;
   return {
@@ -180,6 +181,8 @@ async function build(ctx: ScorecardContext, row: repo.CardRow): Promise<Scorecar
   const { card } = row;
   const saved = new Map((await repo.linesOf(ctx.db, [card.id])).map((l) => [l.criterionId, l]));
   const snapshot = card.status === "final" ? (card.snapshot as Snapshot | null) : null;
+  // The database refuses a final scorecard without its frozen copy; should one ever turn up, showing today's figures as if they were final would be worse than an error.
+  if (card.status === "final" && !snapshot) throw new Error(`Final scorecard ${card.id} has no snapshot.`);
   let parts: Snapshot;
   if (snapshot) parts = snapshot;
   else {
@@ -214,6 +217,7 @@ async function build(ctx: ScorecardContext, row: repo.CardRow): Promise<Scorecar
       internalNote: s?.internalNote ?? null,
       // Taken from the AI only while the score still is what the AI suggested when it was accepted.
       acceptedSuggestion: !!s?.acceptedSuggestion && score != null && s.suggestedScore === score,
+      suggestedWhenScored: score == null ? null : (s?.suggestedScore ?? null),
     };
   });
   return {
@@ -252,7 +256,8 @@ export async function listScorecards(ctx: ScorecardContext, filter: repo.CardFil
       const snapshot = row.card.status === "final" ? (row.card.snapshot as Snapshot | null) : null;
       const using = snapshot ? snapshot.lines.map((l) => ({ id: l.criterionId, weight: l.weight })) : criteria;
       return header(
-        row,
+        // A final scorecard keeps the name the vendor had when it was finalised, as its page and PDF do.
+        snapshot ? { ...row, vendorName: snapshot.vendorName } : row,
         using.map((c) => ({ score: mine.get(c.id) ?? null, weight: c.weight })),
       );
     }),
@@ -315,6 +320,9 @@ export async function saveScorecard(ctx: ScorecardContext, id: string, input: un
       // "Accepted" only holds when the score really is what the AI suggests. A line whose score was not sent keeps what it had.
       const accepted = scored ? sent.acceptedSuggestion && next.score != null && line.suggestion?.score === next.score : (was?.acceptedSuggestion ?? false);
       const suggested = scored ? (line.suggestion?.score ?? null) : (was?.suggestedScore ?? null);
+      const lineChanged = before.score !== next.score || before.vendorComment !== next.vendorComment || before.internalNote !== next.internalNote;
+      // Nothing changed on this line: nothing is written.
+      if (was && !lineChanged) continue;
       note(`${line.name}: score`, before.score, next.score);
       note(`${line.name}: comment for the vendor`, before.vendorComment, next.vendorComment);
       note(`${line.name}: internal note`, before.internalNote, next.internalNote);
@@ -335,11 +343,21 @@ export async function finaliseScorecard(ctx: ScorecardContext, id: string, by: U
   const row = await find(ctx, id);
   const detail = await build(ctx, row);
   if (detail.status === "final") return detail;
+  // A scorecard speaks for a whole quarter, so it becomes final only once the quarter has ended.
+  if (!quarterOver(detail.quarter, ctx.today()))
+    throw new AppError(
+      409,
+      "quarter_running",
+      `${quarterName(detail.quarter)} is not over yet. A scorecard is finalised once its quarter has ended, after ${formatDay(detail.periodEnd)}; until then it stays a draft.`,
+    );
   await ctx.db.transaction(async (tx) => {
     const card = await repo.lockCard(tx, id);
     if (!card) throw notFound("That scorecard");
     if (card.status === "final") return;
-    // Read the scores again under the lock: a save may have landed since the page was built.
+    // Read the scores and the criteria again under the lock: a save or a change of criteria may have landed since the page was built.
+    const inUse = (await repo.listCriteria(tx, true)).map((c) => `${c.id} ${c.name} ${c.weight}`);
+    if (inUse.join("|") !== detail.lines.map((l) => `${l.criterionId} ${l.name} ${l.weight}`).join("|"))
+      throw new AppError(409, "criteria_changed", "The criteria were changed a moment ago. Reload the page, check the scores and finalise again.");
     const saved = new Map((await repo.linesOf(tx, [id])).map((l) => [l.criterionId, l.score]));
     const lines = detail.lines.map((l) => ({ ...l, score: saved.get(l.criterionId) ?? null }));
     const missing = unscored(lines);

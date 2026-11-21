@@ -117,6 +117,8 @@ export async function generateProposal(ctx: ScorecardContext, vendorId: string, 
     await repo.lockVendor(tx, vendorId);
     const existing = (await repo.proposalsOf(tx, vendorId, [m]))[0];
     if (settled(existing)) throw reviewed();
+    // The answer being replaced is closed, so no suggestion is left behind that looks as if it still waits for someone.
+    if (existing?.status === "proposed") await reviewSuggestion(tx, existing.suggestionId, "rejected", "system", ctx.now());
     const suggestion = await recordSuggestion(tx, {
       prompt: monthlyProposal,
       subjectType: "vendor",
@@ -124,6 +126,7 @@ export async function generateProposal(ctx: ScorecardContext, vendorId: string, 
       model,
       inputSummary: `${monthName(m)}: ${input.criteria.length} criteria, ${input.tickets.length} tickets`,
       output,
+      at: ctx.now(),
     });
     const proposalId = await repo.upsertProposal(tx, { vendorId, month: m, suggestionId: suggestion.id, scores, themes, ticketsRead: input.tickets.length });
     await audit(tx, {
@@ -147,8 +150,11 @@ export async function generateProposal(ctx: ScorecardContext, vendorId: string, 
 /** A person accepts, changes or rejects a proposal (AI-1). The decision can be changed later; each one is in the vendor's history. */
 export async function reviewProposal(ctx: ScorecardContext, proposalId: string, input: unknown, by: User): Promise<Proposal> {
   const value = proposalReviewSchema.parse(input);
+  const found = await repo.getProposal(ctx.db, proposalId);
+  if (!found) throw notFound("That proposal");
   await ctx.db.transaction(async (tx) => {
-    await repo.lockProposal(tx, proposalId);
+    // The same lock as writing a proposal takes, so "ask again" and a review of the same month take turns.
+    await repo.lockVendor(tx, found.vendorId);
     const row = await repo.getProposal(tx, proposalId);
     if (!row) throw notFound("That proposal");
     const vendor = (await repo.getVendor(tx, row.vendorId))!;

@@ -176,6 +176,7 @@ export const scorecardSaveSchema = z.object({
       }),
     )
     .max(50)
+    .refine((lines) => new Set(lines.map((l) => l.criterionId)).size === lines.length, "A criterion can be sent only once.")
     .default([]),
 });
 export type ScorecardSave = z.infer<typeof scorecardSaveSchema>;
@@ -230,7 +231,12 @@ export interface ScorecardLine {
   suggestion: LineSuggestion | null;
   /** True when the score was taken from the AI's suggestion as it was. */
   acceptedSuggestion: boolean;
+  /** What the AI suggested at the moment the reviewer scored; it may differ from today's suggestion. Null when unscored or nothing was suggested. */
+  suggestedWhenScored: number | null;
 }
+/** Whether a quarter has ended, so that its scorecard can be finalised on the whole quarter. */
+export const quarterOver = (q: Quarter, today: Day) => quarterBounds(q).end < today;
+
 export interface Scorecard {
   id: string;
   vendorId: string;

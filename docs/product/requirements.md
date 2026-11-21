@@ -95,7 +95,7 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 
 **P-2 Quarterly scorecard.** A member starts a scorecard for a quarter. Measured criteria come with a suggested score from the monthly proposals, shown as a suggestion until the reviewer accepts it or chooses another. Manual criteria are scored by the reviewer, with supporting facts shown (budgets kept, milestones on time, NDA and DPA status). Each criterion takes a comment for the vendor and an internal note.
 
-**P-3 Finalise.** Finalising requires every criterion scored. A final scorecard is read-only. An admin can reopen it.
+**P-3 Finalise.** Finalising requires the quarter to be over and every criterion scored. A final scorecard is read-only. An admin can reopen it.
 
 **P-4 Vendors without Jira.** A scored vendor without a board gets the same scorecard, with all criteria scored by hand and the supporting facts shown.
 

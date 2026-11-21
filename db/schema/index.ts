@@ -499,6 +499,8 @@ export const scorecards = pgTable(
     uniqueIndex("scorecards_one_per_quarter").on(t.vendorId, t.periodStart),
     check("scorecards_status_check", sql`${t.status} in ('draft', 'final')`),
     check("scorecards_period_check", sql`${t.periodEnd} > ${t.periodStart}`),
+    // A final scorecard without its frozen copy would silently show today's figures (P-7).
+    check("scorecards_final_check", sql`${t.status} <> 'final' or ${t.snapshot} is not null`),
   ],
 );
 

@@ -18,6 +18,18 @@ const fakeReq = (headers: Record<string, string>, cookies: Record<string, string
 describe("storage: folder on disk", () => each(storageContract(diskStorage(".data/test-contract"))));
 describe("jira: stand-in", () => each(jiraContract(fakeJira())));
 describe("ai: scripted stand-in", () => each(aiContract(scriptedAi())));
+describe("ai: the stand-in can be made to fail", () => {
+  it("is unreachable or talks nonsense on request, and works again afterwards", async () => {
+    const ai = scriptedAi();
+    const ping = () => ai.complete({ tier: "fast", system: "", user: "ping" });
+    ai.simulate!("unavailable");
+    await expect(ping()).rejects.toThrow();
+    ai.simulate!("nonsense");
+    expect((await ping()).text).not.toBe("pong");
+    ai.simulate!("working");
+    expect((await ping()).text).toBe("pong");
+  });
+});
 
 describe("identity: local stand-in", () => {
   const id = devIdentity("Default@Example.test");

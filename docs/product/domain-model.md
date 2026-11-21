@@ -192,7 +192,8 @@ Starting set, each with weight 20:
 - The metric values are the app's own, handed to the model and stored with the proposal. The model writes the score and the reason.
 - The model is given the tickets created in the month (at most 250) and names the tickets of each theme. The app keeps only tickets it really handed over, counts them itself, drops a theme with fewer than two, and keeps at most five themes with three example tickets each.
 - A person accepts it, changes its scores (the AI's own score stays visible), or rejects it; the decision can be changed later. Each decision is in the vendor's history with who and when.
-- It can be asked for again while nobody has accepted it. Once accepted or changed by a person it is kept.
+- It can be asked for again while nobody has accepted it; the answer it replaces is closed as rejected by `system`, so nothing is left waiting for a review that will never come. Once accepted or changed by a person it is kept.
+- A score that flatly contradicts the app's figures (4 or 5 where every judged target was missed, 1 or 2 where every one was met) counts as an unusable answer. Ticket text is handed to the model as material to read, never as instructions.
 - If the model cannot be reached or its answer cannot be used (asked twice), nothing is stored and the page says so.
 
 **Scorecard**: `vendor_id*`, `period_start*`, `period_end*` (a quarter), `reviewer_user_id*`, `status*` (draft | final),
@@ -200,12 +201,13 @@ per criterion a `score` 1 to 5, a `vendor_comment` and an `internal_note`, plus 
 - One per vendor and quarter. The quarter must have started. The person who starts it is the reviewer.
 - For a measured criterion the suggestion is the average of the quarter's monthly proposals that were not rejected, rounded to a whole score (a half rounds up). It is only a suggestion: the line has no score until the reviewer accepts it or chooses one. The line remembers what was suggested and whether it was taken as it was.
 - A draft follows the criteria in use today. Each change (a score, a comment, a note) is saved by itself, so two saved at once do not undo each other.
-- Supporting facts, worked out in code: SOWs with a budget that ran in the quarter and whether what was invoiced by the end of the quarter is within the budget; milestones due in the quarter (on time, late, overdue, not yet due; cancelled ones left out); NDA and DPA status on the day shown.
-- Finalising needs a score on every active criterion, and freezes what the scorecard shows: its criteria with their names and weights, the suggestions, the facts and the helpdesk figures. Later changes to criteria, targets or agreements do not alter it (P-7).
+- Supporting facts, worked out in code: SOWs with a budget that ran in the quarter and whether what was invoiced by the end of the quarter is within the budget; milestones due in the quarter on SOWs that are active or ended (on time, late, overdue, not yet due; cancelled ones left out); NDA and DPA status on the day shown.
+- Finalising needs the quarter to be over and a score on every active criterion, and freezes what the scorecard shows: its criteria with their names and weights, the suggestions, the facts and the helpdesk figures. Later changes to criteria, targets or agreements do not alter it (P-7).
 - A final scorecard is read-only; an admin can reopen it, after which it is a draft that follows today's criteria and figures again. A draft can be removed; a final one cannot.
 - Overall = weighted average of the scored lines, one decimal.
 - Only for vendors with `scoring_enabled`. When scoring is switched off, the vendor's scorecards and proposals are kept but not shown, and come back when it is switched on again.
-- The vendor PDF (final only) holds the overall score, each criterion's score, weight and comment for the vendor, the summary, and the quarter's helpdesk figures. It leaves out internal notes, the supporting facts and anything about the AI.
+- The database refuses a final scorecard without its frozen copy.
+- The vendor PDF (final only) holds the reviewer's name (left out when only an email address is known), the overall score, each criterion's score, weight and comment for the vendor, the summary, and the quarter's helpdesk figures. It leaves out internal notes, the supporting facts and anything about the AI.
 
 ## RFP
 

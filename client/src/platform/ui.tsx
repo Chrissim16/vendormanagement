@@ -13,7 +13,10 @@ export function ConfirmButton({
   className,
   disabled,
   children = "Remove",
+  confirm = "Really remove?",
 }: {
+  /** What the button asks once armed. */
+  confirm?: string;
   label: string;
   onConfirm: () => void;
   className?: string;
@@ -30,14 +33,14 @@ export function ConfirmButton({
     <Button
       className={clsx(className, armed && "border-crit text-crit-text")}
       disabled={disabled}
-      aria-label={armed ? `Really remove? ${label}, click again to confirm` : label}
+      aria-label={armed ? `${confirm} ${label}, click again to confirm` : label}
       onBlur={() => setArmed(false)}
       onClick={() => {
         setArmed(!armed);
         if (armed) onConfirm();
       }}
     >
-      {armed ? "Really remove?" : children}
+      {armed ? confirm : children}
     </Button>
   );
 }

@@ -71,7 +71,7 @@ function StartScorecard({ vendorId, onClose, onStarted }: { vendorId: string; on
           {Array.from({ length: 8 }, (_, i) => addQuarter(thisQuarter, -i)).map((q) => (
             <option key={q} value={q}>
               {quarterName(q)}
-              {q === thisQuarter ? " (still running)" : ""}
+              {q === thisQuarter ? " (still running, finalised after it ends)" : ""}
             </option>
           ))}
         </SelectField>

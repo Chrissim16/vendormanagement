@@ -65,7 +65,6 @@ export const proposalsOf = (db: Queryable, vendorId: string, months: Month[]) =>
         .orderBy(asc(monthlyProposals.month))
     : Promise.resolve([]);
 export const getProposal = async (db: Queryable, id: string) => (await proposals(db).where(eq(monthlyProposals.id, id)))[0];
-export const lockProposal = (tx: Queryable, id: string) => tx.execute(sql`select 1 from monthly_proposals where id = ${id} for update`);
 export const vendorsWithProposal = async (db: Queryable, month: Month) =>
   new Set((await db.select({ vendorId: monthlyProposals.vendorId }).from(monthlyProposals).where(eq(monthlyProposals.month, month))).map((r) => r.vendorId));
 export const upsertProposal = async (tx: Queryable, p: { vendorId: string; month: Month; suggestionId: string; scores: unknown; themes: unknown; ticketsRead: number }) =>
@@ -195,7 +194,7 @@ export const sowBudgets = (db: Queryable, vendorId: string, start: Day, end: Day
       title: agreements.title,
       budgetMinor: agreements.budgetMinor,
       // Written out with table names: inside a sub-select, bare column names would both be read as the invoice's own.
-      invoicedMinor: sql<number>`(select coalesce(sum(i.amount_minor), 0) from invoices i where i.agreement_id = "agreements"."id" and i.invoice_date <= ${end})::float8`,
+      invoicedMinor: sql<number>`(select coalesce(sum(i.amount_minor), 0) from invoices i where i.agreement_id = "agreements"."id" and i.invoice_date <= ${end})::bigint`,
     })
     .from(agreements)
     .where(
@@ -210,10 +209,18 @@ export const sowBudgets = (db: Queryable, vendorId: string, start: Day, end: Day
     )
     .orderBy(sql`lower(${agreements.title})`);
 
-/** The vendor's milestones due in the period, cancelled ones left out. */
+/** The vendor's milestones due in the period on SOWs that were signed (active or ended), cancelled ones left out. */
 export const milestonesDue = (db: Queryable, vendorId: string, start: Day, end: Day) =>
   db
     .select({ status: milestones.status, dueDate: milestones.dueDate, deliveredOn: milestones.deliveredOn })
     .from(milestones)
     .innerJoin(agreements, eq(agreements.id, milestones.sowId))
-    .where(and(eq(agreements.vendorId, vendorId), gte(milestones.dueDate, start), lte(milestones.dueDate, end), ne(milestones.status, "cancelled")));
+    .where(
+      and(
+        eq(agreements.vendorId, vendorId),
+        inArray(agreements.status, ["active", "ended"]),
+        gte(milestones.dueDate, start),
+        lte(milestones.dueDate, end),
+        ne(milestones.status, "cancelled"),
+      ),
+    );

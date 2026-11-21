@@ -127,12 +127,12 @@ test.describe("AI-2 failure", () => {
     }
     expect(await proposalOf(request, tar.vendorId, "2026-05")).toBeNull();
 
-    // With the AI still down, a scorecard is started, scored by hand and finalised.
-    const v = await newVendor(request, "By hand");
-    const card = await startCard(request, v.id);
+    // With the AI still down, a scorecard for the same helpdesk vendor is started, scored by hand and finalised.
+    const card = await startCard(request, tar.vendorId, "2026-Q1");
     await page.goto(`/performance/scorecards/${card.id}`);
+    await expect(page.getByRole("region", { name: "Criteria" }).getByRole("listitem")).toHaveCount(card.lines.length);
     for (const line of card.lines) await scoreButton(page, line.name, 3).click();
-    await expect(page.getByRole("status")).toContainText("All 5 scored.");
+    await expect(page.getByRole("status")).toContainText(`All ${card.lines.length} scored.`);
     await page.getByRole("button", { name: "Finalise scorecard" }).click();
     await expect(page.getByText("Final", { exact: true })).toBeVisible();
 
@@ -230,10 +230,16 @@ test.describe("P-2 quarterly scorecard", () => {
     await box.blur();
     await expect(page.getByText("This could not be saved. Your text is still here; click outside the box to try again.")).toBeVisible();
     await expect(box).toHaveValue("Costs were as agreed.");
+    // A scorecard is not finalised over a text that was not saved.
+    await page.unroute("**/api/scorecards/*");
+    for (const line of card.lines) await scoreButton(page, line.name, 3).click();
+    await expect(page.getByRole("status")).toContainText("A text on this page could not be saved");
+    await expect(page.getByRole("button", { name: "Finalise scorecard" })).toBeDisabled();
     await page.unroute("**/api/scorecards/*");
     await box.focus();
     await box.blur();
     await expect(page.getByText("This could not be saved.", { exact: false })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Finalise scorecard" })).toBeEnabled();
     await page.reload();
     await expect(box).toHaveValue("Costs were as agreed.");
   });
@@ -284,7 +290,7 @@ test.describe("P-3 finalise", () => {
     await expect(scoreButton(page, "Value for money", 5)).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByRole("button", { name: "Finalise scorecard" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /Remove/ })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Reopen" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Reopen/ })).toHaveCount(0);
     await expect(page.getByText("Not for the vendor's eyes.", { exact: true })).toBeVisible();
     await expectAccessible(page);
     // The server refuses as well.
@@ -297,7 +303,8 @@ test.describe("P-3 finalise", () => {
 
     await signInAs(context, ADMIN);
     await page.reload();
-    await page.getByRole("button", { name: "Reopen" }).click();
+    await page.getByRole("button", { name: /^Reopen/ }).click();
+    await page.getByRole("button", { name: /Really reopen\?/ }).click();
     await expect(page.getByText("Scorecard reopened")).toBeVisible();
     await expect(page.getByRole("button", { name: "Finalise scorecard" })).toBeEnabled();
     await scoreButton(page, "Value for money", 1).click();
@@ -310,7 +317,7 @@ test.describe("P-3 finalise", () => {
     const card = await startCard(request, v.id, "2026-Q2");
     await signInAs(context, MEMBER);
     await page.goto(`/performance/scorecards/${card.id}`);
-    await page.getByRole("button", { name: `Remove the draft scorecard for ${v.name}` }).click();
+    await page.getByRole("button", { name: `Remove draft: the scorecard for ${v.name}` }).click();
     await page.getByRole("button", { name: /Really remove\?/ }).click();
     await expect(page).toHaveURL(/\/performance\/scorecards$/);
     await page.goto(`/performance/scorecards/${card.id}`);

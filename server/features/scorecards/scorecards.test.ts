@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { aiSuggestions, monthlyProposals } from "../../../db/schema";
 import type { Criterion, Proposal, ProposalState, Scorecard, ScorecardDetail } from "../../../shared/scorecards";
@@ -180,7 +180,17 @@ describe("P-1 monthly proposal", () => {
     const tar = ids["Tarnwick Software"]!;
     const p = (await proposal(tar, "2026-09")).proposal!;
     expect(p.status).toBe("proposed");
+    // A scorecard for the quarter shows what the AI suggests, and has no score of its own, before and after the proposal is accepted.
+    const c = (await start(tar, "2026-Q3")).body as ScorecardDetail;
+    const untouched = async () => {
+      const now = await card(c.id);
+      expect(now.lines.map((l) => l.score)).toEqual([null, null, null, null, null]);
+      expect(now).toMatchObject({ overallTenths: null, scored: 0, status: "draft" });
+      expect(now.lines[0]!.suggestion).not.toBeNull();
+    };
+    await untouched();
     const accepted = (await review(p.id, { action: "accept" })).body as Proposal;
+    await untouched();
     expect(accepted).toMatchObject({ status: "accepted", reviewedBy: MEMBER, reviewedAt: "2026-11-21T12:00:00.000Z" });
     const quality = p.scores[0]!;
     const changed = quality.aiScore === 5 ? 4 : quality.aiScore + 1;
@@ -190,7 +200,7 @@ describe("P-1 monthly proposal", () => {
     // What the model wrote is kept untouched next to the person's change.
     const stored = (await t.ports.database.db.select().from(aiSuggestions).where(eq(aiSuggestions.subjectId, tar))).find((s) => s.status === "edited")!;
     expect((stored.output as { scores: { score: number }[] }).scores[0]!.score).toBe(quality.aiScore);
-    expect(stored).toMatchObject({ kind: "monthly_proposal", promptVersion: "monthly-proposal/1", subjectType: "vendor", reviewedBy: MEMBER });
+    expect(stored).toMatchObject({ kind: "monthly_proposal", promptVersion: "monthly-proposal/2", subjectType: "vendor", reviewedBy: MEMBER });
     // Putting the score back makes it a plain acceptance again.
     expect((await review(p.id, { action: "edit", scores: [{ criterionId: quality.criterionId, score: quality.aiScore }] })).body.status).toBe("accepted");
     expect((await review(p.id, { action: "reject" })).body.status).toBe("rejected");
@@ -210,6 +220,11 @@ describe("P-1 monthly proposal", () => {
     const again = await askFor(tar, "2026-08");
     expect(again.status).toBe(201);
     expect(again.body).toMatchObject({ id: before.id, status: "proposed" });
+    // The answer that was replaced does not stay behind as something still waiting for a person.
+    const waiting = (await t.ports.database.db.select().from(aiSuggestions).where(eq(aiSuggestions.subjectId, tar))).filter(
+      (s) => s.status === "proposed" && s.inputSummary?.startsWith("August 2026"),
+    );
+    expect(waiting).toHaveLength(1);
     expect((await t.ports.database.db.select().from(monthlyProposals).where(eq(monthlyProposals.vendorId, tar))).filter((r) => r.month === "2026-08")).toHaveLength(1);
     await review(before.id, { action: "accept" });
     const kept = await askFor(tar, "2026-08");
@@ -299,7 +314,6 @@ describe("P-1 monthly proposal", () => {
 
 describe("P-2 quarterly scorecard", () => {
   it("starts a draft with the measured criteria suggested from the quarter's proposals, nothing scored yet", async () => {
-    const tar = ids["Tarnwick Software"]!;
     const other = await testApp();
     try {
       const tarId = ((await other.as(MEMBER).get("/api/vendors").query({ q: "Tarnwick" })).body.items as { id: string }[])[0]!.id;
@@ -343,7 +357,6 @@ describe("P-2 quarterly scorecard", () => {
     } finally {
       await other.close();
     }
-    expect(tar).toBeTruthy();
   });
 
   it("saves scores, a comment for the vendor and an internal note per criterion, and records whether the AI's suggestion was taken", async () => {
@@ -382,6 +395,14 @@ describe("P-2 quarterly scorecard", () => {
     await save(c.id, { lines: [{ criterionId: responsiveness.criterionId, score: 4, internalNote: "Ask for a new service manager." }] });
     expect((await history("scorecard", c.id)).length).toBe(count);
     expect((await save(c.id, { lines: [{ criterionId: me, score: 3 }] })).status).toBe(400);
+    const twice = await save(c.id, {
+      lines: [
+        { criterionId: quality.criterionId, score: 1 },
+        { criterionId: quality.criterionId, score: 2 },
+      ],
+    });
+    expect(twice.status).toBe(400);
+    expect((await card(c.id)).lines[0]!.score).toBe(quality.suggestion!.score);
     expect((await save(c.id, { lines: [{ criterionId: quality.criterionId, score: 7 }] })).status).toBe(400);
   });
 
@@ -460,6 +481,16 @@ describe("P-3 finalise", () => {
       [ADMIN, "final", "draft"],
       [MEMBER, "draft", "final"],
     ]);
+  });
+
+  it("waits until the quarter is over", async () => {
+    const v = await newVendor("Running quarter");
+    const c = (await start(v, "2026-Q4")).body as ScorecardDetail;
+    await scoreAll(c, 4);
+    const early = await t.as(MEMBER).post(`/api/scorecards/${c.id}/finalise`);
+    expect(early.status).toBe(409);
+    expect(early.body.error).toMatchObject({ code: "quarter_running", message: expect.stringMatching(/Q4 2026 is not over yet.*after 31 Dec 2026/) });
+    expect((await card(c.id)).status).toBe("draft");
   });
 
   it("a draft started by mistake can be removed, with a trace in the audit log", async () => {
@@ -584,6 +615,19 @@ describe("P-6 vendor PDF", () => {
     expect(text).not.toMatch(/internal|\bAI\b|budget|suggest/i);
   });
 
+  it("does not print a reviewer who is known only by an email address", async () => {
+    const v = await newVendor("No name");
+    const who = `nameless-${n()}@example.test`;
+    const c = (await start(v, "2026-Q3", who)).body as ScorecardDetail;
+    expect(c.reviewerName).toBe(who);
+    await scoreAll(c, 3);
+    await t.as(MEMBER).post(`/api/scorecards/${c.id}/finalise`);
+    const text = await textOf((await t.as(MEMBER).get(`/api/scorecards/${c.id}/pdf`).buffer(true).parse(binary)).body as Buffer);
+    expect(text).not.toContain("@");
+    expect(text).not.toContain("Reviewed by");
+    expect(text).toContain("Finalised");
+  });
+
   it("is refused for a draft, and survives text the PDF's letters do not cover", async () => {
     const v = await newVendor("PDF Ünïcode");
     const c = (await start(v, "2026-Q3")).body as ScorecardDetail;
@@ -602,6 +646,43 @@ describe("P-6 vendor PDF", () => {
     expect(text).not.toContain("TOPSECRET");
     // Long comments run on to further pages, each numbered.
     expect(text).toMatch(/Page 2 of \d/);
+  });
+});
+
+describe("P-7 a final scorecard is frozen", () => {
+  it("keeps its figures, targets and facts when targets, invoices and milestones change afterwards", async () => {
+    const other = await testApp();
+    try {
+      const member = other.as(MEMBER);
+      const cards = (await member.get("/api/scorecards").query({ status: "final" })).body.items as Scorecard[];
+      const moss = cards.find((c) => c.vendorName === "Mossgate IT")!;
+      const quillon = cards.find((c) => c.vendorName === "Quillon Consulting")!;
+      const get = async (id: string) => (await member.get(`/api/scorecards/${id}`)).body as ScorecardDetail;
+      const [mossBefore, quillonBefore] = [await get(moss.id), await get(quillon.id)];
+      expect(mossBefore.helpdesk![0]!.cells.first_response.targetTenths).toBe(950);
+      expect(quillonBefore.facts.budgets.sows).toBeGreaterThan(0);
+
+      expect((await member.put(`/api/performance/vendors/${moss.vendorId}/targets`).send({ first_response: 500, csat: null })).status).toBe(200);
+      const sow = quillonBefore.facts.budgets.items[0]!.agreementId;
+      expect((await member.post("/api/invoices").send({ agreementId: sow, invoiceNumber: "FROZEN-1", invoiceDate: "2026-08-01", amountMinor: 9_000_000_00 })).status).toBe(201);
+      expect((await member.post(`/api/agreements/${sow}/milestones`).send({ title: "Late addition", dueDate: "2026-08-15" })).status).toBe(201);
+      await member
+        .patch(`/api/vendors/${quillon.vendorId}`)
+        .send({ name: "Quillon Renamed", type: "consultancy", ownerUserId: (await member.get("/api/me")).body.id, ndaRequired: false, dpaRequired: false });
+
+      expect(await get(moss.id)).toEqual(mossBefore);
+      const quillonAfter = await get(quillon.id);
+      expect(quillonAfter.facts).toEqual(quillonBefore.facts);
+      expect(quillonAfter.vendorName).toBe("Quillon Consulting");
+      expect(((await member.get("/api/scorecards").query({ vendorId: quillon.vendorId })).body.items as Scorecard[])[0]!.vendorName).toBe("Quillon Consulting");
+      // The live pages do show the change, so the test changed what it meant to.
+      expect((await member.get(`/api/performance/vendors/${moss.vendorId}`).query({ month: "2026-07" })).body.targets.first_response).toBe(500);
+
+      // The database itself refuses a final scorecard without its frozen copy.
+      await expect(other.ports.database.db.execute(sql`update scorecards set snapshot = null where id = ${moss.id}`)).rejects.toThrow();
+    } finally {
+      await other.close();
+    }
   });
 });
 

@@ -14,7 +14,8 @@ export function scorecardPdf(card: ScorecardDetail, finalisedOn: string): Promis
     pdf.title(`Vendor scorecard · ${quarterName(card.quarter)} · ${formatDay(card.periodStart)} to ${formatDay(card.periodEnd)}`, card.vendorName);
     pdf.facts([
       ["Overall score", `${formatScore(card.overallTenths)} out of 5`],
-      ["Reviewed by", card.reviewerName],
+      // A reviewer known only by a work email address is not named on a document that leaves the company.
+      ...(card.reviewerName.includes("@") ? [] : ([["Reviewed by", card.reviewerName]] as [string, string][])),
       ["Finalised", finalisedOn],
     ]);
     if (card.summary) {

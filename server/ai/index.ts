@@ -83,7 +83,7 @@ export interface SuggestionRow {
 /** Stores a model's answer as a suggestion nobody has looked at yet. */
 export async function recordSuggestion(
   tx: Queryable,
-  s: { prompt: Pick<Prompt<unknown, unknown>, "kind" | "version">; subjectType: string; subjectId: string; model: string; inputSummary: string; output: unknown },
+  s: { prompt: Pick<Prompt<unknown, unknown>, "kind" | "version">; subjectType: string; subjectId: string; model: string; inputSummary: string; output: unknown; at: Date },
 ): Promise<SuggestionRow> {
   const rows = await tx
     .insert(aiSuggestions)
@@ -95,6 +95,7 @@ export async function recordSuggestion(
       promptVersion: s.prompt.version,
       inputSummary: s.inputSummary,
       output: s.output,
+      createdAt: s.at,
     })
     .returning();
   return rows[0]!;
