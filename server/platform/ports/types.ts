@@ -85,7 +85,12 @@ export interface JiraPort {
   listProjects(): Promise<JiraProject[]>;
   /** Fails with `status: 404` when the board does not exist or the account cannot see it. */
   describeBoard(projectKey: string): Promise<JiraBoard>;
-  /** The board's tickets changed since `since` (all of them when null), as they stand at `now`. Asking twice gives the same tickets. */
+  /**
+   * The board's tickets as they stand at `now`: those changed since `since`, and always every
+   * unresolved ticket. With `since` null: every unresolved ticket and those resolved in the
+   * last two years. An unresolved ticket that is not in the answer no longer exists on the
+   * board. Asking twice gives the same tickets.
+   */
   fetchTickets(projectKey: string, since: Date | null, now: Date): Promise<JiraTicket[]>;
   /** Where a person can open the ticket, or null when there is nowhere. */
   ticketUrl(ticketKey: string): string | null;

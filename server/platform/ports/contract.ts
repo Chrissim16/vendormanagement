@@ -97,7 +97,15 @@ export function databaseContract(port: DatabasePort): ContractCase[] {
 /** Reads only; a week of one board's tickets, so it is quick against a real Jira too. */
 export function jiraContract(jira: JiraPort, now: Date = new Date()): ContractCase[] {
   const weekAgo = new Date(now.getTime() - 7 * 86_400_000);
-  const firstBoard = async () => (await jira.listProjects())[0]!.key;
+  /** The first service desk the account can see; only those carry the measurements the app reads. */
+  let chosen: string | undefined;
+  const firstBoard = async () => {
+    if (chosen) return chosen;
+    for (const p of (await jira.listProjects()).slice(0, 25)) {
+      if ((await jira.describeBoard(p.key)).serviceDesk) return (chosen = p.key);
+    }
+    throw new Error("none of the first 25 boards is a service desk");
+  };
   return [
     {
       name: "boards can be listed, each with a key and a name",
@@ -115,7 +123,16 @@ export function jiraContract(jira: JiraPort, now: Date = new Date()): ContractCa
         assert.equal(board.key.toUpperCase(), key.toUpperCase());
         assert.ok(board.name);
         assert.ok(board.statuses.length > 0, "the board has no statuses");
-        assert.equal(typeof board.serviceDesk, "boolean");
+        assert.equal(board.serviceDesk, true);
+      },
+    },
+    {
+      name: "this Jira has the response-time, resolution-time and satisfaction measurements, under the names the app looks for",
+      async run() {
+        const { measures } = await jira.describeBoard(await firstBoard());
+        assert.ok(measures.firstResponse, 'no field named "Time to first response"');
+        assert.ok(measures.resolution, 'no field named "Time to resolution"');
+        assert.ok(measures.satisfaction, 'no field named "Satisfaction"');
       },
     },
     {
@@ -128,10 +145,12 @@ export function jiraContract(jira: JiraPort, now: Date = new Date()): ContractCa
       },
     },
     {
-      name: "the tickets changed in the last week can be fetched, each with a key, a status and a creation time",
+      name: "the open tickets and those changed in the last week can be fetched, each with a key, a status and a creation time",
       async run() {
         const key = await firstBoard();
-        for (const t of await jira.fetchTickets(key, weekAgo, now)) {
+        const tickets = await jira.fetchTickets(key, weekAgo, now);
+        assert.ok(tickets.length > 0, `the board ${key} has no open ticket and none changed in the last week, so nothing could be checked`);
+        for (const t of tickets) {
           assert.ok(t.key.toUpperCase().startsWith(`${key.toUpperCase()}-`), `unexpected ticket key ${t.key}`);
           assert.ok(t.status, `${t.key} has no status`);
           assert.ok(t.createdAt instanceof Date && !Number.isNaN(t.createdAt.getTime()), `${t.key} has no creation time`);

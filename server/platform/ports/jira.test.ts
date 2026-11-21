@@ -113,6 +113,17 @@ describe("reading what Jira sends", () => {
     expect(t.firstResponseBreached).toBeNull();
   });
 
+  it("leaves out a ticket that vanished between the search and the reading of its history, without failing the board", async () => {
+    const site: JiraTransport = async (_m, path) => {
+      if (path === "/rest/api/3/field") return [];
+      if (path === "/rest/api/3/search/jql")
+        return { issues: ["X-1", "X-2"].map((key) => ({ key, fields: { status: { name: "Open" }, created: "2026-11-01T10:00:00.000+0100" } })), isLast: true };
+      if (path.includes("/X-1/")) throw Object.assign(new Error("Issue does not exist"), { status: 404 });
+      return { values: [], isLast: true };
+    };
+    expect((await jiraClient(site, "real", null).fetchTickets("X", null, NOON)).map((t) => t.key)).toEqual(["X-2"]);
+  });
+
   it("asks for changes as 'the last N minutes' with ten minutes of overlap, and for everything the first time", async () => {
     const asked: string[] = [];
     const site: JiraTransport = async (_m, path, body) => {
@@ -123,7 +134,11 @@ describe("reading what Jira sends", () => {
     const client = jiraClient(site, "real", null);
     await client.fetchTickets("blu", new Date("2026-11-21T11:00:00Z"), NOON);
     await client.fetchTickets("BLU", null, NOON);
-    expect(asked).toEqual(['project = "BLU" AND updated >= "-70m" ORDER BY updated ASC', 'project = "BLU" ORDER BY updated ASC']);
+    // Unresolved tickets are always asked for; the first time, so are those resolved in the last two years.
+    expect(asked).toEqual([
+      'project = "BLU" AND (updated >= "-70m" OR resolution IS EMPTY) ORDER BY updated ASC',
+      'project = "BLU" AND (resolved >= "-105w" OR resolution IS EMPTY) ORDER BY updated ASC',
+    ]);
   });
 
   it("gives the address of a ticket on the real site, and none on the stand-in", () => {
@@ -166,16 +181,26 @@ describe("the stand-in Jira", () => {
     }
   });
 
-  it("returns only what changed since the given moment", async () => {
+  it("returns what changed since the given moment, and every ticket that is still open", async () => {
     const dayAgo = new Date(NOON.getTime() - 86_400_000);
     const recent = await jira.fetchTickets("BLU", dayAgo, NOON);
     const all = await jira.fetchTickets("BLU", null, NOON);
     expect(recent.length).toBeGreaterThan(0);
     expect(recent.length).toBeLessThan(all.length / 10);
-    for (const t of recent) expect(t.updatedAt.getTime()).toBeGreaterThanOrEqual(dayAgo.getTime() - 10 * 60_000);
-    expect(all.filter((t) => t.updatedAt.getTime() >= dayAgo.getTime()).map((t) => t.key)).toEqual(
-      recent.filter((t) => t.updatedAt.getTime() >= dayAgo.getTime()).map((t) => t.key),
-    );
+    for (const t of recent) expect(!t.resolvedAt || t.updatedAt.getTime() >= dayAgo.getTime() - 10 * 60_000, t.key).toBe(true);
+    const open = (list: typeof all) => list.filter((t) => !t.resolvedAt).map((t) => t.key);
+    expect(open(recent)).toEqual(open(all));
+    expect(open(all).length).toBeGreaterThan(0);
+    // A ticket still waiting past its response time comes back although nothing on it changed.
+    expect(all.filter((t) => t.updatedAt.getTime() >= dayAgo.getTime()).every((t) => recent.some((r) => r.key === t.key))).toBe(true);
+  });
+
+  it("the first fetch leaves out tickets resolved more than two years ago", async () => {
+    const far = new Date("2028-06-01T12:00:00Z");
+    const tickets = await fakeJira(() => far).fetchTickets("TAR", null, far);
+    const oldest = Math.min(...tickets.filter((t) => t.resolvedAt).map((t) => t.resolvedAt!.getTime()));
+    expect(oldest).toBeGreaterThanOrEqual(far.getTime() - 105 * 7 * 86_400_000);
+    expect(tickets.length).toBeGreaterThan(300);
   });
 
   it("shows escalation as a status on one board and as a label on the other", async () => {

@@ -79,7 +79,8 @@ export function TicketsPage() {
     queryKey: ["performance", "tickets", vendorId, set, month ?? "", url.q, sort, dir, page],
     queryFn: () => api<TicketPage>(`/performance/vendors/${vendorId}/tickets`, { query: { set, month, q: url.q, sort, dir, page, pageSize: PAGE_SIZE } }),
     enabled: !!set,
-    placeholderData: (p) => p,
+    // Keep the rows while paging or searching within one figure, never under another figure's heading.
+    placeholderData: (p, prev) => (prev?.queryKey[3] === set && prev?.queryKey[4] === (month ?? "") ? p : undefined),
     retry: false,
   });
   if (!set || (q.isError && q.error instanceof ApiError && (q.error.status === 404 || q.error.status === 400))) return <NotFoundPage />;

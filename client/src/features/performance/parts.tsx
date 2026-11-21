@@ -88,7 +88,7 @@ export function SyncStatus({ link }: { link: BoardLink }) {
     );
   if (link.lastSyncOk === false)
     return (
-      <div role="alert" className="flex flex-wrap items-center gap-3 rounded-2xl bg-sunk px-5 py-4">
+      <div role="status" aria-label="Jira sync problem" className="flex flex-wrap items-center gap-3 rounded-2xl bg-sunk px-5 py-4">
         <Pill tone="bad">Last sync failed</Pill>
         <p className="min-w-0 flex-1">
           {link.lastSyncMessage}{" "}
@@ -127,7 +127,12 @@ export function SyncButton({ vendorId, disabled }: { vendorId?: string; disabled
     onError: (e) => toast.error(messageOf(e)),
   });
   return (
-    <Button onClick={() => sync.mutate()} aria-disabled={sync.isPending || disabled || undefined} disabled={disabled} className={sync.isPending ? "cursor-progress" : undefined}>
+    <Button
+      onClick={() => !sync.isPending && sync.mutate()}
+      aria-disabled={sync.isPending || disabled || undefined}
+      disabled={disabled}
+      className={sync.isPending ? "cursor-progress" : undefined}
+    >
       {sync.isPending ? "Fetching" : "Sync now"}
     </Button>
   );

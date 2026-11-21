@@ -81,11 +81,14 @@ describe("figures and targets (J-3, J-4)", () => {
   });
 
   it("works out each headline figure from the month's counts", () => {
-    const counts = { ...emptyCounts, frMeasured: 4, frMet: 3, resolved: 4, firstLine: 2, breached: 1, backlog: 2, backlogOldestDays: 31, ratings: 3, ratingSum: 13 };
+    const counts = { ...emptyCounts, frMeasured: 4, frMet: 3, resolved: 4, firstLine: 2, breached: 1, existed: 9, backlog: 2, backlogOldestDays: 31, ratings: 3, ratingSum: 13 };
     expect(headline(counts)).toEqual({ first_response: 750, first_line: 500, sla_breaches: 250, backlog_age: 310, csat: 43 });
   });
-  it("has no figure for an empty month, except the backlog, which is zero days", () => {
-    expect(headline(emptyCounts)).toEqual({ first_response: null, first_line: null, sla_breaches: null, backlog_age: 0, csat: null });
+  it("has no figure at all for a month before the board's first ticket, and a backlog of zero days once the helpdesk runs with nothing open", () => {
+    expect(headline(emptyCounts)).toEqual({ first_response: null, first_line: null, sla_breaches: null, backlog_age: null, csat: null });
+    expect(headline({ ...emptyCounts, existed: 12 }).backlog_age).toBe(0);
+    expect(judge("backlog_age", headline(emptyCounts).backlog_age, 300)).toBe("none");
+    expect(judge("backlog_age", headline({ ...emptyCounts, existed: 12 }).backlog_age, 300)).toBe("met");
   });
   it("counts the targets missed in a month", () => {
     const counts = { ...emptyCounts, frMeasured: 10, frMet: 8, resolved: 10, firstLine: 9, breached: 2 };
@@ -111,6 +114,7 @@ describe("months", () => {
     expect(isMonth("2026-11")).toBe(true);
     expect(isMonth("2026-13")).toBe(false);
     expect(isMonth("2026-1")).toBe(false);
+    expect(isMonth("0050-01")).toBe(false);
     expect(addMonth("2026-01", -1)).toBe("2025-12");
     expect(addMonth("2026-12", 1)).toBe("2027-01");
     expect(monthName("2026-11")).toBe("November 2026");

@@ -116,7 +116,7 @@ test.describe("J-2 sync", () => {
     await page.goto(`/performance/${v.id}?month=2026-10`);
     await expect(page.getByText(`${n(held)} tickets held`)).toBeVisible();
     await page.getByRole("button", { name: "Sync now" }).click();
-    const problem = page.getByRole("alert").filter({ hasText: "Last sync failed" });
+    const problem = page.getByRole("status", { name: "Jira sync problem" });
     await expect(problem).toContainText("Jira could not be read. The service reported a problem on its side. The tickets fetched earlier are unchanged.");
     await expect(problem).toContainText("last fetched successfully 21 Nov 2026, 13:00");
     // Nothing technical leaks through.

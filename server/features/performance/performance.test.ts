@@ -329,6 +329,65 @@ describe("J-2 sync", () => {
     await link(v, { projectKey: "BRKN", escalationMethod: "status", l2Values: ["Second line"], active: false });
   });
 
+  it("an open ticket that Jira no longer returns (deleted, moved away or hidden) is dropped, so it cannot age in the backlog for ever", async () => {
+    const v = await newVendor("Vanishing Ticket Vendor");
+    let list = [
+      ticket("GONE-1", "2026-09-01T09:00:00Z"),
+      ticket("GONE-2", "2026-11-10T09:00:00Z"),
+      ticket("GONE-3", "2026-10-01T09:00:00Z", { resolvedAt: at("2026-10-02T09:00:00Z") }),
+    ];
+    handBoard("GONE", () => list);
+    await link(v, { projectKey: "GONE", escalationMethod: "status", l2Values: ["Second line"] });
+    expect((await perf(v)).months.at(-1)!.counts).toMatchObject({ backlog: 2, backlogOldestDays: 81 });
+    // GONE-1 was moved to another project. Jira returns every open ticket at each sync, and it is no longer among them.
+    // The resolved ticket is not returned either, because it did not change; it must stay.
+    list = [ticket("GONE-2", "2026-11-10T09:00:00Z")];
+    expect((await t.as(MEMBER).post(`/api/performance/vendors/${v}/sync`)).body.ok).toBe(true);
+    const after = await perf(v);
+    expect(after.link!.tickets).toBe(2);
+    expect(after.months.at(-1)!.counts).toMatchObject({ backlog: 1, backlogOldestDays: 11 });
+    expect(after.months.at(-2)!.counts.resolved).toBe(1);
+    await link(v, { projectKey: "GONE", escalationMethod: "status", l2Values: ["Second line"], active: false });
+  });
+
+  it("a sync that was overtaken by a newer one does not write its older picture over it", async () => {
+    const v = await newVendor("Overtaken Vendor");
+    let list = [ticket("OVER-1", "2026-11-10T09:00:00Z")];
+    handBoard("OVER", () => list);
+    const linked = await link(v, { projectKey: "OVER", escalationMethod: "status", l2Values: ["Second line"] });
+    const ctx = performanceContext(t.config, t.ports);
+    // A slow sync reads Jira while the ticket is still open...
+    let release = () => {};
+    const { fetchTickets } = t.ports.jira;
+    const stale = [...list];
+    t.ports.jira.fetchTickets = async (k, since, now) => (k === "OVER" ? new Promise((done) => (release = () => done(stale))) : fetchTickets(k, since, now));
+    const slow = syncBoard(ctx, linked.body.link.id);
+    await new Promise((r) => setTimeout(r, 50));
+    // ...and meanwhile a second sync, a moment later, sees it resolved and finishes first.
+    t.ports.jira.fetchTickets = fetchTickets;
+    list = [ticket("OVER-1", "2026-11-10T09:00:00Z", { resolvedAt: at("2026-11-21T11:00:00Z"), updatedAt: at("2026-11-21T11:00:00Z") })];
+    const later = { ...ctx, now: () => new Date("2026-11-21T12:05:00Z") };
+    expect(await syncBoard(later, linked.body.link.id)).toMatchObject({ ok: true });
+    release();
+    expect(await slow).toMatchObject({ ok: true, updated: 0 });
+    const p = await perf(v);
+    expect(p.months.at(-1)!.counts).toMatchObject({ resolved: 1, backlog: 0 });
+    expect(p.link!.lastSyncedAt).toBe("2026-11-21T12:05:00.000Z");
+    await link(v, { projectKey: "OVER", escalationMethod: "status", l2Values: ["Second line"], active: false });
+  });
+
+  it("'Sync now' while the timer's run is going waits for it and then syncs every board, so none is skipped", async () => {
+    const ctx = performanceContext(t.config, t.ports);
+    await t.ports.database.db
+      .update(jiraBoardLinks)
+      .set({ lastAttemptAt: new Date("2026-11-21T10:00:00Z") })
+      .where(eq(jiraBoardLinks.vendorId, ids["Mossgate IT"]!));
+    const [timer, pressed, pressedAgain] = [syncAll(ctx, { dueOnly: true }), syncAll(ctx), syncAll(ctx)];
+    expect(pressedAgain).toBe(pressed);
+    expect((await timer).map((r) => r.projectKey)).toEqual(["MOS"]);
+    expect((await pressed).map((r) => r.projectKey)).toEqual(expect.arrayContaining(["BLU", "MOS", "TAR"]));
+  });
+
   it("a board whose sync is switched off cannot be synced, and keeps its tickets", async () => {
     const v = await newVendor("Paused Vendor");
     handBoard("PAUS", () => [ticket("PAUS-1", "2026-10-05T09:00:00Z")]);
@@ -438,6 +497,8 @@ describe("J-3 monthly metrics", () => {
       resolved: 4,
       firstLine: 2,
       breached: 1,
+      // Everything but E existed by the end of October.
+      existed: 6,
       // C (19 days) and F (31 days) were open when October ended.
       backlog: 2,
       backlogMedianDays: 25,
@@ -464,6 +525,7 @@ describe("J-3 monthly metrics", () => {
       resolved: 1,
       firstLine: 1,
       breached: 0,
+      existed: 7,
       // C is 40 days old at noon on 21 Nov, E is 20.
       backlog: 2,
       backlogMedianDays: 30,
@@ -473,6 +535,19 @@ describe("J-3 monthly metrics", () => {
     });
     expect(november.cells.first_response.valueTenths).toBeNull();
     expect(november.cells.csat.valueTenths).toBe(20);
+  });
+
+  it("has no backlog figure, and so no verdict, for months before the board's first ticket", async () => {
+    await t.as(MEMBER).put(`/api/performance/vendors/${v}/targets`).send({ backlog_age: 300 });
+    const p = await perf(v, "2026-10");
+    // The first hand-made ticket was created on 20 Sep 2026.
+    const august = p.months.find((m) => m.month === "2026-08")!;
+    expect(august.counts.existed).toBe(0);
+    expect(august.cells.backlog_age).toEqual({ valueTenths: null, targetTenths: 300, verdict: "none" });
+    expect(august.missed).toBe(0);
+    // In September the helpdesk ran, and D was open at the end of it for 10 days.
+    expect(p.months.find((m) => m.month === "2026-09")!.cells.backlog_age).toEqual({ valueTenths: 100, targetTenths: 300, verdict: "met" });
+    await t.as(MEMBER).put(`/api/performance/vendors/${v}/targets`).send({ backlog_age: null });
   });
 
   it("shows twelve months ending with the chosen one, and never a month that has not started", async () => {

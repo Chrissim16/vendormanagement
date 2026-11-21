@@ -73,6 +73,7 @@ export function BoardLinkForm({
     form.set(key, value);
   };
   const runTest = async () => {
+    if (testing || !v.projectKey) return;
     setTesting(true);
     try {
       setTest(await api<LinkTest>("/admin/jira/test", { body: body(v) }));

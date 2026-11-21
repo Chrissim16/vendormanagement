@@ -328,11 +328,19 @@ export function fakeJiraSite(now: () => Date): JiraTransport {
         fetches.set(board.key, n);
         if (n % 2 === 0) throw refuse(503, "Service Unavailable");
       }
+      // The conditions the app uses, joined by OR: changed lately, resolved lately, or not resolved.
       const minutes = jql.match(/updated\s*>=\s*"-(\d+)m"/)?.[1];
-      const since = minutes ? at - Number(minutes) * MIN : -Infinity;
+      const weeks = jql.match(/resolved\s*>=\s*"-(\d+)w"/)?.[1];
+      const unresolved = /resolution\s+IS\s+EMPTY/i.test(jql);
+      const wanted = (i: ReturnType<typeof issueAt>, s: Story) =>
+        (!minutes && !weeks && !unresolved) ||
+        (minutes !== undefined && i.updated >= at - Number(minutes) * MIN) ||
+        (weeks !== undefined && s.resolved <= at && s.resolved >= at - Number(weeks) * 7 * DAY) ||
+        (unresolved && s.resolved > at);
       const all = stories(board, at)
-        .map((s) => issueAt(board, s, at))
-        .filter((i) => i.updated >= since)
+        .map((s) => ({ s, i: issueAt(board, s, at) }))
+        .filter(({ s, i }) => wanted(i, s))
+        .map(({ i }) => i)
         .sort((a, b) => (descending ? b.updated - a.updated : a.updated - b.updated));
       const size = Math.min(Math.max(q.maxResults ?? 50, 1), 100);
       const from = Number(q.nextPageToken ?? 0) || 0;

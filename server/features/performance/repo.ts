@@ -124,6 +124,18 @@ export async function upsertTickets(tx: Queryable, linkId: string, rows: (JiraTi
   }
 }
 export const deleteTicketsOf = (tx: Queryable, linkId: string) => tx.delete(tickets).where(eq(tickets.boardLinkId, linkId));
+/**
+ * Removes the open tickets a sync did not see. Every sync is given all unresolved tickets,
+ * so one that did not come back has been deleted, moved to another board or hidden in Jira.
+ */
+export async function deleteOpenNotSeen(tx: Queryable, linkId: string, seen: Set<string>) {
+  const open = await tx
+    .select({ id: tickets.id, key: tickets.key })
+    .from(tickets)
+    .where(and(eq(tickets.boardLinkId, linkId), isNull(tickets.resolvedAt)));
+  const gone = open.filter((t) => !seen.has(t.key)).map((t) => t.id);
+  for (let i = 0; i < gone.length; i += 1000) await tx.delete(tickets).where(inArray(tickets.id, gone.slice(i, i + 1000)));
+}
 /** Tickets are kept for 24 months after they were resolved. */
 export const deleteResolvedBefore = (tx: Queryable, linkId: string, cutoff: Date) => tx.delete(tickets).where(and(eq(tickets.boardLinkId, linkId), lt(tickets.resolvedAt, cutoff)));
 export const seenValues = (tx: Queryable, linkId: string) =>
@@ -200,6 +212,7 @@ export async function monthCounts(db: Queryable, linkIds: string[], month: Month
       resolved: count("resolved"),
       firstLine: count("first_line"),
       breached: count("breached"),
+      existed: sql<number>`(count(*) filter (where ${tickets.createdAt} < ${b.asOf}))::int`,
       backlog: count("backlog"),
       backlogMedianDays: sql<number | null>`(percentile_cont(0.5) within group (order by (${ageDays})::float8) filter (where ${inSet("backlog", b)}))::float8`,
       backlogOldestDays: sql<number | null>`(max(${ageDays}) filter (where ${inSet("backlog", b)}))::int`,

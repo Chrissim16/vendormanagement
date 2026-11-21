@@ -77,6 +77,8 @@ export function plainText(node: unknown): string {
 }
 
 const PAGE = 100;
+/** A little over 24 months, the time tickets are kept after they are resolved. */
+const KEEP_WEEKS = 105;
 const MAX_PAGES = 2000;
 const FIELD_NAMES = { firstResponse: "time to first response", resolution: "time to resolution", satisfaction: "satisfaction", satisfactionDate: "satisfaction date" } as const;
 type FieldIds = Partial<Record<keyof typeof FIELD_NAMES, string>>;
@@ -144,7 +146,14 @@ export function jiraClient(call: JiraTransport, kind: PortKind, browseBase: stri
     const f = issue.fields;
     const createdAt = jiraDate(f.created);
     if (!createdAt) return null;
-    const past = await history(issue.key);
+    let past;
+    try {
+      past = await history(issue.key);
+    } catch (e) {
+      // Deleted or hidden between the search and this request: it is no longer a ticket of this board.
+      if ((e as { status?: number }).status === 404) return null;
+      throw e;
+    }
     const first = slaOutcome(ids.firstResponse ? f[ids.firstResponse] : null, "first");
     const resolution = slaOutcome(ids.resolution ? f[ids.resolution] : null, "last");
     const resolvedAt = jiraDate(f.resolutiondate);
@@ -205,7 +214,11 @@ export function jiraClient(call: JiraTransport, kind: PortKind, browseBase: stri
       const ids = await fields();
       // Asked as "changed in the last N minutes", which means the same in every time zone. Ten minutes of overlap, since Jira compares by the minute.
       const minutes = since ? Math.max(1, Math.ceil((now.getTime() - since.getTime()) / 60_000) + 10) : null;
-      const jql = `project = ${quote(projectKey.toUpperCase())}${minutes ? ` AND updated >= "-${minutes}m"` : ""} ORDER BY updated ASC`;
+      // Every unresolved ticket is asked for each time as well: an SLA that runs out does not count as a change in Jira, and
+      // an open ticket that no longer comes back has been deleted or moved away. The first time, tickets resolved more than
+      // two years ago are left where they are.
+      const changed = minutes ? `updated >= "-${minutes}m"` : `resolved >= "-${KEEP_WEEKS}w"`;
+      const jql = `project = ${quote(projectKey.toUpperCase())} AND (${changed} OR resolution IS EMPTY) ORDER BY updated ASC`;
       const wanted = ["summary", "description", "status", "created", "updated", "resolutiondate", "labels", ...Object.values(ids).filter((v): v is string => !!v)];
       const issues = await search(jql, wanted);
       const byKey = new Map(issues.map((i) => [i.key, i]));

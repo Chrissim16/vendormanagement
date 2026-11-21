@@ -124,7 +124,7 @@ Warnings are sorted with what is already wrong first, then the soonest date. The
 
 ## Performance
 
-**Jira board link** (admin): `vendor_id*` (one per vendor), `project_key*` (one vendor per board), `project_name`, `service_desk_id`,
+**Jira board link** (admin): `vendor_id*` (one per vendor), `project_key*` (one vendor per board), `project_name`, `service_desk_id` (not used yet),
 `escalation_method*` (status | label), `l1_values`, `l2_values`, `l3_values`, `active*`,
 and from the sync: `last_synced_at`, `last_attempt_at`, `last_sync_ok`, `last_sync_message`, `last_sync_updated`.
 - The level values are the statuses or labels that mean each support level. At least one value for level 2 or level 3 is required; level 1 values are optional. A value can mean only one level. Values are compared ignoring case.
@@ -138,6 +138,7 @@ and from the sync: `last_synced_at`, `last_attempt_at`, `last_sync_ok`, `last_sy
 `first_response_at`, `first_response_breached`, `resolution_breached`, `highest_level*` (1 | 2 | 3), `csat` (1 to 5), `csat_at`,
 `statuses_seen`, `labels_seen`, `synced_at`.
 - Overwritten on each sync. Removed 24 months after resolution; a ticket resolved longer ago is never taken in. An open ticket is kept however old.
+- The first response outcome is the ticket's first response cycle; the resolution outcome is its last one, so a reopened ticket is judged on its final resolution.
 - `first_response_breached` and `resolution_breached` are empty while Jira has no outcome: no SLA on the ticket, or still running in time. A running SLA that is already late counts as breached.
 - **Highest level** = 3 if the ticket ever carried a level 3 value, else 2 if it ever carried a level 2 value, else 1. A ticket that never carried a listed value was never escalated: level 1. "Ever" includes earlier statuses and labels, which is why they are kept in `statuses_seen` and `labels_seen`.
 - Tickets are copies, not business records: a sync writes no audit entries. Its outcome is kept on the board link.
@@ -145,6 +146,9 @@ and from the sync: `last_synced_at`, `last_attempt_at`, `last_sync_ok`, `last_sy
 **Sync** (J-2): fetches, per board, the tickets changed since the last successful sync (everything the first time), every hour while the app runs (`JIRA_SYNC_EVERY_MINUTES`), on "Sync now" by any member, and by the command `npm run job -- jira-sync`.
 - Everything is fetched before anything is written, and written in one transaction, so a failure leaves the tickets as they were.
 - A failure is kept on the link in plain language and shown until the next successful sync. One failing board does not stop the others.
+- Every sync also fetches all unresolved tickets, changed or not: a response time that runs out is not a "change" in Jira, and an open ticket that no longer comes back has been deleted, moved to another board or hidden, and is removed here so it cannot age in the backlog for ever.
+- If a newer sync of the same board finished while this one was reading Jira, this one writes nothing: its picture is the older one.
+- "Tickets updated" counts tickets that changed since the last sync, not the unchanged open ones fetched along with them.
 - Running it twice changes nothing.
 
 **Target**: `vendor_id*`, `metric*`, `target_tenths*`. One per vendor and metric. Any member sets them; changes are recorded in the vendor's history. A vendor can have targets before it has a board.
@@ -158,7 +162,7 @@ and from the sync: `last_synced_at`, `last_attempt_at`, `last_sync_ok`, `last_sy
 | First response | Tickets created in the month that have a first-response outcome: the share answered within the SLA; median first response time alongside. | % answered in time | at least |
 | First-line closure rate | Share of tickets resolved in the month that never went above level 1. | % | at least |
 | SLA breaches | Count and share of tickets resolved in the month that breached the resolution SLA. | % resolved late | at most |
-| Backlog age | Tickets open at the end of the month (now, for the running month): count, and median and oldest age in whole days. | age of the oldest open ticket, in days; zero when none is open | at most |
+| Backlog age | Tickets open at the end of the month (now, for the running month): count, and median and oldest age in whole days. | age of the oldest open ticket, in days; zero when the helpdesk is running and none is open; no figure for a month before the board's first ticket | at most |
 | Customer satisfaction | Average rating of tickets rated in the month, and number of ratings. | average out of 5 | at least |
 
 - Every figure is held as a whole number of tenths and shown with at most one decimal. The figure as shown is what is compared with the target.

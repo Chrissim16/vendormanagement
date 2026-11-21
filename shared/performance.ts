@@ -82,7 +82,7 @@ export type Targets = Record<MetricKey, number | null>;
 // ---------- Months
 
 export type Month = string;
-export const isMonth = (v: unknown): v is Month => typeof v === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(v);
+export const isMonth = (v: unknown): v is Month => typeof v === "string" && /^2[01]\d{2}-(0[1-9]|1[0-2])$/.test(v);
 export const monthOf = (day: Day): Month => day.slice(0, 7);
 export function addMonth(month: Month, n: number): Month {
   const d = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5)) - 1 + n, 1));
@@ -211,6 +211,8 @@ export interface MonthCounts {
   resolved: number;
   firstLine: number;
   breached: number;
+  /** Tickets the board had seen by the end of the month, open or not. Zero means the helpdesk had not started: there is no backlog to speak of. */
+  existed: number;
   /** Open at the end of the month (or now, for the current month). */
   backlog: number;
   backlogMedianDays: number | null;
@@ -226,6 +228,7 @@ export const emptyCounts: MonthCounts = {
   resolved: 0,
   firstLine: 0,
   breached: 0,
+  existed: 0,
   backlog: 0,
   backlogMedianDays: null,
   backlogOldestDays: null,
@@ -239,8 +242,8 @@ export function headline(c: MonthCounts): Record<MetricKey, number | null> {
     first_response: shareTenths(c.frMet, c.frMeasured),
     first_line: shareTenths(c.firstLine, c.resolved),
     sla_breaches: shareTenths(c.breached, c.resolved),
-    // No open tickets is the best backlog there is: zero days.
-    backlog_age: (c.backlogOldestDays ?? 0) * 10,
+    // Nothing open on a running helpdesk is the best backlog there is: zero days. Before the board's first ticket there is nothing to say.
+    backlog_age: c.existed > 0 ? (c.backlogOldestDays ?? 0) * 10 : null,
     csat: c.ratings > 0 ? Math.round((c.ratingSum * 10) / c.ratings) : null,
   };
 }

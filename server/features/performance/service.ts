@@ -96,7 +96,12 @@ export async function syncBoard(ctx: PerformanceContext, linkId: string): Promis
   } catch (e) {
     console.error(`Jira sync of ${link.projectKey} failed:`, (e as Error).message);
     const message = `${jiraProblem(e, link.projectKey)} The tickets fetched earlier are unchanged.`;
-    await repo.updateLink(ctx.db, link.id, { lastAttemptAt: startedAt, lastSyncOk: false, lastSyncMessage: message });
+    await ctx.db.transaction(async (tx) => {
+      const current = await repo.lockLink(tx, link.id);
+      // Another sync finished in the meantime: its result is the newer truth, and this failure is not shown over it.
+      if (current && sameMoment(current.lastAttemptAt, link.lastAttemptAt))
+        await repo.updateLink(tx, link.id, { lastAttemptAt: startedAt, lastSyncOk: false, lastSyncMessage: message });
+    });
     return outcome(false, 0, message);
   }
   const cutoff = new Date(startedAt);
@@ -106,22 +111,44 @@ export async function syncBoard(ctx: PerformanceContext, linkId: string): Promis
     // The board or its sync was changed while Jira was being read: what was fetched no longer belongs here.
     if (!current || !current.active || current.projectKey !== link.projectKey)
       return outcome(false, 0, "The board link was changed while its tickets were being fetched. Sync again.");
+    // Another sync of this board finished while this one was reading Jira. Its tickets are at least as new; writing these over them could put older states back.
+    if (!sameMoment(current.lastSyncedAt, link.lastSyncedAt)) return outcome(true, 0, null);
     const rows = fetched.filter((t) => !(t.resolvedAt && t.resolvedAt < cutoff)).map((t) => ({ ...t, highestLevel: levelOf(current, t) }));
     await repo.upsertTickets(tx, link.id, rows, startedAt);
+    await repo.deleteOpenNotSeen(tx, link.id, new Set(fetched.map((t) => t.key)));
     await repo.deleteResolvedBefore(tx, link.id, cutoff);
-    await repo.updateLink(tx, link.id, { lastSyncedAt: startedAt, lastAttemptAt: startedAt, lastSyncOk: true, lastSyncMessage: null, lastSyncUpdated: rows.length });
-    return outcome(true, rows.length, null);
+    // Unresolved tickets are fetched every time whether they changed or not; only real changes are counted.
+    const since = link.lastSyncedAt;
+    const updated = since ? rows.filter((t) => t.updatedAt >= since).length : rows.length;
+    await repo.updateLink(tx, link.id, { lastSyncedAt: startedAt, lastAttemptAt: startedAt, lastSyncOk: true, lastSyncMessage: null, lastSyncUpdated: updated });
+    return outcome(true, updated, null);
   });
 }
 
-let running: Promise<SyncOutcome[]> | null = null;
+const sameMoment = (a: Date | null, b: Date | null) => (a?.getTime() ?? null) === (b?.getTime() ?? null);
+
+/** The runs in progress, per database, so two apps in one process (the tests) do not share them. */
+const runs = new WeakMap<Db, { full?: Promise<SyncOutcome[]>; due?: Promise<SyncOutcome[]> }>();
 /**
- * Syncs every board whose sync is on, one after another. With `dueOnly`, only boards not
- * tried within the automatic interval. One failing board does not stop the others. A second
- * call while one is running joins it, so "Sync now" pressed twice does the work once.
+ * Syncs every board whose sync is on, one after another. With `dueOnly` (the timer), only
+ * boards not tried within the automatic interval. One failing board does not stop the
+ * others. "Sync now" pressed twice joins the run in progress and does the work once; a
+ * "Sync now" during a timer run waits for it and then syncs everything, so no board is skipped.
  */
 export function syncAll(ctx: PerformanceContext, options: { dueOnly?: boolean } = {}): Promise<SyncOutcome[]> {
-  running ??= (async () => {
+  const state = runs.get(ctx.db) ?? {};
+  runs.set(ctx.db, state);
+  const kind = options.dueOnly ? "due" : "full";
+  if (state[kind]) return state[kind];
+  // The timer has nothing to add while any run is going.
+  if (options.dueOnly && state.full) return Promise.resolve([]);
+  const after = options.dueOnly
+    ? Promise.resolve()
+    : (state.due ?? Promise.resolve()).then(
+        () => undefined,
+        () => undefined,
+      );
+  const run = after.then(async () => {
     const out: SyncOutcome[] = [];
     const before = ctx.now().getTime() - ctx.syncEveryMinutes * 60_000;
     for (const { link, vendorName } of await repo.listLinks(ctx.db)) {
@@ -135,8 +162,13 @@ export function syncAll(ctx: PerformanceContext, options: { dueOnly?: boolean } 
       }
     }
     return out;
-  })().finally(() => (running = null));
-  return running;
+  });
+  state[kind] = run;
+  const clear = () => {
+    if (state[kind] === run) state[kind] = undefined;
+  };
+  run.then(clear, clear);
+  return run;
 }
 
 // ---------- Board links (J-1)
@@ -147,7 +179,8 @@ export async function listBoards(ctx: PerformanceContext): Promise<JiraBoardChoi
     projects = await ctx.jira.listProjects();
   } catch (e) {
     console.error("Listing Jira boards failed:", (e as Error).message);
-    throw new AppError(502, "jira_unreachable", jiraProblem(e, ""));
+    const notThere = (e as { status?: number }).status === 404;
+    throw new AppError(502, "jira_unreachable", notThere ? "Jira was not found at the address in the app's settings. An admin should check the Jira address." : jiraProblem(e, ""));
   }
   const linked = new Map((await repo.listLinks(ctx.db)).map((l) => [l.link.projectKey.toUpperCase(), l.vendorName]));
   return projects.map((p) => ({ key: p.key, name: p.name, linkedTo: linked.get(p.key.toUpperCase()) ?? null })).sort((a, b) => a.name.localeCompare(b.name));
