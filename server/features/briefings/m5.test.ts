@@ -744,4 +744,18 @@ describe("review fixes: what a person accepts is what they read, and a summary k
     expect(res.headers["content-disposition"]).toContain(`filename*=UTF-8''${encodeURIComponent(`${v.name} briefing ${TODAY}`)}.pdf`);
     expect(res.headers["content-disposition"]).toMatch(/filename="Socit Gnrique \w+ briefing 2026-11-21\.pdf"/);
   });
+
+  it("B-1 an apostrophe or brackets in the vendor's name are written as codes in the file name, so browsers do not ignore it", async () => {
+    const odd = (
+      await t
+        .as(MEMBER)
+        .post("/api/vendors")
+        .send({ name: `Société d'Été (Sud) ${n()}`, type: "software", ownerUserId: me, ndaRequired: false, dpaRequired: false })
+    ).body as { id: string; name: string };
+    const made = (await t.as(MEMBER).post(`/api/vendors/${odd.id}/briefings`).expect(201)).body.briefing as Briefing;
+    const header = (await t.as(MEMBER).get(`/api/briefings/${made.id}/pdf`).buffer(true).parse(binary)).headers["content-disposition"] as string;
+    const star = header.split("filename*=UTF-8''")[1]!;
+    expect(star).toMatch(/^[A-Za-z0-9%._-]+$/);
+    expect(decodeURIComponent(star)).toBe(`${odd.name} briefing ${TODAY}.pdf`);
+  });
 });

@@ -24,7 +24,8 @@ export function briefingRoutes(ctx: OverviewContext) {
     const name = `${b.vendorName} briefing ${b.asAt}`.replace(/[^A-Za-z0-9 ._-]/g, "").replace(/\s+/g, " ");
     res.setHeader("Content-Type", "application/pdf");
     // The plain name for old software, and the full name, accents included, for everything else.
-    const full = encodeURIComponent(`${b.vendorName} briefing ${b.asAt}`.replace(/[\\/:*?"<>|]/g, " "));
+    // encodeURIComponent leaves ' ( ) * as they are, which a file name in this header may not contain.
+    const full = encodeURIComponent(`${b.vendorName} briefing ${b.asAt}`.replace(/[\\/:*?"<>|]/g, " ")).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
     res.setHeader("Content-Disposition", `attachment; filename="${name}.pdf"; filename*=UTF-8''${full}.pdf`);
     res.send(await briefingPdf(b));
   });
