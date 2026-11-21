@@ -255,12 +255,16 @@ test.describe("throughout", () => {
     await expect(panel.getByRole("button", { name: "Member" })).toHaveAttribute("aria-pressed", "true");
   });
 
-  test("X-2 sections not built yet say what will live there", async ({ page, context }) => {
+  test("X-2 every section in the sidebar is built: none says it is still to come", async ({ page, context }) => {
     await signInAs(context, MEMBER);
-    // Performance was built in M3 and RFPs in M6; Ask is still to come.
-    await page.goto("/ask");
-    await expect(page.getByRole("heading", { name: "Nothing to ask about yet" })).toBeVisible();
-    await expect(page.getByText("This part of the app has not been built yet.")).toBeVisible();
+    // Ask was the last one, built in M7.
+    await page.goto("/");
+    for (const section of ["Vendors", "Agreements", "Money", "Performance", "RFPs", "Ask"]) {
+      await page.getByRole("navigation", { name: "Sections" }).getByRole("link", { name: section, exact: true }).click();
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      await expect(page.getByText("This part of the app has not been built yet.")).toHaveCount(0);
+    }
+    await expect(page.getByRole("heading", { name: "Ask", level: 1 })).toBeVisible();
   });
 
   test("the theme switch changes to dark and is remembered", async ({ page, context }) => {

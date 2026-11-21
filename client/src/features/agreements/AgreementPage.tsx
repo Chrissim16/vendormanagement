@@ -105,6 +105,7 @@ function Documents({ a }: { a: AgreementDetail }) {
                 </a>
                 <span className="num block text-[13px] text-ink-2">
                   {size(d.sizeBytes)} · added {formatDate(d.createdAt)} by {d.createdBy ?? "someone"}
+                  {d.readable === false && " · no readable text, so Ask cannot search it"}
                 </span>
               </span>
               <Button className="h-8 px-3.5 text-[12.5px]" onClick={() => remove.mutate(d)} aria-label={`Remove ${d.fileName}`}>

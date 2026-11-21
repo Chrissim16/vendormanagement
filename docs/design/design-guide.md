@@ -118,7 +118,8 @@ Things slide into place; they do not just appear. Motion is quick and never bloc
 | Numbers | Digits roll to their value like a counter. |
 | Charts | Bars grow from the baseline with a small bounce; a bar lifts and turns blue on hover. |
 | Dashboard tiles | Lift on hover. No tilt. |
-| Search field | The hint text slides up to a new suggestion every few seconds. |
+| Search field | The hint text slides up to a new suggestion every few seconds, until something is typed. |
+| Ask | A new answer slides in from the right above the earlier ones. |
 | Scoring | The selector thumb snaps to the chosen score with a bounce. Accepting an AI suggestion and finalising throw a short burst of small coloured squares. |
 | Theme switch | The new theme spreads in a circle from the button. |
 
@@ -161,6 +162,22 @@ A proposal that is more than a text (a whole RFP draft) uses the same panel with
 primary action ("Use this draft"); when using it would replace something, the button asks
 once more in place. A comparison the AI makes across records (candidates' answers) is one
 tinted panel, folded per criterion, that says plainly that nothing in it is a score.
+
+Ask is the one place where the AI's text is the page. The page is a single field with its
+button, then the answers, newest first. Each answer has the question as its heading, the
+AI's text in the tinted panel labelled "AI answer" with when it was written, any document
+passage word for word in a white box inside the panel with its document, page and where it
+is attached, and the records used as underlined links. Right under the panel, outside the
+tint, "What the app looked up" lists each look-up between hairlines with the app's own
+count and totals and a link to the list with the same filter: the tint is the AI's wording,
+what is outside it is the app's. An answer that could not be given carries a "Not answered"
+pill. There is nothing to accept: an answer is read, not saved. A failure uses the ordinary
+error pattern and keeps the question in the field.
+
+The search field in the top bar is one field for finding and asking. While empty it slides
+its hints; focused ("/" from anywhere) it opens a list under it: the typed text as a
+question to ask first, then matching vendors, agreements, RFPs and pages, each group under
+a small heading. Arrow keys move, Enter chooses, Escape closes the list and keeps the text.
 
 A score from 1 to 5 is chosen on a row of five squares on the sunken fill; the chosen one
 is filled with the primary colour and its thumb snaps over with a bounce. The same square,

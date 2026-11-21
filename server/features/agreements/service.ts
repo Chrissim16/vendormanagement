@@ -22,6 +22,7 @@ import type { Page, User } from "../../../shared/types";
 import { diff } from "../../../shared/users";
 import { audit } from "../../platform/audit";
 import { AppError, notFound } from "../../platform/errors";
+import { extractText } from "../../platform/text";
 import { failFields, toCsv } from "../../platform/http";
 import { explain } from "../../platform/ports/explain";
 import type { Db, Queryable, StoragePort, Tx } from "../../platform/ports/types";
@@ -58,6 +59,7 @@ const toDocument = (d: Awaited<ReturnType<typeof repo.documentsOf>>[number]): Do
   sizeBytes: d.sizeBytes,
   createdAt: d.createdAt.toISOString(),
   createdBy: d.createdBy,
+  readable: d.readable,
 });
 
 export async function getAgreement(db: Queryable, id: string, today: Day): Promise<AgreementDetail> {
@@ -281,10 +283,21 @@ export async function addDocument(db: Db, storage: StoragePort, agreementId: str
   if (!row) throw notFound("That agreement");
   // The stored name is generated, so nothing a person typed ever becomes part of a file path.
   const storageKey = `agreements/${agreementId}/${randomUUID()}.${ext}`;
+  // The words in the file are read now, so that questions about it can be answered later (C-1). A file without readable text is attached all the same.
+  const extractedText = await extractText(ext, file.data);
   await storage.put(storageKey, file.data, contentType).catch(storageFailed("stored"));
   try {
     return await db.transaction(async (tx) => {
-      const doc = await repo.insertDocument(tx, { agreementId, title: fileName, fileName, contentType, sizeBytes: file.data.length, storageKey, createdBy: by.email });
+      const doc = await repo.insertDocument(tx, {
+        agreementId,
+        title: fileName,
+        fileName,
+        contentType,
+        sizeBytes: file.data.length,
+        storageKey,
+        extractedText,
+        createdBy: by.email,
+      });
       await audit(tx, {
         userEmail: by.email,
         action: "update",

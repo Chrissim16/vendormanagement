@@ -1,31 +1,6 @@
 import { Link } from "react-router-dom";
 import { EmptyState, PageHeader } from "../platform/ui";
 
-const sections = {
-  vendors: [
-    "Vendors",
-    "No vendors yet",
-    "Every software vendor, consultancy and advisory firm the team works with will be listed here, each with its owner, contacts and paperwork.",
-  ],
-  agreements: [
-    "Agreements",
-    "No agreements yet",
-    "MSAs, SOWs, subscriptions, NDAs and data processing agreements will be listed here, with their dates, values and renewal deadlines.",
-  ],
-  ask: ["Ask", "Nothing to ask about yet", "You will be able to ask questions in plain language here, such as which SOWs end this quarter."],
-} as const;
-
-/** A section that a later milestone fills. It says what will live here. */
-export function ComingSection({ name }: { name: keyof typeof sections }) {
-  const [title, heading, body] = sections[name];
-  return (
-    <>
-      <PageHeader title={title} />
-      <EmptyState title={heading}>{body} This part of the app has not been built yet.</EmptyState>
-    </>
-  );
-}
-
 export function NotFoundPage() {
   return (
     <>

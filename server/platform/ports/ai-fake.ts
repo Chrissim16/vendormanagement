@@ -246,6 +246,286 @@ function rfpComparison(ask: RfpComparisonAsk): string {
   return JSON.stringify({ questions, scores });
 }
 
+interface Period {
+  from: string;
+  to: string;
+}
+interface AskPlanAsk {
+  task: "ask_plan";
+  today: string;
+  periods: Record<string, Period>;
+  question: string;
+  earlierQuestions: string[];
+  vendors: string[];
+  people: string[];
+  rfps: string[];
+}
+
+const periodWords: [RegExp, string][] = [
+  [/\bthis quarter\b/, "thisQuarter"],
+  [/\b(last|previous) quarter\b/, "lastQuarter"],
+  [/\bnext quarter\b/, "nextQuarter"],
+  [/\bthis month\b/, "thisMonth"],
+  [/\b(last|previous) month\b/, "lastMonth"],
+  [/\bnext month\b/, "nextMonth"],
+  [/\bthis year\b/, "thisYear"],
+  [/\b(last|previous) year\b/, "lastYear"],
+  [/\bnext year\b/, "nextYear"],
+  [/\bnext (30|thirty) days\b/, "next30Days"],
+  [/\bnext (90|ninety) days\b|\bnext three months\b/, "next90Days"],
+  [/\b(last|past) (12|twelve) months\b/, "last12Months"],
+];
+const monthWords = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+
+/** The period a question names, if it names one: a phrase such as "this quarter", or a month by name. */
+function periodIn(q: string, ask: AskPlanAsk): Period | undefined {
+  for (const [pattern, key] of periodWords) if (pattern.test(q)) return ask.periods[key];
+  const named = new RegExp(`\\b(?:in|during|for|of) (${monthWords.join("|")})(?: (\\d{4}))?\\b`).exec(q);
+  if (!named) return undefined;
+  const month = monthWords.indexOf(named[1]!) + 1;
+  // A month without a year is the latest one that has started.
+  const [thisYear, thisMonth] = [Number(ask.today.slice(0, 4)), Number(ask.today.slice(5, 7))];
+  const year = named[2] ? Number(named[2]) : month > thisMonth ? thisYear - 1 : thisYear;
+  const two = (n: number) => String(n).padStart(2, "0");
+  return { from: `${year}-${two(month)}-01`, to: `${year}-${two(month)}-${two(new Date(Date.UTC(year, month, 0)).getUTCDate())}` };
+}
+
+/** The name from a list that a question mentions: the whole name, or else its first word when that is distinctive. */
+function mentioned(q: string, names: string[]): string | undefined {
+  const byLength = [...names].sort((a, b) => b.length - a.length);
+  const whole = byLength.find((n) => q.includes(n.toLowerCase()));
+  if (whole) return whole;
+  const words = new Set(q.split(/[^\p{L}\p{N}]+/u));
+  const first = byLength.filter((n) => {
+    const w = n.split(/\s+/)[0]!.toLowerCase();
+    return w.length >= 4 && words.has(w);
+  });
+  return first.length === 1 ? first[0] : undefined;
+}
+
+const CHANGE =
+  /^(?:please |can you |could you |will you )?(?:add|create|delete|remove|change|update|set|approve|reject|rename|offboard|cancel|mark|record|move|edit|finalise|finalize|issue)\b/;
+
+/** Which look-ups a question is about, by its words. A real model reads the question; this only recognises the common ones. */
+function planFor(q: string, ask: AskPlanAsk): { name: string; args: Record<string, unknown> }[] | "change" | null {
+  if (CHANGE.test(q)) return "change";
+  // A name the app does not know is passed on as it was written, so the answer can say that it is not known.
+  const vendor = mentioned(q, ask.vendors) ?? /\b(?:of|for|with|at|from|by) ([A-Z][\p{L}\p{N}&.-]*(?: (?:[A-Z][\p{L}\p{N}&.-]*|Ltd|B\.V\.|GmbH|Inc))+)/u.exec(ask.question)?.[1];
+  const period = periodIn(q, ask);
+  const has = (pattern: RegExp) => pattern.test(q);
+
+  if (
+    has(
+      /\b(documents?|clauses?|wording|liabilit\w*|indemni\w*|governing law|penalt\w*|passages?|confidential\w*|contract says?|agreement says?|say about|says about|stat(e|es) about)\b/,
+    )
+  ) {
+    // The words to look for: the question without the vendor's own name, which is in every one of its documents.
+    const first = vendor?.split(/\s+/)[0]?.toLowerCase();
+    const text = ask.question
+      .split(/\s+/)
+      .filter((w) => !first || !w.toLowerCase().startsWith(first))
+      .join(" ");
+    return [{ name: "documents", args: { text, vendor } }];
+  }
+
+  const rfp = mentioned(q, ask.rfps);
+  if (rfp && has(/\brfp\b|candidate|shortlist|longlist|winner|won|decision|decided|stage|score/)) return [{ name: "rfp", args: { title: rfp } }];
+  if (has(/\brfps?\b|request for proposal|candidates?|shortlist|longlist/))
+    return [
+      {
+        name: "rfps",
+        args: { stage: has(/running|open|ongoing|current|still|in progress/) ? "open" : has(/decided|finished|closed/) ? "decided" : has(/cancel/) ? "cancelled" : undefined },
+      },
+    ];
+
+  if (has(/helpdesk|\bsla\b|tickets?|first response|first.line|backlog|satisfaction|csat|targets?\b/)) {
+    const month = period && period.from.slice(0, 7) === period.to.slice(0, 7) ? period.from.slice(0, 7) : undefined;
+    return [vendor ? { name: "vendor_helpdesk", args: { vendor, month } } : { name: "helpdesk", args: { month } }];
+  }
+  if (has(/scorecards?|\bscores?\b|\bscored\b/)) return [{ name: "scorecards", args: { vendor, status: has(/\bfinal/) ? "final" : has(/\bdraft/) ? "draft" : undefined } }];
+
+  const sowTitle = /\bsow \d+\b/.exec(q)?.[0];
+  if (sowTitle && has(/milestones?|change requests?|consultants?|day rate|budget|invoiced|remaining|deliver/))
+    return [{ name: "sow", args: { title: sowTitle.toUpperCase(), vendor } }];
+  if (has(/budgets?|overrun|over.?spen/)) return [{ name: "sow_budgets", args: { vendor } }];
+  if (has(/milestones?/)) return [{ name: "warnings", args: { vendor, type: "risk_open_milestones" } }];
+
+  if (has(/invoices?|invoiced|\bspend\b|\bspent\b|\bpaid\b|\bcosts?\b|how much/)) {
+    if (!vendor && has(/per vendor|by vendor|per month|by month|\bmost\b|\bspend\b|\bspent\b|each vendor/))
+      return [{ name: "spend", args: { from: period?.from, to: period?.to } }];
+    return [{ name: "invoices", args: { vendor, from: period?.from, to: period?.to } }];
+  }
+  if (has(/renew|notice (deadline|period)/)) return [{ name: "renewals", args: {} }];
+
+  if (has(/\b(no|without|missing|lack\w*)\b.*\bnda\b|\bnda\b.*\b(missing|not in place)\b/)) return [{ name: "warnings", args: { vendor, type: "nda_missing" } }];
+  if (has(/\b(no|without|missing|lack\w*)\b.*\b(dpa|data processing)\b|\b(dpa|data processing agreement)\b.*\b(missing|not in place)\b/))
+    return [{ name: "warnings", args: { vendor, type: "dpa_missing" } }];
+  if (has(/risk flags?|\brisks?\b/)) return [{ name: "warnings", args: { vendor, only: "risk_flags" } }];
+  if (has(/warnings?|attention|what is wrong|what's wrong|problems?/)) return [{ name: "warnings", args: { vendor } }];
+
+  const kinds: [RegExp, string][] = [
+    [/\bsows?\b|statements? of work/, "sow"],
+    [/\bmsas?\b|master (services )?agreements?/, "msa"],
+    [/subscriptions?|licen[cs]es?/, "subscription"],
+    [/\bndas?\b/, "nda"],
+    [/\bdpas?\b|data processing/, "dpa"],
+  ];
+  const kind = kinds.find(([pattern]) => pattern.test(q))?.[1];
+  if (kind || has(/agreements?|contracts?/)) {
+    const ending = has(/\bend(s|ing|ed)?\b|expir|run out|runs out|finish/);
+    return [
+      {
+        name: "agreements",
+        args: {
+          vendor,
+          kind,
+          status: has(/\bactive\b|\brunning\b/)
+            ? "active"
+            : has(/\bdraft/)
+              ? "draft"
+              : has(/negotiat/)
+                ? "in_negotiation"
+                : has(/signature/)
+                  ? "out_for_signature"
+                  : has(/\bended\b/)
+                    ? "ended"
+                    : undefined,
+          owner: has(/\bown/) ? mentioned(q, ask.people) : undefined,
+          endsFrom: ending ? period?.from : undefined,
+          endsTo: ending ? period?.to : undefined,
+        },
+      },
+    ];
+  }
+
+  // A vendor alone is a question about the vendor only when it reads like one; "what is X's share price" is not something the app holds.
+  if (
+    vendor &&
+    !has(/\bvendors\b|suppliers/) &&
+    (has(/tell me|\babout\b|\bwho\b|contacts?|\bown(s|ed|er)?\b|status|details|overview|\bknow\b|paperwork/) || q.split(/\s+/).length <= 3)
+  )
+    return [{ name: "vendor", args: { vendor } }];
+  if (has(/vendors?|suppliers?|\bown(s|ed|er)?\b|consultanc|advisor/)) {
+    const type = has(/software/) ? "software" : has(/consultanc/) ? "consultancy" : has(/advisor/) ? "advisory" : undefined;
+    const status = has(/prospect/) ? "prospect" : has(/on hold/) ? "on_hold" : has(/offboarded/) ? "offboarded" : has(/\bactive\b/) ? "active" : undefined;
+    return [{ name: "vendors", args: { type, status, owner: has(/\bown/) ? mentioned(q, ask.people) : undefined } }];
+  }
+  return null;
+}
+
+function askPlan(ask: AskPlanAsk): string {
+  const q = ask.question.toLowerCase();
+  let plan = planFor(q, ask);
+  // A short follow-up ("and for Quillon?", "and next quarter?") takes the rest from the question before it.
+  let before = ask.earlierQuestions.at(-1)?.toLowerCase();
+  const followUp = /^(and|what about|how about|same|also)\b/.test(q);
+  if (before && followUp && (plan === null || (Array.isArray(plan) && plan[0]?.name === "vendor"))) {
+    const [now, then] = [mentioned(q, ask.vendors), mentioned(before, ask.vendors)];
+    // The vendor asked about now takes the place of the one asked about before.
+    if (now && then) before = before.split(then.toLowerCase()).join(" ").split(then.split(/\s+/)[0]!.toLowerCase()).join(" ");
+    if (periodIn(q, ask)) for (const [pattern] of periodWords) before = before.replace(pattern, " ");
+    plan = planFor(`${q} ${before}`, ask) ?? plan;
+  }
+  if (plan === "change") return JSON.stringify({ lookups: [], because: "change" });
+  if (!plan) return JSON.stringify({ lookups: [], because: "not_held" });
+  return JSON.stringify({ lookups: plan.map((c) => ({ name: c.name, args: Object.fromEntries(Object.entries(c.args).filter(([, v]) => v !== undefined)) })) });
+}
+
+interface AskAnswerAsk {
+  task: "ask_answer";
+  question: string;
+  lookedUp: {
+    what: string;
+    found: number | null;
+    figures: Record<string, string>;
+    notListedHere: number;
+    note: string | null;
+    records: ({ ref: string; name: string } & Record<string, string>)[];
+    passages: { ref: string; document: string; attachedTo: string; part: string | null; text: string }[];
+  }[];
+}
+
+/** The facts worth a line in a list, most telling first. */
+const tellingFacts = [
+  "Vendor",
+  "Status",
+  "Stage",
+  "End date",
+  "Renewal date",
+  "Notice deadline",
+  "Budget used",
+  "Budget state",
+  "Amount",
+  "Date",
+  "Overall score",
+  "Together in euros",
+  "Targets missed",
+  "Facts",
+  "Due",
+  "List",
+  "Winner",
+];
+
+/** The sentence of a passage that shares the most words with the question, word for word. */
+function telling(passage: string, question: string): string {
+  const asked = new Set(question.toLowerCase().match(/\p{L}{4,}/gu) ?? []);
+  const sentences = passage
+    .split(/\n+|(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 12);
+  const score = (s: string) => (s.toLowerCase().match(/\p{L}{4,}/gu) ?? []).filter((w) => asked.has(w) || [...asked].some((a) => a.slice(0, 5) === w.slice(0, 5))).length;
+  // A heading is not a statement; whole sentences are preferred.
+  const whole = sentences.filter((s) => /[.!?]$/.test(s));
+  return [...(whole.length ? whole : sentences)].sort((a, b) => score(b) - score(a))[0] ?? passage.trim();
+}
+
+/** An answer put together from what was looked up, quoting it as given. It lists; it does not reason. */
+function askAnswer(ask: AskAnswerAsk): string {
+  const out: string[] = [];
+  const sources: string[] = [];
+  let answered = false;
+  const LISTED = 8;
+  for (const l of ask.lookedUp) {
+    const figures = Object.entries(l.figures).map(([k, v]) => `${k}: ${v}`);
+    if (l.passages.length) {
+      answered = true;
+      for (const p of l.passages.slice(0, 2)) {
+        out.push(`The document “${p.document}”${p.part ? `, ${p.part}` : ""} (${p.attachedTo}) says: “${telling(p.text, ask.question)}”`);
+        sources.push(p.ref);
+      }
+    } else if (l.found != null) {
+      answered = true;
+      out.push(`${l.what}: ${l.found === 0 ? "none" : l.found}.${figures.length && l.found ? ` ${figures.join(". ")}.` : ""}`);
+      for (const r of l.records.slice(0, LISTED)) {
+        const shown = tellingFacts.filter((k) => r[k]).slice(0, 3);
+        out.push(`- ${r.name}${shown.length ? ` (${shown.map((k) => `${k.toLowerCase()}: ${r[k]}`).join("; ")})` : ""}`);
+        sources.push(r.ref);
+      }
+      if (l.records.length > LISTED || l.notListedHere > 0) out.push("Only the first ones are listed here; the list itself has them all.");
+    } else if (l.records.length) {
+      answered = true;
+      out.push(`${l.what}.${figures.length ? ` ${figures.join(". ")}.` : ""}`);
+      // One record shown in full (a vendor, a SOW, an RFP) starts with everything known about it; what belongs to it follows as a list.
+      const inFull = /^(Vendor|SOW|RFP) · /.test(l.what);
+      if (inFull) {
+        for (const [k, v] of Object.entries(l.records[0]!)
+          .filter(([k]) => k !== "ref" && k !== "name")
+          .slice(0, 12))
+          out.push(`- ${k}: ${v}`);
+        sources.push(l.records[0]!.ref);
+      }
+      for (const r of l.records.slice(inFull ? 1 : 0, LISTED + 1)) {
+        const shown = tellingFacts.filter((k) => r[k]).slice(0, 3);
+        out.push(`- ${r.name}${shown.length ? ` (${shown.map((k) => `${k.toLowerCase()}: ${r[k]}`).join("; ")})` : ""}`);
+        sources.push(r.ref);
+      }
+      if (l.records.length > LISTED + 1) out.push("Only the first ones are listed here; the page itself has them all.");
+    }
+    if (l.note) out.push(l.note);
+  }
+  return JSON.stringify({ answered, answer: out.join("\n") || "The app looked, and found nothing to answer this from.", sources: sources.slice(0, 12) });
+}
+
 /** Answers the prompts it knows; anything else gets the plain stand-in answer. */
 export function standInAnswer(req: AiRequest): string | undefined {
   if (!req.json) return undefined;
@@ -256,6 +536,8 @@ export function standInAnswer(req: AiRequest): string | undefined {
     if (ask.task === "briefing") return briefing(ask as BriefingAsk);
     if (ask.task === "rfp_draft") return rfpDraft(ask as RfpDraftAsk);
     if (ask.task === "rfp_comparison") return rfpComparison(ask as RfpComparisonAsk);
+    if (ask.task === "ask_plan") return askPlan(ask as AskPlanAsk);
+    if (ask.task === "ask_answer") return askAnswer(ask as AskAnswerAsk);
   } catch {
     // Not one of the app's prompts.
   }

@@ -9,6 +9,7 @@ import { todayIn } from "../shared/dates";
 import { adminRoutes } from "./features/admin/routes";
 import { agreementRoutes } from "./features/agreements/routes";
 import { briefingRoutes } from "./features/briefings/routes";
+import { chatRoutes } from "./features/chat/routes";
 import { importRoutes } from "./features/import/routes";
 import { invoiceRoutes } from "./features/invoices/routes";
 import { performanceRoutes } from "./features/performance/routes";
@@ -123,6 +124,7 @@ export function createApp(config: Config, ports: Ports) {
   api.use(overviewRoutes(scorecardContext(config, ports)));
   api.use(briefingRoutes(scorecardContext(config, ports)));
   api.use(rfpRoutes(rfpContext(config, ports)));
+  api.use(chatRoutes(scorecardContext(config, ports)));
   api.get("/settings", async (_req, res) => res.json(await getSettings(db)));
   api.put("/admin/settings", requireRole("admin"), async (req, res) => res.json(await saveSettings(db, req.body, currentUser(req))));
   api.use("/admin/import", importRoutes(db, today));

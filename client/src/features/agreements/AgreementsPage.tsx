@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { agreementStatuses, kindLabels, kinds, kindShort, statusLabels, type Agreement } from "../../../../shared/agreements";
+import { isDay } from "../../../../shared/dates";
 import { formatMoney } from "../../../../shared/money";
 import type { Page } from "../../../../shared/types";
 import type { Vendor } from "../../../../shared/vendors";
@@ -52,7 +53,7 @@ export function AgreementsPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const people = usePeople();
-  const [url, setUrl] = useUrlState({ q: "", kind: "", vendorId: "", status: "", owner: "", sort: "title", dir: "asc", page: "1" });
+  const [url, setUrl] = useUrlState({ q: "", kind: "", vendorId: "", status: "", owner: "", endsFrom: "", endsTo: "", sort: "title", dir: "asc", page: "1" });
   const [search, setSearch] = useState(url.q);
   const [adding, setAdding] = useState(false);
   useEffect(() => {
@@ -60,14 +61,16 @@ export function AgreementsPage() {
     return () => clearTimeout(t);
   }, [search, url.q, setUrl]);
   const page = pageNumber(url.page);
-  const filters = { q: url.q, kind: url.kind, vendorId: url.vendorId, status: url.status, owner: url.owner, sort: url.sort, dir: url.dir };
+  // A date still being typed is not sent, so the list never shows an error for half a date.
+  const ends = { endsFrom: isDay(url.endsFrom) ? url.endsFrom : "", endsTo: isDay(url.endsTo) ? url.endsTo : "" };
+  const filters = { q: url.q, kind: url.kind, vendorId: url.vendorId, status: url.status, owner: url.owner, ...ends, sort: url.sort, dir: url.dir };
   const list = useQuery({
     queryKey: ["agreements", filters, page],
     queryFn: () => api<Page<Agreement>>("/agreements", { query: { ...filters, page, pageSize: PAGE_SIZE } }),
     placeholderData: (p) => p,
   });
   const vendors = useQuery({ queryKey: ["vendors", "choices-all"], queryFn: () => api<Page<Vendor>>("/vendors", { query: { pageSize: 200, sort: "name", status: "all" } }) });
-  const filtered = !!(url.q || url.kind || url.vendorId || url.status || url.owner);
+  const filtered = !!(url.q || url.kind || url.vendorId || url.status || url.owner || url.endsFrom || url.endsTo);
   const total = list.data?.total;
 
   return (
@@ -129,6 +132,12 @@ export function AgreementsPage() {
               </option>
             ))}
           </Select>
+        </Field>
+        <Field label="Ends from" htmlFor="agreements-ends-from">
+          <TextInput id="agreements-ends-from" type="date" value={url.endsFrom} onChange={(e) => setUrl({ endsFrom: e.target.value, page: "1" })} />
+        </Field>
+        <Field label="Ends to" htmlFor="agreements-ends-to">
+          <TextInput id="agreements-ends-to" type="date" value={url.endsTo} onChange={(e) => setUrl({ endsTo: e.target.value, page: "1" })} />
         </Field>
       </div>
       {list.isPending ? (

@@ -23,6 +23,7 @@ import {
 import type { User } from "../../../shared/types";
 import { AppError, notFound } from "../../platform/errors";
 import { failFields } from "../../platform/http";
+import { extractText } from "../../platform/text";
 import type { Db, Queryable, Tx } from "../../platform/ports/types";
 import { checkDocument, cleanFileName } from "../agreements/service";
 import { createVendor, findVendorByName, getVendor } from "../vendors/service";
@@ -175,13 +176,15 @@ async function store(ctx: RfpContext, rfpId: string, candidateId: string, file: 
   const fileName = cleanFileName(file.name);
   const { ext, contentType } = checkDocument(fileName, file.data);
   const storageKey = `rfps/${rfpId}/${candidateId}/${randomUUID()}.${ext}`;
+  // The words in the file are read now, so that questions about it can be answered later (C-1).
+  const text = await extractText(ext, file.data);
   try {
     await ctx.storage.put(storageKey, file.data, contentType);
   } catch (e) {
     console.error("Document storage failed:", (e as Error).message);
     throw new AppError(502, "storage_failed", "The file could not be stored. Nothing was changed. Try again.");
   }
-  return { fileName, ext, contentType, storageKey };
+  return { fileName, ext, contentType, storageKey, extractedText: text };
 }
 /** Removes a stored file whose record was not saved after all, or is gone. A file that cannot be removed right now is only wasted space. */
 const discard = (ctx: RfpContext, key: string) => ctx.storage.remove(key).catch((e) => console.error("Could not remove a stored file:", (e as Error).message));
@@ -234,6 +237,7 @@ export async function uploadResponse(ctx: RfpContext, candidateId: string, file:
         contentType: stored.contentType,
         sizeBytes: file.data.length,
         storageKey: stored.storageKey,
+        extractedText: stored.extractedText,
         createdBy: by.email,
       });
       const answeredNow = new Set([...before.keys(), ...matched.map((m) => m.questionId)]);
@@ -329,6 +333,7 @@ export async function addDocument(ctx: RfpContext, candidateId: string, file: { 
         contentType: stored.contentType,
         sizeBytes: file.data.length,
         storageKey: stored.storageKey,
+        extractedText: stored.extractedText,
         createdBy: by.email,
       });
       saved = true;

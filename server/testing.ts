@@ -36,7 +36,7 @@ export async function testApp(env: Record<string, string> = {}, options: { empty
   const config = loadConfig({ PLATFORM: "local", FILES_DIR: ".data/test-files", CLIENT_DIR: "does-not-exist", TODAY: TODAY, ...databaseEnv, ...env });
   const ports = await buildPorts(config);
   await ports.database.migrate();
-  if (!options.empty) await seed(ports.database.db, config.today!, scorecardContext(config, ports));
+  if (!options.empty) await seed(ports.database.db, config.today!, scorecardContext(config, ports), ports.storage);
   const app = createApp(config, ports);
   /** Makes requests as the given person. */
   const as = (email: string) => {

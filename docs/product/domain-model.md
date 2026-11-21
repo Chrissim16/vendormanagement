@@ -64,6 +64,7 @@ Derived, not stored:
 - `terminate` does not end the agreement by itself; someone sets it to ended when it stops.
 
 **Document**: attached to an agreement, or to a candidate's response in an RFP; never both. `title*`, `file_name*`, `content_type*`, `size_bytes*`, `storage_key*`, `extracted_text`. PDF, Word and Excel only, 25 MB at most, judged by the file's content as well as its name. The stored file's name is generated, so nothing a person typed becomes part of a file path. Attaching and removing are recorded in the agreement's history.
+- `extracted_text` holds the words in the file, read when it is attached, so that Ask can find passages in it (C-1): a PDF gives one part per page, a workbook one part per sheet, a Word file (.docx) one part. Empty when the file holds no words the app can read (a scan, an old .doc or .xls); absent only for a document attached before the app could read text, which the app reads at its next start. Reading never refuses an upload.
 
 **Warning** (worked out, not stored), for A-7:
 
@@ -294,5 +295,36 @@ per criterion a `score` 1 to 5, a `vendor_comment` and an `internal_note`, plus 
 `status*` (proposed | accepted | edited | rejected), `reviewed_by`, `reviewed_at`.
 - `output` is the model's answer exactly as given and is never changed; a person's edits are stored with the record the suggestion belongs to.
 - "Edited" means a person's value now differs from the AI's.
+- An answer to a question (C-1) is kept as a suggestion with kind `ask_answer` (or `ask_plan` when nothing was looked up), the person who asked as its subject, the question as `input_summary`, and the answer with the look-ups it rested on as `output`. It stays `proposed`: an answer is read, not accepted, and never becomes part of a record. There is no other record of a conversation; the conversation on screen lives in the browser tab.
+
+## Ask a question
+
+Nothing new is stored beyond the suggestion row above. A question is answered from **look-ups**: a fixed list of read-only queries, each the same function a list page or a record's page uses.
+
+| Look-up | What it returns | The page with the same figures |
+|---|---|---|
+| vendors | The vendor list, filtered by name, type, status, owner | Vendors |
+| vendor | One vendor with contacts, paperwork, its agreements and RFPs | The vendor's panel |
+| agreements | The agreement list, filtered by vendor, kind, status, owner, words, and the period the end date falls in | Agreements |
+| renewals | Subscriptions without a renewal decision whose notice deadline has passed or is near | Renewals |
+| sow | One SOW with budget, milestones, change requests, consultants | The SOW's page |
+| sow_budgets | Active SOWs with budget against invoiced | Dashboard |
+| invoices | The invoice list with totals per currency, by vendor, period, words | Invoices |
+| spend | Spend per vendor and month for a period | Money |
+| helpdesk | Every board's figures for a month | Performance |
+| vendor_helpdesk | One vendor's last six months of figures | The vendor's performance page |
+| scorecards | Scorecards by vendor and status | Scorecards |
+| warnings | Warnings and risk flags, by vendor or kind | Warnings |
+| rfps | The RFP list by stage and title | RFPs |
+| rfp | One RFP with candidates, scores so far and the decision | The RFP's page |
+| documents | Up to five passages of uploaded documents that share the most words with the question | The agreement or RFP the document is attached to |
+
+- The model first chooses up to four look-ups and their filters; it sees no data at that point, only the names of vendors, colleagues and RFPs so it can recognise them, and the first and last day of the periods a question can name ("this quarter"), worked out by the app.
+- The app runs the look-ups. Every count and total is worked out in code. A list gives its first 40 rows to the model and the page; its count is always of the whole list.
+- A vendor or colleague the app cannot match to exactly one name is never dropped from the filter: the look-up returns nothing but a note saying so.
+- The model then writes the answer from the results. An answer is refused (and asked for once more, then reported as a failure) when it quotes a number that is in neither the results nor the question (single digits aside; digits inside a name someone typed count only when the whole name is quoted), names a source that was not looked up, or names no source although records were found.
+- When no look-up fits, the answer is a fixed sentence written by the app: that it does not hold this, or, for a request to change something, that Ask can only look things up.
+- A passage is at most a few sentences (about 420 characters), cut at clause headings where there are any, and shown word for word with its document, its page or sheet, and where the document is attached. Passages are found by shared words, not by meaning.
+- The last three questions of a conversation go along with a new one so a follow-up can be understood; earlier answers do not.
 
 **Audit log entry**: `at*`, `user_email*`, `action*`, `entity_type*`, `entity_id*`, `summary` (a readable label for the record, such as a vendor name), `changes`. Written in the same transaction as the change. Never edited or removed: the database itself refuses any update, delete or truncate of the audit log. Changes the app makes by itself are recorded with `system` as the user.

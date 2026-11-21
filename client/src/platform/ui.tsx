@@ -155,7 +155,9 @@ export function Field({ label, error, htmlFor, children }: { label: string; erro
 }
 
 const control = "h-[38px] min-w-0 rounded-full border border-line-2 bg-surface px-4 text-sm placeholder:text-ink-3 hover:border-ink-3";
-export const TextInput = ({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) => <input {...props} className={clsx(control, className)} />;
+export const TextInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function TextInput({ className, ...props }, ref) {
+  return <input ref={ref} {...props} className={clsx(control, className)} />;
+});
 export const Select = ({ className, ...props }: SelectHTMLAttributes<HTMLSelectElement>) => <select {...props} className={clsx(control, "pr-8", className)} />;
 
 /**

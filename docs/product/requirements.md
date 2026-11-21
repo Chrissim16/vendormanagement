@@ -151,6 +151,9 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 - If the app does not hold the answer, it says so instead of guessing.
 - Questions about the content of an uploaded document are answered with the document and passage named.
 - The chat cannot change any data.
+- Under each answer the page shows what the app looked up, with its own count and totals and a link to the list page with the same filter, so every figure can be checked in one click.
+- The search field in the top bar finds vendors, agreements, RFPs and pages by name, and takes a typed question to Ask.
+- The agreement list can also be filtered by the period the end or renewal date falls in ("Ends from", "Ends to"), which is what "SOWs ending this quarter" links to.
 
 ## Contract reading (M8)
 

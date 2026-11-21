@@ -4,6 +4,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { Toaster } from "sonner";
+import { AskPage } from "./features/ask/AskPage";
 import { AuditPage } from "./features/admin/AuditPage";
 import { PeoplePage } from "./features/admin/PeoplePage";
 import { SystemCheckPage } from "./features/admin/SystemCheckPage";
@@ -22,7 +23,7 @@ import { ScorecardsPage } from "./features/scorecards/ScorecardsPage";
 import { BriefingPage } from "./features/briefings/BriefingPage";
 import { DashboardPage } from "./features/overview/DashboardPage";
 import { ReportPage } from "./features/overview/ReportPage";
-import { ComingSection, NotFoundPage } from "./features/placeholders";
+import { NotFoundPage } from "./features/placeholders";
 import { RfpPage } from "./features/rfp/RfpPage";
 import { RfpsPage } from "./features/rfp/RfpsPage";
 import { VendorsPage } from "./features/vendors/VendorsPage";
@@ -67,7 +68,7 @@ const router = createBrowserRouter([
       { path: "/performance/:vendorId/tickets", element: <TicketsPage /> },
       { path: "/rfps", element: <RfpsPage /> },
       { path: "/rfps/:id", element: <RfpPage /> },
-      { path: "/ask", element: <ComingSection name="ask" /> },
+      { path: "/ask", element: <AskPage /> },
       {
         path: "/admin/import",
         element: (

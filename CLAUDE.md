@@ -59,7 +59,9 @@ Read `progress.md` first in every session. Read the other files when the task to
   write it to a file.
 - AI suggests, people decide. Every model call goes through `server/ai` and is stored as a
   suggestion that a person accepts or edits. Numbers shown as facts are computed in code,
-  not by the model. Chat is read-only.
+  not by the model. Chat is read-only: Ask answers only from the look-ups in
+  `shared/ask.ts`, each of which reuses a list page's own query. A new look-up must read
+  only, and a figure Ask can quote must be one a page shows for the same filter.
 - Admin-only endpoints check the role on the server. Hiding a button is not access control.
 - Every create, update and delete of a business record writes an audit log entry in the
   same database transaction.
@@ -77,6 +79,7 @@ Read `progress.md` first in every session. Read the other files when the task to
 - `npm run db:seed` loads the invented sample data; `npm run db:generate` creates a migration after a schema change (migrations apply themselves at start)
 - `npm run job -- jira-sync` fetches every linked board's tickets from Jira once; the running app also does this by itself every hour
 - `npm run job -- monthly-proposals` asks the AI for last month's proposal for every helpdesk vendor that has none; the running app also does this by itself
+- `npm run job -- document-text` reads the text of documents attached before the app could read them, so Ask can search them; the app also does this by itself at start
 - `npm run ai:eval` runs the prompt evaluation sets (against a real model when one is configured, otherwise the stand-in)
 - Locally, `POST /api/dev/ai` with `{"mode": "unavailable"}` (or `"nonsense"`, `"working"`) makes the stand-in AI fail, to see what a page does then
 - `npx vitest run <path>` and `npx playwright test -g "<requirement ID>" --trace off` run part of the tests

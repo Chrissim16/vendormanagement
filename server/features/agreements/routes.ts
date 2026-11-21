@@ -4,7 +4,7 @@ import { agreementStatuses, kinds } from "../../../shared/agreements";
 import type { Day } from "../../../shared/dates";
 import { currentUser } from "../../platform/auth";
 import { AppError } from "../../platform/errors";
-import { dir, id, paging, text, upload } from "../../platform/http";
+import { day, dir, id, paging, text, upload } from "../../platform/http";
 import type { Db, StoragePort } from "../../platform/ports/types";
 import { agreementSorts } from "./repo";
 import * as service from "./service";
@@ -15,6 +15,8 @@ const filters = {
   vendorId: id.optional(),
   status: z.enum(agreementStatuses).optional(),
   owner: id.optional(),
+  endsFrom: day.optional(),
+  endsTo: day.optional(),
   sort: z.enum(agreementSorts as [string, ...string[]]).default("title"),
   dir,
 };

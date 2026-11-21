@@ -174,6 +174,8 @@ export interface DocumentInfo {
   sizeBytes: number;
   createdAt: string;
   createdBy: string | null;
+  /** Whether the app could read the words in the file, so that Ask can search it; null while it has not been tried. */
+  readable: boolean | null;
 }
 export interface DecisionInfo {
   id: string;

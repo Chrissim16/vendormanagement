@@ -1,4 +1,5 @@
 import { performanceContext, scorecardContext } from "../../app";
+import { readMissingText } from "../../features/chat/service";
 import { runMonthlyProposals } from "../../features/scorecards/proposals";
 import { syncAll } from "../../features/performance/service";
 import { loadConfig } from "../config";
@@ -34,6 +35,19 @@ const jobs: Record<string, () => Promise<void>> = {
       if (!done.length) console.log("Every helpdesk vendor already has last month's proposal, or there was nothing to measure.");
       for (const r of done) console.log(`${r.vendorName}, ${r.month}: ${r.ok ? "proposal written" : r.message}`);
       if (done.some((r) => !r.ok)) process.exitCode = 1;
+    } finally {
+      await ports.database.close();
+    }
+  },
+  /** Reads the text of documents that were attached before the app could read them, so that Ask can search them (C-1). */
+  "document-text": async () => {
+    const config = loadConfig();
+    const ports = await buildPorts(config);
+    try {
+      await ports.database.migrate();
+      const done = await readMissingText(ports.database.db, ports.storage);
+      console.log(done.read || done.failed ? `${done.read} documents read, ${done.failed} could not be fetched.` : "Every document has been read already.");
+      if (done.failed) process.exitCode = 1;
     } finally {
       await ports.database.close();
     }

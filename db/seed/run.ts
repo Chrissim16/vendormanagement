@@ -1,3 +1,5 @@
+import { seedDocuments } from "./documents";
+import type { StoragePort } from "../../server/platform/ports/types";
 import { eq, sql } from "drizzle-orm";
 import { users, vendors } from "../schema";
 import { addDays, type Day } from "../../shared/dates";
@@ -384,10 +386,12 @@ async function seedScorecards(ctx: ScorecardContext, today: Day) {
 }
 
 /** Loads the sample people, vendors, agreements, helpdesk boards, AI proposals and scorecards. Safe to run more than once. */
-export async function seed(db: Db, today: Day, ctx?: ScorecardContext) {
+export async function seed(db: Db, today: Day, ctx?: ScorecardContext, storage?: StoragePort) {
   await seedCore(db, today);
   if (ctx) {
     const admin = (await db.select().from(users).where(eq(users.email, "admin@example.test")))[0];
+    // Two invented contracts, when there is a place to keep files.
+    if (admin && storage) await seedDocuments(db, storage, toUser(admin));
     if (admin) await seedPerformance(ctx.perf, toUser(admin));
     await seedScorecards(ctx, today);
     await seedRfps(ctx, today);

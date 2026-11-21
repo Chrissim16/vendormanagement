@@ -1,6 +1,7 @@
-import { aliasedTable, and, asc, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
+import { aliasedTable, and, asc, desc, eq, gte, ilike, lte, or, sql, type SQL } from "drizzle-orm";
 import { agreements, documents, renewalDecisions, users, vendors } from "../../../db/schema";
 import type { AgreementInput, AgreementStatus, Kind } from "../../../shared/agreements";
+import type { Day } from "../../../shared/dates";
 import { like } from "../../platform/http";
 import type { Queryable } from "../../platform/ports/types";
 
@@ -26,6 +27,9 @@ export interface AgreementFilter {
   vendorId?: string;
   status?: AgreementStatus;
   owner?: string;
+  /** The end or renewal date falls on or after this day, and on or before the next. An agreement without an end date matches neither. */
+  endsFrom?: Day;
+  endsTo?: Day;
   sort: AgreementSort;
   dir: "asc" | "desc";
   page: number;
@@ -49,6 +53,8 @@ function conditions(f: Omit<AgreementFilter, "sort" | "dir" | "page" | "pageSize
   if (f.vendorId) where.push(eq(agreements.vendorId, f.vendorId));
   if (f.status) where.push(eq(agreements.status, f.status));
   if (f.owner) where.push(eq(agreements.ownerUserId, f.owner));
+  if (f.endsFrom) where.push(gte(agreements.endDate, f.endsFrom));
+  if (f.endsTo) where.push(lte(agreements.endDate, f.endsTo));
   return where.length ? and(...where) : undefined;
 }
 
@@ -120,9 +126,21 @@ export const decisionsOf = (db: Queryable, agreementId: string) =>
   db.select().from(renewalDecisions).where(eq(renewalDecisions.agreementId, agreementId)).orderBy(desc(renewalDecisions.termEndDate));
 export const insertDecision = async (db: Queryable, d: typeof renewalDecisions.$inferInsert) => (await db.insert(renewalDecisions).values(d).returning())[0]!;
 
-export const documentsOf = (db: Queryable, agreementId: string) => db.select().from(documents).where(eq(documents.agreementId, agreementId)).orderBy(desc(documents.createdAt));
+/** A document as lists show it: everything but its text, which can be long, and whether that text could be read (null while it has not been tried). */
+const documentColumns = {
+  id: documents.id,
+  title: documents.title,
+  fileName: documents.fileName,
+  contentType: documents.contentType,
+  sizeBytes: documents.sizeBytes,
+  createdAt: documents.createdAt,
+  createdBy: documents.createdBy,
+  readable: sql<boolean | null>`case when ${documents.extractedText} is null then null else ${documents.extractedText} <> '' end`,
+};
+export const documentsOf = (db: Queryable, agreementId: string) =>
+  db.select(documentColumns).from(documents).where(eq(documents.agreementId, agreementId)).orderBy(desc(documents.createdAt));
 export const getDocument = async (db: Queryable, id: string) => (await db.select().from(documents).where(eq(documents.id, id)))[0];
-export const insertDocument = async (db: Queryable, d: typeof documents.$inferInsert) => (await db.insert(documents).values(d).returning())[0]!;
+export const insertDocument = async (db: Queryable, d: typeof documents.$inferInsert) => (await db.insert(documents).values(d).returning(documentColumns))[0]!;
 export const deleteDocument = (db: Queryable, id: string) => db.delete(documents).where(eq(documents.id, id));
 
 export const getVendorBrief = async (db: Queryable, id: string) =>

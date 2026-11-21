@@ -4,8 +4,9 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { Link, NavLink, useLocation, useOutlet } from "react-router-dom";
 import { useWarnings } from "../lib/data";
-import { bouncy, page, spring } from "../lib/motion";
+import { bouncy, page } from "../lib/motion";
 import { toggleTheme } from "../lib/theme";
+import { SearchBar } from "./SearchBar";
 import { DevSwitcher, useMe } from "./session";
 import { IconButton } from "./ui";
 
@@ -50,29 +51,6 @@ function NavItem({ to, label, icon: Icon }: Item) {
         </>
       )}
     </NavLink>
-  );
-}
-
-const hints = ["Search vendors, agreements, invoices", "Try “SOWs ending this quarter”", "Try “who has no NDA”"];
-
-/** Placeholder until search arrives with the Ask milestone; the hints slide to show what it will do. */
-function SearchHint() {
-  const [i, setI] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => setI((n) => (n + 1) % hints.length), 3200);
-    return () => clearInterval(t);
-  }, []);
-  return (
-    <div aria-hidden className="flex h-[38px] max-w-[420px] flex-1 items-center gap-2.5 overflow-hidden rounded-full bg-sunk px-4 text-ink-2">
-      <Search size={15} />
-      <div className="relative h-5 flex-1">
-        <AnimatePresence initial={false}>
-          <motion.span key={i} className="absolute inset-0 truncate leading-5" initial={{ y: 20 }} animate={{ y: 0 }} exit={{ y: -20 }} transition={spring}>
-            {hints[i]}
-          </motion.span>
-        </AnimatePresence>
-      </div>
-    </div>
   );
 }
 
@@ -134,7 +112,7 @@ export function Layout() {
 
       <div className="flex h-full min-w-0 flex-col">
         <header className="flex items-center gap-2.5 border-b border-line px-10 py-4">
-          <SearchHint />
+          <SearchBar />
           <span className="flex-1" />
           <IconButton label="Switch between light and dark" onClick={toggleTheme}>
             <Moon size={17} aria-hidden />
