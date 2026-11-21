@@ -141,7 +141,7 @@ export function VendorPerformancePage() {
   const p = q.data;
   const admin = me.role === "admin";
   const chosen = p?.months.at(-1);
-  const setMonth = (m: Month) => setUrl({ month: m === p?.currentMonth ? "" : m });
+  const setMonth = (m: Month) => setUrl({ month: m === p?.currentMonth ? "" : m }, { push: true });
   const done = async () => {
     setDialog(null);
     await qc.invalidateQueries();
@@ -164,8 +164,8 @@ export function VendorPerformancePage() {
         title={p?.vendor.name ?? " "}
       >
         {p?.link && <SyncButton vendorId={vendorId} disabled={!p.link.active} />}
-        {p && admin && <Button onClick={() => setDialog("link")}>{p.link ? "Edit board link" : "Link a board"}</Button>}
-        {p && (
+        {p?.vendor.scoringEnabled && admin && <Button onClick={() => setDialog("link")}>{p.link ? "Edit board link" : "Link a board"}</Button>}
+        {p?.vendor.scoringEnabled && (
           <Button variant="primary" onClick={() => setDialog("targets")}>
             Set targets
           </Button>
@@ -176,6 +176,10 @@ export function VendorPerformancePage() {
         <Loading />
       ) : q.isError ? (
         <ErrorState message={messageOf(q.error)} onRetry={() => void q.refetch()} />
+      ) : !p!.vendor.scoringEnabled ? (
+        <EmptyState title="This vendor is not scored">
+          Scoring is switched off for {p!.vendor.name}, so it has no performance figures and no scorecards. Switch scoring on in the vendor's details if it should be measured.
+        </EmptyState>
       ) : !p!.link || !chosen ? (
         <EmptyState
           title="No Jira board linked"
@@ -239,7 +243,6 @@ export function VendorPerformancePage() {
                     <th scope="row" className="py-2.5 font-normal">
                       <Link
                         to={`/performance/${vendorId}?month=${m.month}`}
-                        replace
                         aria-current={m.month === chosen.month ? "true" : undefined}
                         className={m.month === chosen.month ? "font-semibold" : link}
                       >

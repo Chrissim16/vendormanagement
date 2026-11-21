@@ -781,12 +781,22 @@ describe("J-5 performance overview", () => {
     expect(o.unlinked.map((u) => u.name)).not.toEqual(expect.arrayContaining(["Harrowick Partners"]));
     expect(o.unlinked.map((u) => u.name)).not.toEqual(expect.arrayContaining(["Bluefinch Systems"]));
 
-    const v = await newVendor("Unscored With Board", { scoringEnabled: false });
+    // A vendor that is not scored cannot be given a board.
+    const never = await newVendor("Never Scored", { scoringEnabled: false });
     handBoard("UNSC", () => [ticket("UNSC-1", "2026-11-05T09:00:00Z")]);
-    await link(v, { projectKey: "UNSC", escalationMethod: "status", l2Values: ["Second line"] });
-    const names = (await overview()).rows.map((r: OverviewRow) => r.vendorName);
-    expect(names).not.toContain("Unscored With Board");
-    // Its own page still works.
+    const refused = await link(never, { projectKey: "UNSC", escalationMethod: "status", l2Values: ["Second line"] });
+    expect(refused.status).toBe(409);
+    expect(refused.body.error.message).toMatch(/Scoring is switched off for this vendor/);
+
+    // A vendor with a board whose scoring is then switched off leaves every performance view, and comes back with its figures when scoring returns.
+    const v = await newVendor("Unscored With Board");
+    expect((await link(v, { projectKey: "UNSC", escalationMethod: "status", l2Values: ["Second line"] })).status).toBe(200);
+    expect((await overview()).rows.map((r: OverviewRow) => r.vendorName)).toContain("Unscored With Board");
+    expect((await t.as(MEMBER).patch(`/api/vendors/${v}`).send({ scoringEnabled: false })).status).toBe(200);
+    expect((await overview()).rows.map((r: OverviewRow) => r.vendorName)).not.toContain("Unscored With Board");
+    expect(await perf(v)).toMatchObject({ vendor: { scoringEnabled: false }, link: null, months: [] });
+    expect((await t.as(MEMBER).get(`/api/performance/vendors/${v}/tickets`).query({ set: "backlog" })).body.total).toBe(0);
+    await t.as(MEMBER).patch(`/api/vendors/${v}`).send({ scoringEnabled: true });
     expect((await perf(v)).link).toMatchObject({ projectKey: "UNSC", tickets: 1 });
     await link(v, { projectKey: "UNSC", escalationMethod: "status", l2Values: ["Second line"], active: false });
   });

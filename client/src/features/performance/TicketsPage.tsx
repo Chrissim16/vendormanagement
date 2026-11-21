@@ -106,7 +106,15 @@ export function TicketsPage() {
       />
       <div className="flex flex-wrap items-end gap-4">
         <Field label="Search these tickets" htmlFor="ticket-search">
-          <TextInput id="ticket-search" type="search" placeholder="Key, summary or status" value={search} onChange={(e) => setSearch(e.target.value)} className="w-[280px]" />
+          <TextInput
+            id="ticket-search"
+            type="search"
+            maxLength={200}
+            placeholder="Key, summary or status"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-[280px]"
+          />
         </Field>
         <p role="status" className="num pb-2 text-ink-2">
           {d && !q.isPlaceholderData ? plural(d.total, "ticket") : " "}

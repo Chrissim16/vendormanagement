@@ -17,6 +17,8 @@ export function VendorPerformanceTab({ vendorId }: { vendorId: string }) {
       {p.link ? "Open performance" : "Go to performance"}
     </Link>
   );
+  if (!p.vendor.scoringEnabled)
+    return <p className="text-ink-2">Scoring is switched off for this vendor, so it has no performance figures. Switch it on with Edit vendor if it should be measured.</p>;
   if (!p.link || !month)
     return (
       <>

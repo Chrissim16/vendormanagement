@@ -95,7 +95,7 @@ export async function syncBoard(ctx: PerformanceContext, linkId: string): Promis
     fetched = await ctx.jira.fetchTickets(link.projectKey, link.lastSyncedAt, startedAt);
   } catch (e) {
     console.error(`Jira sync of ${link.projectKey} failed:`, (e as Error).message);
-    const message = `${jiraProblem(e, link.projectKey)} The tickets fetched earlier are unchanged.`;
+    const message = `${jiraProblem(e, link.projectKey)} ${link.lastSyncedAt ? "The tickets fetched earlier are unchanged." : "No tickets have been fetched for this board yet."}`;
     await ctx.db.transaction(async (tx) => {
       const current = await repo.lockLink(tx, link.id);
       // Another sync finished in the meantime: its result is the newer truth, and this failure is not shown over it.
@@ -225,6 +225,9 @@ export async function saveLink(ctx: PerformanceContext, vendorId: string, input:
   if (Object.keys(errors).length) failFields(errors);
   const vendor = await repo.getVendor(ctx.db, vendorId);
   if (!vendor) throw notFound("That vendor");
+  // A vendor that is not scored has no place in the performance views (P-5), so it gets no board either.
+  if (!vendor.scoringEnabled)
+    throw new AppError(409, "not_scored", "Scoring is switched off for this vendor, so it has no performance figures. Switch scoring on for the vendor first.");
   let board;
   try {
     board = await ctx.jira.describeBoard(value.projectKey);
@@ -317,7 +320,8 @@ export async function saveTargets(ctx: PerformanceContext, vendorId: string, inp
       if (next === null) await repo.removeTarget(tx, vendorId, key);
       else await repo.setTarget(tx, vendorId, key, next, by.email);
       const words = (v: number | null) => (v == null ? null : formatTarget(key, v));
-      changes[`target for ${metricInfo[key].label.toLowerCase()}`] = { from: words(current[key]), to: words(next) };
+      const name = metricInfo[key].label;
+      changes[`target for ${name.startsWith("SLA") ? name : name.toLowerCase()}`] = { from: words(current[key]), to: words(next) };
       current[key] = next;
     }
     if (Object.keys(changes).length) await audit(tx, { userEmail: by.email, action: "update", entityType: "vendor", entityId: vendorId, summary: vendor.name, changes });
@@ -369,7 +373,8 @@ export async function getVendorPerformance(ctx: PerformanceContext, vendorId: st
   const vendor = await repo.getVendor(ctx.db, vendorId);
   if (!vendor) throw notFound("That vendor");
   const { month, currentMonth } = chosenMonth(ctx, monthAsked);
-  const [row, targets] = await Promise.all([repo.linkOfVendor(ctx.db, vendorId), targetsByVendor(ctx.db, [vendorId])]);
+  // A vendor switched to "not scored" keeps its board and tickets, but shows no figures until scoring is switched on again (P-5).
+  const [row, targets] = await Promise.all([vendor.scoringEnabled ? repo.linkOfVendor(ctx.db, vendorId) : undefined, targetsByVendor(ctx.db, [vendorId])]);
   const months = [];
   if (row) {
     const now = ctx.now();
@@ -396,7 +401,7 @@ export async function listTickets(
   const vendor = await repo.getVendor(ctx.db, vendorId);
   if (!vendor) throw notFound("That vendor");
   const { month } = chosenMonth(ctx, f.month);
-  const link = await repo.linkOfVendor(ctx.db, vendorId);
+  const link = vendor.scoringEnabled ? await repo.linkOfVendor(ctx.db, vendorId) : undefined;
   if (!link) return { items: [], total: 0, month, vendorName: vendor.name };
   const { items, total } = await repo.listTickets(ctx.db, { ...f, month, linkId: link.id }, ctx.timeZone, ctx.now());
   return {

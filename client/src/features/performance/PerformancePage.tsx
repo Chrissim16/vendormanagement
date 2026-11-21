@@ -13,7 +13,7 @@ import { BoardLinkForm, linkSavedMessage } from "./BoardLinkForm";
 import { everyWords, metricLabel, MetricFigure, MissedPill, MonthSelect, monthTitle, plural, SyncButton, SyncStatus } from "./parts";
 
 const columns: Column<OverviewRow>[] = [
-  { key: "vendor", header: "Vendor", sort: "vendor", cell: (r) => r.vendorName, className: "min-w-[170px]" },
+  { key: "vendor", header: "Vendor", sort: "vendor", cell: (r) => r.vendorName, className: "min-w-[150px]" },
   ...metricKeys.map((k): Column<OverviewRow> => ({
     key: k,
     header: metricLabel(k),
@@ -93,7 +93,7 @@ export function PerformancePage() {
       ) : (
         <>
           <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
-            <MonthSelect id="perf-month" value={o!.month} current={o!.currentMonth} onChange={(m) => setUrl({ month: m === o!.currentMonth ? "" : m })} />
+            <MonthSelect id="perf-month" value={o!.month} current={o!.currentMonth} onChange={(m) => setUrl({ month: m === o!.currentMonth ? "" : m }, { push: true })} />
             <p className="min-w-0 flex-1 pb-2 text-ink-2">
               Tickets are fetched from Jira {everyWords(o!.syncEveryMinutes)}
               {fetched?.length ? "." : ". Nothing has been fetched yet."}

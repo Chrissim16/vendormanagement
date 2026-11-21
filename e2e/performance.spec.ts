@@ -297,13 +297,16 @@ test.describe("J-5 performance overview", () => {
       for (const k of metricKeys) {
         const cell = r.metrics.cells[k];
         await expect(row).toContainText(formatMetric(k, cell.valueTenths));
-        if (cell.verdict !== "none") await expect(row).toContainText(`${cell.verdict === "missed" ? "Missed" : "Met"} · target ${formatMetric(k, cell.targetTenths)}`);
+        if (cell.verdict !== "none")
+          await expect(row).toContainText(
+            `${cell.verdict === "missed" ? "Missed" : "Met"} · ${metricInfo[k].direction === "at_least" ? "min" : "max"} ${formatMetric(k, cell.targetTenths)}`,
+          );
       }
       await expect(row).toContainText(r.metrics.missed ? `${r.metrics.missed} missed` : "Targets met");
     }
     // Bluefinch has slipped on first response: marked as missed, in words as well as colour.
     const blu = table.locator("tbody tr").filter({ hasText: "Bluefinch Systems" });
-    await expect(blu).toContainText("Missed · target 95%");
+    await expect(blu).toContainText("Missed · min 95%");
     // Tarnwick has no satisfaction target: a figure without a verdict.
     await expect(table.locator("tbody tr").filter({ hasText: "Tarnwick Software" })).toContainText("No target");
 

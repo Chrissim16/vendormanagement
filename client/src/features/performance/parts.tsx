@@ -46,7 +46,9 @@ export function MonthSelect({ id, value, current, onChange }: { id: string; valu
 export function Verdict({ metric, cell, short }: { metric: MetricKey; cell: MetricCell; short?: boolean }) {
   if (cell.targetTenths == null) return <span className="text-[12.5px] text-ink-3">No target</span>;
   // In a table column the direction is left out: the column heading and the verdict already say it.
-  const target = `target ${short ? formatMetric(metric, cell.targetTenths) : formatTarget(metric, cell.targetTenths)}`;
+  const target = short
+    ? `${metricInfo[metric].direction === "at_least" ? "min" : "max"} ${formatMetric(metric, cell.targetTenths)}`
+    : `target ${formatTarget(metric, cell.targetTenths)}`;
   if (cell.verdict === "none") return <span className="text-[12.5px] text-ink-2">Nothing to measure · {target}</span>;
   return (
     <span className="inline-flex items-center gap-1.5 text-[12.5px]">
@@ -75,7 +77,15 @@ export function MissedPill({ missed, anyTarget, short }: { missed: number; anyTa
 
 /** How often tickets arrive by themselves, in words. */
 export const everyWords = (minutes: number) =>
-  minutes <= 0 ? "only when someone presses Sync now" : minutes === 60 ? "every hour" : minutes % 60 === 0 ? `every ${minutes / 60} hours` : `every ${minutes} minutes`;
+  minutes <= 0
+    ? "only when someone presses Sync now"
+    : minutes === 1
+      ? "every minute"
+      : minutes === 60
+        ? "every hour"
+        : minutes % 60 === 0
+          ? `every ${minutes / 60} hours`
+          : `every ${minutes} minutes`;
 
 /** When a board was last fetched, how much came in, and what went wrong if it failed (J-2). */
 export function SyncStatus({ link }: { link: BoardLink }) {

@@ -133,6 +133,7 @@ and from the sync: `last_synced_at`, `last_attempt_at`, `last_sync_ok`, `last_sy
 - Changing the level values works every held ticket's level out again; nothing is fetched.
 - `active` off stops the sync and keeps the tickets and figures. Links are switched off, not deleted.
 - Creating and changing a link is recorded in the vendor's history.
+- Only a vendor with `scoring_enabled` can be linked. A linked vendor whose scoring is later switched off keeps its board and tickets but shows no figures anywhere until scoring is switched on again.
 
 **Ticket** (copied from Jira): `board_link_id*`, `key*`, `summary`, `description`, `status`, `created_at*`, `resolved_at`,
 `first_response_at`, `first_response_breached`, `resolution_breached`, `highest_level*` (1 | 2 | 3), `csat` (1 to 5), `csat_at`,
