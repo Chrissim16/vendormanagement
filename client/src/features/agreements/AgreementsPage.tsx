@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { agreementStatuses, kindLabels, kinds, statusLabels, type Agreement } from "../../../../shared/agreements";
+import { agreementStatuses, kindLabels, kinds, kindShort, statusLabels, type Agreement } from "../../../../shared/agreements";
 import { formatMoney } from "../../../../shared/money";
 import type { Page } from "../../../../shared/types";
 import type { Vendor } from "../../../../shared/vendors";
@@ -33,8 +33,8 @@ export function AgreementTabs() {
 const columns: Column<Agreement>[] = [
   { key: "title", header: "Agreement", sort: "title", cell: (a) => a.title, className: "w-[24%]" },
   { key: "vendor", header: "Vendor", sort: "vendor", cell: (a) => <span className="text-ink-2">{a.vendorName}</span>, className: "w-[17%]" },
-  { key: "kind", header: "Kind", sort: "kind", cell: (a) => <Pill tone={a.kind === "sow" ? "brand" : "none"}>{kindLabels[a.kind]}</Pill> },
-  { key: "status", header: "Status", sort: "status", cell: (a) => <Pill tone={agreementTone(a.status)}>{statusLabels[a.status]}</Pill> },
+  { key: "kind", header: "Kind", sort: "kind", cell: (a) => <Pill tone={a.kind === "sow" ? "brand" : "none"}>{kindShort[a.kind]}</Pill>, className: "w-[130px]" },
+  { key: "status", header: "Status", sort: "status", cell: (a) => <Pill tone={agreementTone(a.status)}>{statusLabels[a.status]}</Pill>, className: "w-[160px]" },
   { key: "endDate", header: "End date", sort: "endDate", cell: (a) => <span className="num text-ink-2">{day(a.endDate)}</span> },
   { key: "owner", header: "Owner", sort: "owner", cell: (a) => <span className="text-ink-2">{a.ownerName}</span> },
   {

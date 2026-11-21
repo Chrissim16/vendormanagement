@@ -139,7 +139,7 @@ export function AgreementForm({
       <form onSubmit={form.submit} noValidate className="flex flex-col gap-5">
         <Grid>
           {!a && !vendorId && (
-            <SelectField form={shown} name="vendorId" label="Vendor" value={v.vendorId} onChange={(e) => set("vendorId", e.target.value)}>
+            <SelectField form={shown} name="vendorId" label="Vendor" value={v.vendorId} onChange={(e) => form.patch({ vendorId: e.target.value, parentMsaId: "" })}>
               <option value="">Choose a vendor</option>
               {vendors.data?.items.map((x) => (
                 <option key={x.id} value={x.id}>

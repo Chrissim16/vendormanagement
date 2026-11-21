@@ -65,7 +65,7 @@ heading with a marker in front of it.
 | Table header | 12.5px, 500, faint text |
 | Large figure | 52px (tile), 34px (overall score), 26px (fact), 600 |
 
-Figures that line up use tabular numerals. Dates read `21 Nov 2026`. Money reads `€ 240,000`.
+Figures that line up use tabular numerals. Dates read `21 Nov 2026`. Money reads `€ 240,000.00`, always with cents, so amounts line up and an invoice of € 1,249.50 is never shown rounded.
 
 ## Shape and space
 

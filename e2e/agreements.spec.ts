@@ -65,6 +65,31 @@ test.describe("A-1 add an agreement", () => {
   });
 });
 
+test.describe("A-1 add an agreement, changing vendor", () => {
+  test("A-1 choosing another vendor forgets the MSA picked for the first one", async ({ page, context, request }) => {
+    const first = await newVendor(request, "First");
+    await newAgreement(request, first, { kind: "msa", title: "First MSA" });
+    const second = await newVendor(request, "Second");
+    await signInAs(context, MEMBER);
+    await page.goto("/agreements");
+    await page.getByRole("button", { name: "Add agreement" }).click();
+    const dialog = page.getByRole("dialog", { name: "Add agreement" });
+    await dialog.getByLabel("Vendor").selectOption({ label: first.name });
+    await dialog.getByLabel("Kind").selectOption("sow");
+    await dialog.getByLabel("Under MSA (optional)").selectOption({ label: "First MSA" });
+    await dialog.getByLabel("Vendor").selectOption({ label: second.name });
+    await expect(dialog.getByLabel("Under MSA (optional)")).toHaveValue("");
+    await dialog.getByLabel("Title").fill("Second vendor SOW");
+    await dialog.getByLabel("Pricing").selectOption("fixed");
+    await dialog.getByLabel("Budget").fill("100");
+    await dialog.getByLabel("Start date").fill("2026-06-01");
+    await dialog.getByLabel("End date").fill("2026-12-31");
+    await dialog.getByRole("button", { name: "Add agreement" }).click();
+    await expect(page.getByRole("heading", { name: "Second vendor SOW", level: 1 })).toBeVisible();
+    await expect(page.getByRole("link", { name: second.name })).toBeVisible();
+  });
+});
+
 test.describe("A-2 status", () => {
   test("A-2 active needs the signed date and ended needs a reason", async ({ page, context, request }) => {
     const v = await newVendor(request, "Status");
@@ -89,6 +114,7 @@ test.describe("A-2 status", () => {
     await dialog.getByLabel("Why it ended").selectOption("replaced");
     await dialog.getByRole("button", { name: "Save changes" }).click();
     await expect(page.getByText("Ended", { exact: true })).toBeVisible();
+    await expect(page.getByText("Replaced", { exact: true })).toBeVisible();
   });
 });
 
@@ -228,7 +254,9 @@ test.describe("A-6 renewals", () => {
     await page.goto(`/agreements/${late.id}`);
     await expect(page.getByText("10 Feb 2028").first()).toBeVisible();
     await expect(page.getByText("Renew for the term ending 10 Feb 2027: Agreed at the same price")).toBeVisible();
-    await expect(page.getByText("Nothing due")).toBeVisible();
+    // The new term is far off: the page counts down to its deadline, as the renewals page would.
+    await expect(page.getByText("356 days to the notice deadline")).toBeVisible();
+    await expect(page.getByText("renewal decision for the term ending 10 Feb 2027 set to renew")).toBeVisible();
   });
 });
 
@@ -403,7 +431,7 @@ test.describe("throughout M1", () => {
   });
 
   test("X-4 dates are shown as day month year on every M1 page", async ({ page, context, request }) => {
-    const v = await newVendor(request, "Dates", { ndaRequired: true });
+    const v = await newVendor(request, "Dates", { ndaRequired: true, dpaRequired: true });
     const a = await newAgreement(request, v, { ...sub, title: "Dated licence" });
     await newAgreement(request, v, { kind: "dpa", title: "Dated DPA", status: "active", signedOn: "2025-03-04", endDate: "2026-10-05" });
     await signInAs(context, MEMBER);

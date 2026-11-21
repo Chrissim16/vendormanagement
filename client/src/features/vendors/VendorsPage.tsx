@@ -14,7 +14,7 @@ import { VendorPanel, vendorTone } from "./VendorPanel";
 
 const columns: Column<Vendor>[] = [
   { key: "name", header: "Vendor", sort: "name", cell: (v) => v.name, className: "w-[28%]" },
-  { key: "type", header: "Type", sort: "type", cell: (v) => <span className="text-ink-2">{vendorTypeLabels[v.type]}</span> },
+  { key: "type", header: "Type", sort: "type", cell: (v) => <span className="text-ink-2">{vendorTypeLabels[v.type]}</span>, className: "w-[130px]" },
   { key: "owner", header: "Owner", sort: "owner", cell: (v) => <span className="text-ink-2">{v.ownerName}</span> },
   { key: "agreements", header: "Active agreements", cell: (v) => <span className="num">{v.activeAgreements}</span> },
   {
@@ -22,7 +22,7 @@ const columns: Column<Vendor>[] = [
     header: "Needs attention",
     cell: (v) => (v.warnings ? <Pill tone="warn">{v.warnings === 1 ? "1 warning" : `${v.warnings} warnings`}</Pill> : <span className="text-ink-3">Nothing</span>),
   },
-  { key: "status", header: "Status", sort: "status", cell: (v) => <Pill tone={vendorTone(v.status)}>{vendorStatusLabels[v.status]}</Pill> },
+  { key: "status", header: "Status", sort: "status", cell: (v) => <Pill tone={vendorTone(v.status)}>{vendorStatusLabels[v.status]}</Pill>, className: "w-[130px]" },
 ];
 const PAGE_SIZE = 25;
 
@@ -44,7 +44,10 @@ export function VendorsPage() {
 
   return (
     <>
-      <PageHeader context={total === undefined ? " " : `${total} ${total === 1 ? "vendor" : "vendors"}${url.status ? "" : ", not counting offboarded ones"}`} title="Vendors">
+      <PageHeader
+        context={total === undefined || list.isPlaceholderData ? " " : `${total} ${total === 1 ? "vendor" : "vendors"}${url.status ? "" : ", not counting offboarded ones"}`}
+        title="Vendors"
+      >
         <Button variant="primary" onClick={() => setAdding(true)}>
           Add vendor
         </Button>

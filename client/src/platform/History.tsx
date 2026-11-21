@@ -30,7 +30,7 @@ const names: Record<string, string> = {
 const fieldName = (key: string) =>
   key
     .split(" ")
-    .map((part) => names[part] ?? part)
+    .map((part) => names[part] ?? (isDay(part) ? formatDay(part) : part))
     .join(" ");
 const money = new Set(["budgetMinor", "annualValueMinor"]);
 /** Fields whose values are the app's own codes, such as in_negotiation. */

@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { documentTypes, kindLabels, MAX_DOCUMENT_BYTES, pricingLabels, statusLabels, type AgreementDetail, type DocumentInfo } from "../../../../shared/agreements";
-import { formatDay } from "../../../../shared/dates";
+import { daysBetween, formatDay } from "../../../../shared/dates";
 import { formatMoney } from "../../../../shared/money";
 import { api, ApiError, messageOf } from "../../lib/api";
 import { formatDate } from "../../lib/format";
@@ -31,6 +31,12 @@ const Section = ({ title, children, action }: { title: string; children: React.R
   </section>
 );
 const size = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`);
+const reasonLabels = { completed: "Completed", expired: "Expired", terminated: "Terminated", replaced: "Replaced" } as const;
+/** How far off the notice deadline is, for a subscription with nothing due yet. The same count the renewals page shows. */
+const daysLeft = (today: string, deadline: string) => {
+  const n = daysBetween(today, deadline);
+  return `${n} ${n === 1 ? "day" : "days"} to the notice deadline`;
+};
 const decisionLabels = { renew: "Renew", renegotiate: "Renegotiate", terminate: "Terminate" } as const;
 
 function Documents({ a }: { a: AgreementDetail }) {
@@ -120,8 +126,15 @@ export function AgreementPage() {
   if (q.isError) {
     return (
       <>
-        <PageHeader title={q.error instanceof ApiError && q.error.status === 404 ? "That agreement does not exist" : "The agreement could not be loaded"} />
-        <ErrorState message={messageOf(q.error)} onRetry={() => void q.refetch()} />
+        <PageHeader
+          title={q.error instanceof ApiError && (q.error.status === 404 || q.error.status === 400) ? "That agreement does not exist" : "The agreement could not be loaded"}
+        />
+        <ErrorState
+          message={
+            q.error instanceof ApiError && (q.error.status === 404 || q.error.status === 400) ? "The link may be old, or the agreement may never have existed." : messageOf(q.error)
+          }
+          onRetry={q.error instanceof ApiError && q.error.status < 500 && q.error.status !== 0 ? undefined : () => void q.refetch()}
+        />
       </>
     );
   }
@@ -158,6 +171,7 @@ export function AgreementPage() {
         <Pill tone={a.kind === "sow" ? "brand" : "none"}>{kindLabels[a.kind]}</Pill>
         <Pill tone={agreementTone(a.status)}>{statusLabels[a.status]}</Pill>
         {a.pricing && <Pill>{pricingLabels[a.pricing]}</Pill>}
+        {a.status === "ended" && a.endReason && <Pill>{reasonLabels[a.endReason]}</Pill>}
         <Button onClick={() => setDialog("edit")}>Edit or change status</Button>
       </PageHeader>
 
@@ -182,7 +196,7 @@ export function AgreementPage() {
       {a.kind === "subscription" && a.status === "active" && (
         <Section title="Renewal" action={!a.decidedForTerm ? <Button onClick={() => setDialog("decision")}>Record decision</Button> : undefined}>
           <div className="flex flex-wrap items-center gap-3">
-            {pill ? <Pill tone={pill.tone}>{pill.label}</Pill> : <Pill tone="ok">{a.decidedForTerm ? "Decided" : "Nothing due"}</Pill>}
+            {pill ? <Pill tone={pill.tone}>{pill.label}</Pill> : a.decidedForTerm ? <Pill tone="ok">Decided</Pill> : <Pill>{daysLeft(today, a.noticeDeadline!)}</Pill>}
             <p className="text-ink-2">
               {a.renewalState === "overdue" && `The notice deadline passed on ${formatDay(a.noticeDeadline!)} and no decision has been recorded.`}
               {a.renewalState === "due_soon" && `Decide before ${formatDay(a.noticeDeadline!)} whether to renew, renegotiate or terminate.`}

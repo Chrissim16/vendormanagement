@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { kindLabels, statusLabels, type Agreement } from "../../../../shared/agreements";
+import { kindShort, statusLabels, type Agreement } from "../../../../shared/agreements";
 import { formatDay } from "../../../../shared/dates";
 import { formatMoney } from "../../../../shared/money";
 import type { Page } from "../../../../shared/types";
@@ -58,7 +58,7 @@ export function AgreementRow({ a, indent }: { a: Agreement; indent?: boolean }) 
       to={`/agreements/${a.id}`}
       className={`group flex items-center gap-3.5 border-b border-line py-3.5 transition-[padding] duration-300 ease-out hover:pl-2.5 ${indent ? "ml-6 border-l border-l-line-2 pl-4" : ""}`}
     >
-      <Pill tone={a.kind === "sow" ? "brand" : "none"}>{kindLabels[a.kind]}</Pill>
+      <Pill tone={a.kind === "sow" ? "brand" : "none"}>{kindShort[a.kind]}</Pill>
       <span className="min-w-0 flex-1">
         <span className="block truncate font-semibold">{a.title}</span>
         <span className="block truncate text-[13px] text-ink-2">
@@ -198,7 +198,11 @@ export function VendorPanel({ id, onClose }: { id: string; onClose: () => void }
         {tab === "agreements" && (
           <>
             {agreements.isPending && <Loading rows={3} />}
-            {agreements.data && list.length === 0 && <p className="text-ink-2">No agreements yet. Start with the MSA or the NDA.</p>}
+            {agreements.data && list.length === 0 && (
+              <p className="text-ink-2">
+                {v.status === "offboarded" ? "This vendor has no agreements. An offboarded vendor cannot receive new ones." : "No agreements yet. Start with the MSA or the NDA."}
+              </p>
+            )}
             <div className="flex flex-col">
               {msas.map((m) => (
                 <div key={m.id}>

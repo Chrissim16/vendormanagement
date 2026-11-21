@@ -6,6 +6,9 @@ export const kinds = ["msa", "sow", "subscription", "nda", "dpa"] as const;
 export type Kind = (typeof kinds)[number];
 export const kindLabels: Record<Kind, string> = { msa: "MSA", sow: "SOW", subscription: "Subscription", nda: "NDA", dpa: "Data processing agreement" };
 
+/** For pills in lists, where the full name does not fit. */
+export const kindShort: Record<Kind, string> = { ...kindLabels, dpa: "DPA" };
+
 export const agreementStatuses = ["draft", "in_negotiation", "out_for_signature", "active", "ended"] as const;
 export type AgreementStatus = (typeof agreementStatuses)[number];
 export const statusLabels: Record<AgreementStatus, string> = {

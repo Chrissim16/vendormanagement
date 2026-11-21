@@ -108,3 +108,8 @@ body {
 :root[data-mode="dark"] {
   --crit-text: #ff8d95;
 }
+
+/* Figures in tables line up. */
+table {
+  font-variant-numeric: tabular-nums;
+}
