@@ -18,7 +18,7 @@ async function decorate(db: Queryable, rows: Row[], today: Day): Promise<Vendor[
     db,
     rows.map((r) => r.vendor.id),
   );
-  const warnings = buildWarnings(input.vendors, input.agreements, today);
+  const warnings = buildWarnings(input.vendors, input.agreements, today, input.windows);
   return rows.map(({ vendor: v, ownerName }) => {
     const mine = input.agreements.filter((a) => a.vendorId === v.id);
     return {

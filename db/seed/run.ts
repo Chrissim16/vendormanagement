@@ -6,6 +6,8 @@ import type { VendorInput } from "../../shared/vendors";
 import { toUser } from "../../server/platform/auth";
 import type { Db } from "../../server/platform/ports/types";
 import { createAgreement } from "../../server/features/agreements/service";
+import { saveInvoice } from "../../server/features/invoices/service";
+import { decideChange, getDelivery, saveChange, saveConsultant, saveMilestone, saveRateLine } from "../../server/features/sow/service";
 import { createVendor, saveContact } from "../../server/features/vendors/service";
 
 /** Invented people only. Never real names or addresses. */
@@ -23,6 +25,20 @@ interface SeedVendor {
   owner: string;
   contact?: [name: string, jobTitle: string];
   agreements: (A & { under?: string })[];
+  /** Day rates per role: [role, rate in cents, days ago it started]. */
+  rates?: [role: string, dayRateMinor: number, since: number][];
+}
+
+/** What happens on a SOW or subscription after it is signed. Amounts are in cents; days are relative to today. */
+interface Delivery {
+  /** A change approved before the milestones were planned: [title, budget change, new end in days from today]. */
+  approvedChange?: [title: string, budgetChangeMinor: number, newEnd: number];
+  proposedChange?: [title: string, budgetChangeMinor: number];
+  /** [title, amount, due, delivered (omit while open)] */
+  milestones?: [title: string, amountMinor: number | null, due: number, delivered?: number][];
+  consultants?: [name: string, role: string][];
+  /** [invoice number, amount, date, milestone title] */
+  invoices?: [number: string, amountMinor: number, date: number, milestone?: string][];
 }
 
 /**
@@ -52,6 +68,12 @@ function sampleVendors(today: Day): SeedVendor[] {
       vendor: { name: "Bluefinch Systems", type: "software", legalName: "Bluefinch Systems B.V. (invented)", country: "NL", website: "https://bluefinch.example.test" },
       owner: "mira@example.test",
       contact: ["Lena Hartog", "Service Director"],
+      rates: [
+        ["Lead architect", 1_250_00, 800],
+        ["Lead architect", 1_350_00, 140],
+        ["Data engineer", 980_00, 800],
+        ["Service desk analyst", 520_00, 800],
+      ],
       agreements: [
         { kind: "msa", title: "Master services agreement", status: "active", signedOn: d(-990) },
         {
@@ -61,9 +83,9 @@ function sampleVendors(today: Day): SeedVendor[] {
           status: "active",
           signedOn: d(-230),
           startDate: d(-225),
-          endDate: d(99),
+          endDate: d(9),
           pricing: "fixed",
-          budgetMinor: 240_000_00,
+          budgetMinor: 210_000_00,
         },
         {
           kind: "sow",
@@ -95,6 +117,10 @@ function sampleVendors(today: Day): SeedVendor[] {
       vendor: { name: "Quillon Consulting", type: "consultancy", country: "NL" },
       owner: "sanne@example.test",
       contact: ["Pieter Aalto", "Partner"],
+      rates: [
+        ["Senior consultant", 1_450_00, 440],
+        ["Analyst", 890_00, 440],
+      ],
       agreements: [
         { kind: "msa", title: "Framework agreement", status: "active", signedOn: d(-440) },
         {
@@ -170,6 +196,53 @@ function sampleVendors(today: Day): SeedVendor[] {
   ];
 }
 
+/** Milestones, changes, consultants and invoices for the sample agreements, by agreement title. Invented, like everything here. */
+const sampleDelivery: Record<string, Delivery> = {
+  "SOW 07 Ledger migration": {
+    approvedChange: ["Extra entity in scope", 30_000_00, 99],
+    proposedChange: ["Extended hypercare", 12_000_00],
+    milestones: [
+      ["Design sign-off", 42_000_00, -220, -222],
+      ["Data model and mapping", 58_000_00, -144, -144],
+      ["First trial migration", 60_000_00, -52, -33],
+      ["Parallel run", 45_000_00, 55],
+      ["Go-live and handover", 35_000_00, 99],
+    ],
+    consultants: [
+      ["Alex Example", "Lead architect"],
+      ["Robin Sample", "Data engineer"],
+    ],
+    invoices: [
+      ["BF-2026-014", 42_000_00, -215, "Design sign-off"],
+      ["BF-2026-031", 58_000_00, -140, "Data model and mapping"],
+      ["BF-2026-058", 60_000_00, -30, "First trial migration"],
+      ["BF-2026-061", 15_000_00, -24],
+      ["BF-2026-066", 14_200_00, -12],
+      ["BF-2026-070", 10_000_00, -3],
+    ],
+  },
+  "SOW 09 Helpdesk run": {
+    consultants: [["Sam Placeholder", "Service desk analyst"]],
+    invoices: Array.from({ length: 9 }, (_, n): [string, number, number] => [`BF-RUN-${String(n + 1).padStart(2, "0")}`, 8_200_00, -270 + n * 30]),
+  },
+  "SOW 02 Close process review": {
+    milestones: [
+      ["Current state report", null, -60, -58],
+      ["Recommendations", null, 10],
+    ],
+    consultants: [["Jo Specimen", "Senior consultant"]],
+    invoices: [
+      ["QC-1101", 14_000_00, -80],
+      ["QC-1117", 14_000_00, -50],
+      ["QC-1130", 14_000_00, -20],
+    ],
+  },
+  "Reporting suite": { invoices: [["TW-88213", 48_000_00, -284]] },
+  "Service desk licence": { invoices: [["MG-5521", 26_400_00, -248]] },
+  "Data platform licence": { invoices: [["SC-00917", 31_500_00, -115]] },
+  "Research membership": { invoices: [["EA-2026-77", 62_000_00, -65]] },
+};
+
 /** Loads the sample people, vendors and agreements. Safe to run more than once. */
 export async function seed(db: Db, today: Day) {
   await db
@@ -200,6 +273,40 @@ export async function seed(db: Db, today: Day) {
     for (const { under, ...a } of s.agreements) {
       const created = await createAgreement(db, { ...a, vendorId: vendor.id, ownerUserId: idOf(s.owner), parentMsaId: under ? made.get(under) : null }, admin, today);
       made.set(a.title, created.id);
+    }
+    for (const [role, dayRateMinor, since] of s.rates ?? [])
+      await saveRateLine(db, { vendorId: vendor.id }, { role, dayRateMinor, validFrom: addDays(today, -since) }, admin, today);
+    for (const [title, id] of made) {
+      const plan = sampleDelivery[title];
+      if (!plan) continue;
+      const day = (n: number) => addDays(today, n);
+      if (plan.approvedChange) {
+        const [changeTitle, budgetChangeMinor, newEnd] = plan.approvedChange;
+        const after = await saveChange(db, { sowId: id }, { title: changeTitle, requestedOn: day(-70), budgetChangeMinor, newEndDate: day(newEnd) }, admin, today);
+        await decideChange(db, after.changeRequests.at(-1)!.id, "approved", admin, today);
+      }
+      for (const [mTitle, amountMinor, due, delivered] of plan.milestones ?? []) {
+        await saveMilestone(
+          db,
+          { sowId: id },
+          { title: mTitle, amountMinor, dueDate: day(due), ...(delivered === undefined ? {} : { status: "delivered", deliveredOn: day(delivered) }) },
+          admin,
+          today,
+        );
+      }
+      if (plan.proposedChange)
+        await saveChange(db, { sowId: id }, { title: plan.proposedChange[0], requestedOn: day(-6), budgetChangeMinor: plan.proposedChange[1] }, admin, today);
+      for (const [name, role] of plan.consultants ?? []) await saveConsultant(db, { sowId: id }, { name, role }, admin, today);
+      const milestoneIds = plan.milestones ? new Map((await getDelivery(db, id, today)).milestones.map((m) => [m.title, m.id])) : new Map<string, string>();
+      for (const [invoiceNumber, amountMinor, date, milestone] of plan.invoices ?? []) {
+        await saveInvoice(
+          db,
+          null,
+          { agreementId: id, invoiceNumber, amountMinor, invoiceDate: day(date), milestoneId: milestone ? milestoneIds.get(milestone) : null },
+          admin,
+          today,
+        );
+      }
     }
   }
   // Tie the people to a known state for anyone re-seeding.

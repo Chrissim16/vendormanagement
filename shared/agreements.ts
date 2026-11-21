@@ -28,7 +28,8 @@ export type Decision = (typeof decisions)[number];
 
 export const DEFAULT_NOTICE_DAYS = 90;
 /** Warning windows from the PRD. They become admin settings in a later milestone. */
-export const WINDOWS = { noticeDays: 90, sowEndDays: 30 } as const;
+export const WINDOWS = { noticeDays: 90, sowEndDays: 30, budgetWarningPct: 80 };
+export type Windows = typeof WINDOWS;
 
 const day = z.string().refine(isDay, "Enter a real date.");
 const optionalDay = z.preprocess((v) => (v === "" || v === undefined ? null : v), day.nullable());
@@ -179,6 +180,8 @@ export interface DecisionInfo {
   termEndDate: Day;
 }
 export interface AgreementDetail extends Agreement {
+  /** Everything invoiced against this agreement so far, in its own currency. */
+  invoicedMinor: number;
   parent: { id: string; title: string } | null;
   children: { id: string; title: string; status: AgreementStatus; endDate: Day | null; budgetMinor: number | null; currency: Currency }[];
   documents: DocumentInfo[];

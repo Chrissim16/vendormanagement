@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { inPlace, noticeDeadline, renewalState, WINDOWS, type AgreementStatus, type Kind } from "./agreements";
+import { inPlace, noticeDeadline, renewalState, WINDOWS, type AgreementStatus, type Kind, type Windows } from "./agreements";
+import { formatMoney, type Currency } from "./money";
+import { budgetView } from "./sow";
 import { daysBetween, formatDay, type Day } from "./dates";
 
 export const vendorTypes = ["software", "consultancy", "advisory"] as const;
@@ -90,7 +92,8 @@ export function paperwork(kind: "nda" | "dpa", required: boolean, agreements: Pa
   return mine.some((a) => a.status === "active") ? "expired" : "missing";
 }
 
-export type WarningType = "renewal_overdue" | "renewal_due" | "sow_ending" | "sow_past_end" | "nda_missing" | "nda_expired" | "dpa_missing" | "dpa_expired";
+export type WarningType =
+  "renewal_overdue" | "renewal_due" | "sow_ending" | "sow_past_end" | "budget_warning" | "budget_overrun" | "nda_missing" | "nda_expired" | "dpa_missing" | "dpa_expired";
 
 export interface Warning {
   type: WarningType;
@@ -125,12 +128,16 @@ export interface WarningAgreement extends Paper {
   noticePeriodDays: number | null;
   /** A renewal decision exists for the term ending on `endDate`. */
   decidedForTerm: boolean;
+  /** For a SOW: its budget, what has been invoiced against it, and the currency of both. */
+  budgetMinor?: number | null;
+  invoicedMinor?: number;
+  currency?: Currency;
 }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 /** Everything that needs attention today (A-7). Pure, so it can be tested without a database. */
-export function buildWarnings(vendors: WarningVendor[], agreements: WarningAgreement[], today: Day, windows = WINDOWS): Warning[] {
+export function buildWarnings(vendors: WarningVendor[], agreements: WarningAgreement[], today: Day, windows: Windows = WINDOWS): Warning[] {
   const byVendor = new Map(vendors.map((v) => [v.id, v]));
   const out: Warning[] = [];
   for (const a of agreements) {
@@ -160,6 +167,22 @@ export function buildWarnings(vendors: WarningVendor[], agreements: WarningAgree
           date: deadline,
         });
       }
+    }
+    if (a.kind === "sow" && a.budgetMinor != null && a.currency) {
+      const b = budgetView(a.budgetMinor, a.invoicedMinor ?? 0, windows.budgetWarningPct);
+      const invoiced = formatMoney(b.invoicedMinor, a.currency);
+      const budget = formatMoney(a.budgetMinor, a.currency);
+      if (b.state === "over")
+        out.push({ ...base, type: "budget_overrun", tone: "bad", label: "Over budget", detail: `${invoiced} has been invoiced against a budget of ${budget}.`, date: null });
+      if (b.state === "warn")
+        out.push({
+          ...base,
+          type: "budget_warning",
+          tone: "warn",
+          label: `${b.usedPct}% of budget used`,
+          detail: `${invoiced} of the ${budget} budget has been invoiced.`,
+          date: a.endDate,
+        });
     }
     if (a.kind === "sow" && a.endDate) {
       const left = daysBetween(today, a.endDate);

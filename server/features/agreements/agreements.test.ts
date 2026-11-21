@@ -306,11 +306,13 @@ describe("A-7 warnings", () => {
       ["renewal_overdue", "Tarnwick Software · Reporting suite"],
       ["sow_ending", "Quillon Consulting · SOW 02 Close process review"],
       ["renewal_due", "Mossgate IT · Service desk licence"],
+      ["budget_warning", "Bluefinch Systems · SOW 07 Ledger migration"],
       ["nda_missing", "Larkspur Data"],
     ]);
     expect(list[1]).toMatchObject({ tone: "bad", label: "Overdue" });
     expect(list[2]).toMatchObject({ tone: "warn", label: "Ends in 18 days" });
     expect(list[3]!.label).toBe("27 days");
+    expect(list[4]).toMatchObject({ tone: "warn", label: "83% of budget used", detail: "€ 199,200.00 of the € 240,000.00 budget has been invoiced." });
     expect(list.every((w) => w.vendorId)).toBe(true);
     expect(list.filter((w) => w.type.startsWith("renewal") || w.type.startsWith("sow")).every((w) => w.agreementId)).toBe(true);
     await other.close();

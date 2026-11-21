@@ -25,11 +25,13 @@ import { AppError, notFound } from "../../platform/errors";
 import { failFields, toCsv } from "../../platform/http";
 import { explain } from "../../platform/ports/explain";
 import type { Db, Queryable, StoragePort, Tx } from "../../platform/ports/types";
+import { getSettings } from "../settings/service";
+import { checkSowEdit, invoicedByAgreement } from "../sow/service";
 import * as repo from "./repo";
 
 type Row = NonNullable<Awaited<ReturnType<typeof repo.getAgreement>>>;
 
-function toAgreement({ agreement: a, vendorName, ownerName, decisionId }: Row, today: Day): Agreement {
+function toAgreement({ agreement: a, vendorName, ownerName, decisionId }: Row, today: Day, noticeDays: number): Agreement {
   const { createdBy: _c, updatedBy: _u, updatedAt: _t, createdAt, ...fields } = a;
   return {
     ...fields,
@@ -37,14 +39,15 @@ function toAgreement({ agreement: a, vendorName, ownerName, decisionId }: Row, t
     ownerName,
     createdAt: createdAt.toISOString(),
     noticeDeadline: noticeDeadline(a),
-    renewalState: renewalState(a, today, decisionId !== null),
+    renewalState: renewalState(a, today, decisionId !== null, noticeDays),
     decidedForTerm: decisionId !== null,
   };
 }
 
 export async function listAgreements(db: Db, filter: repo.AgreementFilter, today: Day): Promise<Page<Agreement>> {
-  const { items, total } = await repo.listAgreements(db, filter);
-  return { items: items.map((r) => toAgreement(r, today)), total };
+  const settings = await getSettings(db);
+  const { items, total } = await repo.listAgreements(db, filter, settings.gbpToEurE4);
+  return { items: items.map((r) => toAgreement(r, today, settings.noticeDays)), total };
 }
 
 const toDocument = (d: Awaited<ReturnType<typeof repo.documentsOf>>[number]): DocumentInfo => ({
@@ -61,14 +64,17 @@ export async function getAgreement(db: Queryable, id: string, today: Day): Promi
   const row = await repo.getAgreement(db, id);
   if (!row) throw notFound("That agreement");
   const a = row.agreement;
-  const [parent, children, documents, decisions] = await Promise.all([
+  const [settings, invoiced, parent, children, documents, decisions] = await Promise.all([
+    getSettings(db),
+    invoicedByAgreement(db, [id]),
     a.parentMsaId ? repo.getParent(db, a.parentMsaId) : undefined,
     a.kind === "msa" ? repo.childrenOf(db, id) : [],
     repo.documentsOf(db, id),
     repo.decisionsOf(db, id),
   ]);
   return {
-    ...toAgreement(row, today),
+    ...toAgreement(row, today, settings.noticeDays),
+    invoicedMinor: invoiced.get(id) ?? 0,
     parent: parent ? { id: parent.id, title: parent.title } : null,
     children,
     documents: documents.map(toDocument),
@@ -119,6 +125,13 @@ export async function updateAgreement(db: Db, id: string, input: unknown, by: Us
       if (vendor?.status === "offboarded") failFields({ status: "This vendor is offboarded, so its agreements cannot be made active." });
     }
     if (Object.keys(errors).length) failFields(errors);
+    if (value.kind === "sow") {
+      const sowErrors = await checkSowEdit(tx, id, value);
+      if (Object.keys(sowErrors).length) failFields(sowErrors);
+    }
+    // Invoices are in the agreement's currency; changing it would silently relabel what was paid.
+    if (value.currency !== current.currency && (await invoicedByAgreement(tx, [id])).has(id))
+      failFields({ currency: `This agreement already has invoices in ${current.currency}. Remove them before changing the currency.` });
     await checkLinks(tx, value, { owner: value.ownerUserId !== current.ownerUserId, parent: value.parentMsaId !== current.parentMsaId });
     if (value.parentMsaId === id) failFields({ parentMsaId: "An agreement cannot sit under itself." });
     const { vendorId: _v, ...fields } = value;
@@ -162,7 +175,7 @@ export async function listRenewals(db: Db, windowDays: number, owner: string | u
   const rows = await repo.activeSubscriptions(db, owner);
   return rows
     .filter((r) => r.decisionId === null && r.agreement.endDate)
-    .map((r) => ({ ...toAgreement(r, today), renewalState: renewalState(r.agreement, today, false, windowDays) }))
+    .map((r) => ({ ...toAgreement(r, today, windowDays), renewalState: renewalState(r.agreement, today, false, windowDays) }))
     .filter((a) => a.renewalState === "overdue" || a.renewalState === "due_soon")
     .sort((a, b) => daysBetween(b.noticeDeadline!, a.noticeDeadline!) || a.title.localeCompare(b.title));
 }
@@ -170,7 +183,8 @@ export async function listRenewals(db: Db, windowDays: number, owner: string | u
 const EXPORT_LIMIT = 5000;
 
 export async function exportCsv(db: Db, filter: Omit<repo.AgreementFilter, "page" | "pageSize">, today: Day): Promise<string> {
-  const { items, total } = await repo.listAgreements(db, { ...filter, page: 1, pageSize: EXPORT_LIMIT });
+  const settings = await getSettings(db);
+  const { items, total } = await repo.listAgreements(db, { ...filter, page: 1, pageSize: EXPORT_LIMIT }, settings.gbpToEurE4);
   if (total > EXPORT_LIMIT) throw new AppError(400, "too_many", `There are ${total} agreements to export, more than fits in one file. Narrow the filters first.`);
   const money = (minor: number | null) => (minor == null ? "" : (minor / 100).toFixed(2));
   return toCsv(
@@ -192,7 +206,7 @@ export async function exportCsv(db: Db, filter: Omit<repo.AgreementFilter, "page
       "Auto renews",
     ],
     items.map((r) => {
-      const a = toAgreement(r, today);
+      const a = toAgreement(r, today, settings.noticeDays);
       return [
         a.vendorName,
         kindLabels[a.kind],

@@ -9,9 +9,12 @@ import { todayIn } from "../shared/dates";
 import { adminRoutes } from "./features/admin/routes";
 import { agreementRoutes } from "./features/agreements/routes";
 import { importRoutes } from "./features/import/routes";
+import { invoiceRoutes } from "./features/invoices/routes";
+import { getSettings, saveSettings } from "./features/settings/service";
+import { sowRoutes } from "./features/sow/routes";
 import { vendorRoutes } from "./features/vendors/routes";
 import { listWarnings } from "./features/warnings/service";
-import { authenticate } from "./platform/auth";
+import { authenticate, currentUser, requireRole } from "./platform/auth";
 import type { Config } from "./platform/config";
 import { AppError, errorHandler } from "./platform/errors";
 import type { Ports } from "./platform/ports/types";
@@ -73,6 +76,10 @@ export function createApp(config: Config, ports: Ports) {
   api.use(vendorRoutes(db, today));
   api.use(agreementRoutes(db, ports.storage, today));
   api.get("/warnings", async (_req, res) => res.json(await listWarnings(db, today())));
+  api.use(sowRoutes(db, today));
+  api.use(invoiceRoutes(db, today));
+  api.get("/settings", async (_req, res) => res.json(await getSettings(db)));
+  api.put("/admin/settings", requireRole("admin"), async (req, res) => res.json(await saveSettings(db, req.body, currentUser(req))));
   api.use("/admin/import", importRoutes(db, today));
   api.use((_req, _res, next) => next(new AppError(404, "not_found", "That address does not exist.")));
 
