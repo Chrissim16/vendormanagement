@@ -309,6 +309,8 @@ const CHANGE =
 /** Which look-ups a question is about, by its words. A real model reads the question; this only recognises the common ones. */
 function planFor(q: string, ask: AskPlanAsk): { name: string; args: Record<string, unknown> }[] | "change" | null {
   if (CHANGE.test(q)) return "change";
+  // "Invoices over 50,000": the lists have no filter by amount, and leaving the condition out would answer a different question.
+  if (/\b(over|above|more than|greater than|under|below|less than|at least|at most|exceed\w*)\s+(?:[€£]|eur|gbp)?\s?\d/.test(q)) return null;
   // A name the app does not know is passed on as it was written, so the answer can say that it is not known.
   const vendor = mentioned(q, ask.vendors) ?? /\b(?:of|for|with|at|from|by) ([A-Z][\p{L}\p{N}&.-]*(?: (?:[A-Z][\p{L}\p{N}&.-]*|Ltd|B\.V\.|GmbH|Inc))+)/u.exec(ask.question)?.[1];
   const period = periodIn(q, ask);
@@ -319,12 +321,16 @@ function planFor(q: string, ask: AskPlanAsk): { name: string; args: Record<strin
       /\b(documents?|clauses?|wording|liabilit\w*|indemni\w*|governing law|penalt\w*|passages?|confidential\w*|contract says?|agreement says?|say about|says about|stat(e|es) about)\b/,
     )
   ) {
-    // The words to look for: the question without the vendor's own name, which is in every one of its documents.
+    // The words to look for: the question without the words that only ask ("what does ... say about") and without the vendor's own name, which is in every one of its documents.
     const first = vendor?.split(/\s+/)[0]?.toLowerCase();
-    const text = ask.question
-      .split(/\s+/)
-      .filter((w) => !first || !w.toLowerCase().startsWith(first))
-      .join(" ");
+    const asking =
+      /^(what|which|where|when|who|how|does|do|did|is|are|the|a|an|of|in|on|for|with|about|says?|said|mentions?|mentioned|states?|contracts?|documents?|agreements?|our|we|have|has|there|any|that|to|and|or|it|its)$/i;
+    const text =
+      ask.question
+        .split(/[^\p{L}\p{N}'’&.-]+/u)
+        .map((w) => w.replace(/^[.'’-]+|[.'’?!-]+$/g, ""))
+        .filter((w) => w && !asking.test(w) && (!first || !w.toLowerCase().startsWith(first)))
+        .join(" ") || ask.question;
     return [{ name: "documents", args: { text, vendor } }];
   }
 

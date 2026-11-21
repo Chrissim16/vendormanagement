@@ -662,13 +662,21 @@ const runners: { [N in LookupName]: Runner<N> } = {
       rows: [],
       passages: found.passages,
       more: 0,
-      note: !found.readable
-        ? `There ${vendor ? `is no document of ${vendor.name}` : "is no uploaded document"} with text the app can read, so nothing could be looked up.`
-        : !found.passages.length
-          ? `No passage in the ${found.readable} ${found.readable === 1 ? "document" : "documents"} searched mentions these words.`
-          : found.unreadable
+      note:
+        [
+          !found.readable
+            ? `There ${vendor ? `is no document of ${vendor.name}` : "is no uploaded document"} with text the app can read, so nothing could be looked up.`
+            : !found.passages.length
+              ? `No passage in the ${found.readable} ${found.readable === 1 ? "document" : "documents"} searched mentions these words.`
+              : found.missing.length
+                ? `No document searched mentions ${found.missing.map((w) => `“${w}”`).join(" or ")}, so these passages are about the rest of what was looked for.`
+                : "",
+          found.readable && found.unreadable
             ? `${found.unreadable} ${found.unreadable === 1 ? "document has" : "documents have"} no readable text (a scan, for example) and could not be searched.`
-            : null,
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" ") || null,
     };
   },
 };

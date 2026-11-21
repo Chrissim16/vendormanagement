@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expectAccessible, MEMBER, signInAs } from "./helpers";
+import { expectAccessible, expectDistinctLandmarks, MEMBER, signInAs } from "./helpers";
 
 /** C-1 in the browser, on the sample data with today pinned to 21 Nov 2026 and the stand-in AI. Other tests add records of their own, so counts are compared with the list pages, not written down here. */
 
@@ -25,7 +25,7 @@ test.describe("C-1 ask a question", () => {
     const answer = page.getByRole("article", { name: "Answer to: Which RFPs are still running?" });
     await expect(answer.getByText("AI answer")).toBeVisible();
     await expect(answer).toContainText("Written by the AI on 21 Nov 2026");
-    await expect(answer.getByRole("region", { name: "Records used" }).getByRole("link", { name: "RFP Expense management tool" })).toBeVisible();
+    await expect(answer.getByRole("group", { name: "Records used" }).getByRole("link", { name: "RFP Expense management tool" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Nothing asked yet" })).toHaveCount(0);
   });
 
@@ -33,7 +33,7 @@ test.describe("C-1 ask a question", () => {
     await page.goto("/ask");
     const answer = await ask(page, "Which SOWs end next quarter?");
     await expect(answer).toContainText("SOW 04 Payment controls");
-    const looked = answer.getByRole("region", { name: "What the app looked up" });
+    const looked = answer.getByRole("group", { name: "What the app looked up" });
     await expect(looked).toContainText("SOWs · ending 1 Jan 2027 to 31 Mar 2027");
     const found = Number((await looked.locator("dd").first().innerText()).trim());
     expect(found).toBeGreaterThanOrEqual(2);
@@ -51,14 +51,14 @@ test.describe("C-1 ask a question", () => {
     // Back on Ask the conversation is still there, and a record link opens the record.
     await page.goBack();
     const again = page.getByRole("article", { name: "Answer to: Which SOWs end next quarter?" });
-    await again.getByRole("region", { name: "Records used" }).getByRole("link", { name: "SOW 04 Payment controls" }).click();
+    await again.getByRole("group", { name: "Records used" }).getByRole("link", { name: "SOW 04 Payment controls" }).click();
     await expect(page.getByRole("heading", { name: "SOW 04 Payment controls", level: 1 })).toBeVisible();
   });
 
   test("C-1 an amount in an answer is the invoice list's own total", async ({ page }) => {
     await page.goto("/ask");
     const answer = await ask(page, "How much did Sedgewater invoice in the last 12 months?");
-    const looked = answer.getByRole("region", { name: "What the app looked up" });
+    const looked = answer.getByRole("group", { name: "What the app looked up" });
     const figures = await looked
       .locator("dl div")
       .evaluateAll((els) => Object.fromEntries(els.map((e) => [e.querySelector("dt")!.textContent, e.querySelector("dd")!.textContent])));
@@ -73,7 +73,7 @@ test.describe("C-1 ask a question", () => {
     await page.goto("/ask");
     const answer = await ask(page, "What does the contract with Bluefinch say about liability?");
     await expect(answer).toContainText("Bluefinch MSA (invented sample).pdf”, page 2");
-    const passage = answer.getByRole("region", { name: "Passages" }).getByRole("figure").first();
+    const passage = answer.getByRole("group", { name: "Passages" }).getByRole("figure").first();
     await expect(passage.locator("blockquote")).toContainText("4. Liability");
     await expect(passage.locator("blockquote")).toContainText("limited to 150% of the fees paid in that year");
     await expect(passage.getByRole("link", { name: "Bluefinch MSA (invented sample).pdf" })).toHaveAttribute("href", /\/api\/documents\/[0-9a-f-]{36}\/download/);
@@ -87,7 +87,7 @@ test.describe("C-1 ask a question", () => {
     const weather = await ask(page, "What is the weather tomorrow?");
     await expect(weather).toContainText("The app does not hold the answer to that, so I will not guess.");
     await expect(weather.getByText("Not answered")).toBeVisible();
-    await expect(weather.getByRole("region", { name: "Records used" })).toHaveCount(0);
+    await expect(weather.getByRole("group", { name: "Records used" })).toHaveCount(0);
 
     const before = await (await page.request.get("/api/vendors?q=Bluefinch")).json();
     const change = await ask(page, "Delete the vendor Bluefinch Systems");
@@ -198,6 +198,8 @@ test.describe("C-1 ask a question", () => {
     await expect(answer).not.toContainText("2026-12-09");
     await ask(page, "What is the weather tomorrow?");
     await expectAccessible(page);
+    // Three answers on the page, each with its own records and look-ups.
+    await expectDistinctLandmarks(page);
     await page.getByRole("button", { name: "Switch between light and dark" }).click();
     await expectAccessible(page);
     await page.getByRole("button", { name: "Switch between light and dark" }).click();

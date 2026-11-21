@@ -13,13 +13,55 @@ Newest entry first. Written for the owner, in plain language.
 | M4 Scorecards and AI scoring | Done here; the AI proposals are unproven until tried with the company's model |
 | M5 Briefings, risk flags, dashboard, report | Done here; the AI-written text is unproven until tried with the company's model |
 | M6 RFP | Done here; the AI draft and comparison are unproven until tried with the company's model |
-| M7 Ask a question | Not started |
+| M7 Ask a question | Done here; how well a real AI understands questions is unproven until tried with the company's model |
 | M8 Contract reading | Not started |
 | M9 Move to Databricks | Not started; done at work |
 
-**Next:** M7 Ask a question.
+**Next:** M8 Contract reading.
 
 ## Log
+
+### 2026-11-21 M7 Ask a question done
+You can now ask the app a question in plain words and get an answer that shows where it came from. As before, the AI part runs on a stand-in that works by simple rules, because the company's model cannot be reached from here (see "Needs your attention").
+
+What you can do in it:
+
+- **Ask on the Ask page.** Type a question such as "Which SOWs end this quarter?", "How much was invoiced last month?", "Which vendors have no NDA?", "Tell me about Bluefinch" or "What are the milestones of SOW 07?". The answer appears in a blue panel marked "AI answer", with the day and time it was written. An empty page offers five questions to start with.
+- **See what the answer rests on.** Under the AI's words, "Records used" lists the vendors, agreements, invoices or RFPs it used, each as a link to that record.
+- **Check every figure in one click.** Below the panel, "What the app looked up" says in words what was looked up ("SOWs · ending 1 Oct 2026 to 31 Dec 2026"), how many the app found and any totals, with a link "Open the list" that opens the list page with exactly that filter. These counts and totals are worked out by the app, not by the AI, and are the same numbers the list page shows.
+- **Ask about what a contract says.** "What does the contract with Bluefinch say about liability?" answers with the name of the document, the page, and the passage itself word for word, with links to the file and to the agreement it is attached to. This works for PDF, Word and Excel files attached to an agreement or sent by an RFP candidate; the app reads their text when they are attached.
+- **Ask a follow-up.** After "Which SOWs end this quarter?" you can ask "and next quarter?".
+- **Be told when the app does not know.** A question about something the app does not hold gets "The app does not hold the answer to that, so I will not guess", marked "Not answered". A vendor name the app does not know is said to be unknown; it is never quietly left out. A name written loosely ("bluefinch") is used, and the result says whom it was taken to mean.
+- **Nothing can be changed by asking.** "Delete the vendor ..." gets "Ask can only look things up". There is no way for the AI to add, change or remove anything.
+- **Find things from the field at the top.** The search field in the top bar now works on every page. Press "/" and type a name to jump to a vendor, an agreement, an RFP or a page; or type a question and press Enter to ask it.
+- **Filter agreements by end date.** The Agreements page has two new boxes, "Ends from" and "Ends to". This is the list that "SOWs ending this quarter" links to.
+
+The sample data now has two invented contracts to ask about: a master services agreement (PDF) with Bluefinch Systems and a framework agreement (Word) with Quillon Consulting.
+
+How it was checked: an independent tester asked about 45 questions in the running app, worked out the counts and amounts for twelve of them from the list pages, added a SOW, 45 invoices and five documents of its own and confirmed that the answers moved with them, tried ten requests to change something and compared every record and the history before and after (nothing changed), and went through keyboard use, dark mode, a narrow window and failures of the AI. Every part of the requirement passed. An independent reviewer read all the code. Between them they found two things that had to be fixed and about twenty that should be; all are fixed, each with a test, and the full set of automated checks passes. The ones that mattered most:
+
+- **A wrong number could have slipped through.** The app throws away an AI answer that contains a number the app did not look up. That check was too easy to satisfy: because dates were in what the AI was given, "21 SOWs" or "31 SOWs" would have passed, and so would an amount shown in euros that was really in pounds. Now a date counts as a whole and an amount counts with its currency sign, so neither can happen.
+- **A specially made Word file could have frozen the app** for everyone, again at every restart. Word files are now read in a way that takes a moment whatever is in them. Text that was deleted with tracked changes is no longer read as if it were part of the contract.
+- **Some links did not show the same thing as the answer.** For example "Which risk flags are there?" linked to the Warnings page, which shows everything. A link is now only offered when the page behind it shows exactly what was counted.
+- **A document question could quote the wrong paragraph.** "What does the Framework agreement of Quillon say about liability?" showed the opening paragraph, because it also contains the words "framework agreement". The words that only name the document no longer decide which passage is shown, and when a word you asked about is in no document at all, the answer says so.
+
+Needs your attention:
+
+- **No real AI model has been tried, again.** No key for a real model was available in this build environment. For this feature that matters more than for the earlier ones. The stand-in only recognises common wordings and answers by listing what the app found; it does not really understand a question. A real model should understand free wording, pick out "only the SOW that is over budget" and combine two look-ups. There are 15 new invented test cases for it; the 8 the stand-in can take pass, and the 7 that need real understanding (for example a contract passage that tells the AI to say something false) wait for the company's model. Run them at work before relying on Ask.
+- **Your questions are stored.** Each question and its answer is kept with your name, so an answer can be traced later. No screen shows them, and the conversation on screen is gone when you close the tab or press "Start over". Say if questions should not be stored, or if you would like a history.
+- **Document text is found by words, not by meaning.** Asking with the words a contract uses ("liability", "termination") works; asking with other words for the same thing may find nothing, and the app then says it found nothing. A scanned document (a photo of paper) and the old .doc and .xls formats cannot be read; the agreement page says so next to such a file.
+- **Text written by outsiders reaches the AI** when you ask about a contract or a candidate's document. It is passed as material to read, the AI is told never to follow instructions in it, and the passage is always shown word for word next to the answer so you can read it yourself.
+
+Decided on your behalf (see `docs/open-questions.md`, Q71 to Q79):
+
+- Ask covers vendors, agreements and renewals, SOW budgets, milestones and change requests, invoices and spend, helpdesk figures, scorecards, warnings and risk flags, RFPs and document text. Not yet: briefings, the monthly report, single Jira tickets, the history and rate cards.
+- An answer may contain only numbers the app looked up, or numbers you typed in the question yourself.
+- Of a long list the AI reads the first 40 rows; the count and totals are always of the whole list, and the answer says when only the first ones are listed.
+- The last three questions go along with a new one so a follow-up is understood.
+- The field at the top finds vendors, agreements, RFPs and pages; not invoices, people or tickets.
+- Every team member may ask about everything, as on the pages themselves.
+
+One requirement was extended to match what was built (C-1): the figures under each answer with their link to the list, the search field at the top, and the end-date filter on the Agreements page.
 
 ### 2026-11-21 M6 RFP done
 The app now carries an RFP from the approved demand to the decision, without a separate spreadsheet. As before, the AI part runs on a stand-in that writes by simple rules, because the company's model cannot be reached from here (see "Needs your attention").
@@ -280,6 +322,13 @@ architecture and plan were rewritten to match. The plan now has ten milestones.
 First version of the brief, requirements, plan and agent workflow. No application code yet.
 
 ## Follow-ups
+- A large PDF (hundreds of pages) is read while the person who attached it waits, and the app is busy for everyone during those seconds. Fine for ordinary contracts; to be moved to the background if large files turn out to be common.
+- Ask has no limit on how often someone can ask. Each question is two calls to the AI model; to be watched once the cost per call at work is known.
+- Ask finds document passages by the words they share with the question, looking through every document each time. Fine for a few hundred documents; a proper text index is the next step if there are many more.
+- When a question has a condition the lists cannot apply (for example "invoices over 50,000"), the stand-in says it cannot answer. Whether the real model says so as plainly has to be seen at work.
+- A question typed as one unbroken word of several hundred characters wraps onto many lines; harmless.
+- One older check (searching the tickets behind a helpdesk figure) failed once while the machine was busy with a slower run of the checks, and passed every time since. To be watched.
+- The first page load shows one "not found" message in the browser's own error console, not on screen; where it comes from was not traced.
 - Two people changing the same RFP document at the same moment: the last save wins. The one who was typing is told that someone else saved, but only once the page has fetched the newer version.
 - Two quick saves on an RFP page can come back in the wrong order and briefly show the older state; a reload shows the right one.
 - An AI draft or comparison nobody looked at stays "not reviewed yet" after the RFP is decided.

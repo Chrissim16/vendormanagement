@@ -75,11 +75,8 @@ export function SearchBar() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-  // Going to another page closes the list and empties the field.
-  useEffect(() => {
-    setOpen(false);
-    setText("");
-  }, [location.pathname, location.search]);
+  // Going to another page by any other way closes the list. What is being typed is left alone.
+  useEffect(() => setOpen(false), [location.pathname, location.search]);
 
   const query = { q: found, pageSize: 5 };
   const on = open && found.length >= 2;
@@ -91,6 +88,8 @@ export function SearchBar() {
   const fresh = found === q;
 
   const go = (to: string) => {
+    // Emptied here, at once, and not when the new page arrives: by then the next search may already be being typed.
+    setText("");
     setOpen(false);
     input.current?.blur();
     navigate(to);

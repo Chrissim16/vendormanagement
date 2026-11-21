@@ -43,7 +43,7 @@ function AnswerText({ text }: { text: string }) {
     else blocks.push({ list: isItem, lines: [isItem ? line.replace(/^[-•]\s+/, "") : line] });
   }
   return (
-    <div className="flex flex-col gap-2.5 text-[15px] leading-relaxed">
+    <div className="flex flex-col gap-2.5 text-[15px] leading-relaxed [overflow-wrap:anywhere]">
       {blocks.map((b, i) =>
         b.list ? (
           <ul key={i} className="flex list-disc flex-col gap-1 pl-5">
@@ -88,7 +88,7 @@ function Lookup({ l }: { l: AskLookup }) {
         <p className="min-w-0 flex-1 font-medium">{l.title}</p>
         {l.href && (
           <Link to={l.href} className={underlined}>
-            {l.count == null ? "Open the page" : "Open the list"}
+            {l.href === "/" ? "Open the dashboard" : l.count == null ? "Open the page" : "Open the list"}
           </Link>
         )}
       </div>
@@ -110,7 +110,7 @@ function Lookup({ l }: { l: AskLookup }) {
 function Answer({ a, newest }: { a: AskAnswer; newest: boolean }) {
   return (
     <motion.article {...(newest ? item : {})} aria-label={`Answer to: ${a.question}`} className="flex flex-col gap-3.5">
-      <h2 className="text-[17px] font-semibold tracking-[-0.01em] [text-wrap:balance]">{a.question}</h2>
+      <h2 className="text-[17px] font-semibold tracking-[-0.01em] [overflow-wrap:anywhere] [text-wrap:balance]">{a.question}</h2>
       <div className="flex flex-col gap-4 rounded-2xl bg-tint px-5 py-5">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <AiLabel>AI answer</AiLabel>
@@ -122,14 +122,14 @@ function Answer({ a, newest }: { a: AskAnswer; newest: boolean }) {
         </div>
         <AnswerText text={a.answer} />
         {a.passages.length > 0 && (
-          <section aria-label="Passages" className="flex flex-col gap-2.5">
+          <div role="group" aria-label="Passages" className="flex flex-col gap-2.5">
             {a.passages.map((p) => (
               <Passage key={p.ref} p={p} />
             ))}
-          </section>
+          </div>
         )}
         {a.sources.length > 0 && (
-          <section aria-label="Records used" className="flex flex-col gap-1.5">
+          <div role="group" aria-label="Records used" className="flex flex-col gap-1.5">
             <h3 className="text-[13px] font-semibold text-ink-2">Records used</h3>
             <ul className="flex flex-wrap gap-x-5 gap-y-1.5">
               {a.sources.map((s, i) => (
@@ -140,18 +140,18 @@ function Answer({ a, newest }: { a: AskAnswer; newest: boolean }) {
                 </li>
               ))}
             </ul>
-          </section>
+          </div>
         )}
       </div>
       {a.lookups.length > 0 && (
-        <section aria-label="What the app looked up" className="flex flex-col">
+        <div role="group" aria-label="What the app looked up" className="flex flex-col">
           <h3 className="pb-2 text-[13px] font-semibold text-ink-2">What the app looked up</h3>
           <ul className="flex flex-col border-b border-line">
             {a.lookups.map((l, i) => (
               <Lookup key={i} l={l} />
             ))}
           </ul>
-        </section>
+        </div>
       )}
     </motion.article>
   );
@@ -249,7 +249,7 @@ export function AskPage() {
       <div aria-live="polite" className="flex flex-col gap-10">
         {ask.isPending && (
           <div className="flex flex-col gap-2">
-            <h2 className="text-[17px] font-semibold tracking-[-0.01em]">{ask.variables}</h2>
+            <h2 className="text-[17px] font-semibold tracking-[-0.01em] [overflow-wrap:anywhere]">{ask.variables}</h2>
             <Loading rows={3} />
           </div>
         )}

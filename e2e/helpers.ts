@@ -36,6 +36,12 @@ export async function expectAccessible(page: Page) {
   expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(" | ")}`)).toEqual([]);
 }
 
+/** Parts of a page that repeat (one per answer, say) must not be landmarks with the same name: a screen reader could not tell them apart. */
+export async function expectDistinctLandmarks(page: Page) {
+  const results = await new AxeBuilder({ page }).withRules(["landmark-unique"]).analyze();
+  expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(" | ")}`)).toEqual([]);
+}
+
 export const TODAY = "2026-11-21";
 const asAdmin = { "x-dev-user": ADMIN, cookie: "" };
 const unique = (label: string) => `${label} ${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`;

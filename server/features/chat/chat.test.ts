@@ -328,6 +328,28 @@ describe("C-1 questions about the content of a document", () => {
     expect(word.answer).toContain("above EUR 500 per trip");
   });
 
+  it("C-1 the words that name a document do not decide which passage answers", async () => {
+    // "Framework agreement" is the document's own name and stands in its opening line; the question is about liability.
+    const a = await ask("What does the Framework agreement of Quillon say about liability?");
+    expect(a.passages).toHaveLength(1);
+    expect(a.passages[0]!.text).toContain("Liability\nThe Consultancy's liability is limited to the fees of the statement of work concerned");
+    expect(a.answer).toContain("with a maximum of EUR 250,000 per event");
+    // Nothing in it is about payment terms: no passage, instead of the opening paragraph.
+    const b = await ask("What does the Framework agreement of Quillon say about payment terms?");
+    expect(b.answered).toBe(false);
+    expect(b.passages).toEqual([]);
+    // A word no document has is named, so a passage about the rest is not taken for the whole answer.
+    const c = await ask("What do the contracts say about walrus termination notice?");
+    expect(c.passages.length).toBeGreaterThan(0);
+    expect(c.answer).toContain("No document searched mentions “walrus”, so these passages are about the rest of what was looked for.");
+  });
+
+  it("C-1 a condition the lists cannot apply is not left out in silence", async () => {
+    const a = await ask("Which invoices are over 50000 euros?");
+    expect(a.answered).toBe(false);
+    expect(a.lookups).toEqual([]);
+  });
+
   it("C-1 words no document holds, and a vendor without documents, are said plainly", async () => {
     const a = await ask("What does the Bluefinch contract say about unicorns and dragons?");
     expect(a.answered).toBe(false);
@@ -511,7 +533,10 @@ describe("C-1 a list longer than the answer can read", () => {
   it("C-1 only the first 40 rows are read, the count and totals are of the whole list, and the rest is said to be left out", async () => {
     const sow = ((await t.as(MEMBER).get("/api/agreements").query({ q: "SOW 04 Payment controls" })).body.items as { id: string }[])[0]!.id;
     for (let i = 0; i < 45; i++) {
-      const res = await t.as(MEMBER).post("/api/invoices").send({ agreementId: sow, invoiceNumber: `LONG-${i}`, invoiceDate: "2026-11-02", amountMinor: 100 });
+      const res = await t
+        .as(MEMBER)
+        .post("/api/invoices")
+        .send({ agreementId: sow, invoiceNumber: `LONG-${i}`, invoiceDate: "2026-11-02", amountMinor: 100 });
       expect(res.status, JSON.stringify(res.body)).toBe(201);
     }
     const a = await ask("Show the invoices of Quillon this month");
