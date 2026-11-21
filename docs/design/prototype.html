@@ -4,22 +4,26 @@
 /* Layout: fixed left rail, one roomy scrolling canvas; records open in a panel that slides in while the list narrows to a name column. */
 :root{
   --bg:#FFFFFF; --rail:#F5F9FD; --surface:#FFFFFF; --sunk:#F2F6FB;
-  --ink:#09142D; --ink-2:#4A5672; --ink-3:#8791A8;
+  --ink:#1A1F2B; --ink-2:#555D70; --ink-3:#8B92A3;
   --line:rgba(9,20,45,.09); --line-2:rgba(9,20,45,.16);
   --accent:#0089DD; --accent-ink:#006FB4; --tint:#EBF5FC;
-  --strong:#152468; --on-strong:#FFFFFF;
+  --strong:#0077C8; --on-strong:#FFFFFF;
   --shadow:0 1px 2px rgba(9,20,45,.04),0 12px 32px rgba(9,20,45,.07);
   --sans:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:var(--sans);
   --ease:cubic-bezier(.2,.8,.2,1); --spring:cubic-bezier(.34,1.5,.5,1); --fast:180ms; --med:300ms; color-scheme:light;
 }
 :root[data-mode="dark"]{
-  --bg:#080F28; --rail:#0A1330; --surface:#0E1A3E; --sunk:#0C1635;
-  --ink:#F1F5FF; --ink-2:#B1BCD8; --ink-3:#7785A8;
+  --bg:#111318; --rail:#14161C; --surface:#1B1E26; --sunk:#181B22;
+  --ink:#F3F4F7; --ink-2:#B4B9C6; --ink-3:#7F8696;
   --line:rgba(190,210,255,.11); --line-2:rgba(190,210,255,.22);
   --accent:#39A9F0; --accent-ink:#7CC6F6; --tint:rgba(0,137,221,.16);
-  --strong:#F1F5FF; --on-strong:#0C1A42;
+  --strong:#39A9F0; --on-strong:#06121F;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 16px 40px rgba(0,0,0,.35); color-scheme:dark}
+:root{--crit:#C4283D; --crit-bg:#FDECEE; --crit-solid:#E5484D; --warn:#925600; --warn-bg:#FFF2D6; --warn-solid:#F5A524;
+  --ok:#0B7A53; --ok-bg:#E2F6EC; --t1:#FFF0EC; --t2:#FFF5DE; --t3:#EAF4FC; --bar:#CFE5F6}
+:root[data-mode="dark"]{--crit:#FF8D95; --crit-bg:rgba(229,72,77,.18); --crit-solid:#E5484D; --warn:#FFCB6B; --warn-bg:rgba(245,165,36,.16); --warn-solid:#F5A524;
+  --ok:#6FD8AC; --ok-bg:rgba(48,164,108,.18); --t1:rgba(229,72,77,.12); --t2:rgba(245,165,36,.12); --t3:rgba(0,137,221,.14); --bar:rgba(57,169,240,.28)}
 *{box-sizing:border-box}
 html,body{height:100%}
 body{background:var(--bg);color:var(--ink);font:400 14px/1.5 var(--sans);-webkit-font-smoothing:antialiased;overflow:hidden}
@@ -57,7 +61,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;paddin
 .iconbtn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .bell:hover svg{animation:ring .5s var(--ease)}
 @keyframes ring{30%{transform:rotate(14deg)}60%{transform:rotate(-10deg)}100%{transform:none}}
-.badge{position:absolute;top:5px;right:4px;min-width:16px;height:16px;border-radius:8px;background:var(--strong);color:var(--on-strong);font:600 10px/16px var(--sans);text-align:center;padding:0 4px}
+.badge{position:absolute;top:5px;right:4px;min-width:16px;height:16px;border-radius:8px;background:var(--crit-solid);color:#fff;font:600 10px/16px var(--sans);text-align:center;padding:0 4px}
 .spacer{flex:1}
 .stage{flex:1;min-height:0;position:relative;overflow:hidden}
 .view{position:absolute;inset:0;overflow:auto;padding:44px 40px 72px;transition:transform var(--med) var(--ease),opacity var(--fast) linear}
@@ -69,18 +73,22 @@ h2{font:600 16px/1.3 var(--sans);letter-spacing:-.01em;margin:0}
 .btn{height:38px;padding:0 18px;border-radius:999px;font-weight:600;font-size:13.5px;border:1px solid var(--line-2);transition:transform var(--fast) var(--ease),background var(--fast),box-shadow var(--fast)}
 .btn:hover{background:var(--sunk)} .btn:active{transform:scale(.96)}
 .btn.primary{background:var(--strong);color:var(--on-strong);border-color:transparent}
-.btn.primary:hover{box-shadow:0 6px 18px rgba(21,36,104,.28);transform:translateY(-1px)}
+.btn.primary:hover{box-shadow:0 6px 18px rgba(0,119,200,.3);transform:translateY(-1px)}
 .btn[disabled]{opacity:.4;pointer-events:none}
 .chip{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:11px;font:600 11px var(--sans);white-space:nowrap;border:1px solid var(--line-2);color:var(--ink-2)}
 .chip.strong{background:var(--strong);color:var(--on-strong);border-color:transparent}
 .chip.blue{background:var(--tint);color:var(--accent-ink);border-color:transparent}
+.chip.bad{background:var(--crit-bg);color:var(--crit);border-color:transparent}
+.chip.warn{background:var(--warn-bg);color:var(--warn);border-color:transparent}
+.chip.ok{background:var(--ok-bg);color:var(--ok);border-color:transparent}
+.va{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;font:600 12px var(--sans);font-style:normal;margin-right:10px;vertical-align:middle}
 .chip.ai{background:var(--tint);color:var(--accent-ink);border-color:transparent}
 
 /* dashboard */
 .trio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
 .trio button{text-align:left;padding:26px 26px 24px;display:flex;flex-direction:column;gap:10px;position:relative;background:var(--sunk);border-radius:24px;transition:transform 380ms var(--spring),background var(--fast)}
-.trio button:hover{transform:translateY(-5px) rotate(-.8deg);background:var(--tint)}
-.trio button:nth-child(2):hover{transform:translateY(-5px) rotate(.8deg)}
+.trio button:hover{transform:translateY(-5px)}
+.trio button:nth-child(1){background:var(--t1)}.trio button:nth-child(2){background:var(--t2)}.trio button:nth-child(3){background:var(--t3)}
 .trio button:active{transform:scale(.97)}
 .trio .big{font:600 52px/1 var(--sans);letter-spacing:-.04em}
 .trio .go{position:absolute;right:24px;top:26px;opacity:0;transform:translateX(-10px);transition:all var(--med) var(--spring);color:var(--accent-ink);font-weight:600}
@@ -90,8 +98,6 @@ h2{font:600 16px/1.3 var(--sans);letter-spacing:-.01em;margin:0}
 .rows{display:flex;flex-direction:column}
 .row{display:flex;align-items:center;gap:14px;padding:15px 0;border-bottom:1px solid var(--line);text-align:left;width:100%;transition:padding var(--med) var(--ease)}
 .row:hover{padding-left:10px}
-.row:hover .chip{animation:wig 420ms var(--ease)}
-@keyframes wig{30%{transform:rotate(-5deg) scale(1.06)}65%{transform:rotate(4deg)}}
 .odo{display:inline-flex;overflow:hidden;height:1em;line-height:1}
 .odo b{display:flex;flex-direction:column;font-weight:inherit;transition:transform 760ms var(--spring)}
 .odo b span{height:1em} .odo em{font-style:normal} .overall.odo{display:flex;margin-top:6px}
@@ -107,7 +113,7 @@ h2{font:600 16px/1.3 var(--sans);letter-spacing:-.01em;margin:0}
 .chart{display:grid;grid-template-columns:auto minmax(0,1fr);gap:0 12px}
 .chart .y{display:flex;flex-direction:column;justify-content:space-between;font:500 10.5px var(--mono);color:var(--ink-3);height:150px;text-align:right}
 .bars{height:150px;display:flex;align-items:flex-end;gap:8px;border-bottom:1px solid var(--line-2);background:linear-gradient(var(--line),var(--line)) 0 0/100% 1px no-repeat,linear-gradient(var(--line),var(--line)) 0 50%/100% 1px no-repeat}
-.bars i{flex:1;background:var(--line-2);border-radius:4px 4px 0 0;height:calc(var(--v)*100%);transform-origin:bottom;transform:scaleY(0);transition:transform 620ms var(--spring),background var(--fast);transition-delay:calc(var(--i)*28ms)}
+.bars i{flex:1;background:var(--bar);border-radius:4px 4px 0 0;height:calc(var(--v)*100%);transform-origin:bottom;transform:scaleY(0);transition:transform 620ms var(--spring),background var(--fast);transition-delay:calc(var(--i)*28ms)}
 .in .bars i:hover{background:var(--accent);transform:scaleY(1.07);transition-delay:0ms}
 .bars i:last-child{background:var(--accent)} .in .bars i{transform:none}
 .chart .x{grid-column:2;display:flex;gap:8px;font:500 10.5px var(--mono);color:var(--ink-3);padding-top:8px}
@@ -144,14 +150,14 @@ button.tr:hover{background:var(--sunk)}
 .meter{height:6px;border-radius:3px;background:var(--line);overflow:hidden;flex:1;min-width:60px}
 .meter i{display:block;height:100%;border-radius:3px;background:var(--accent);width:0;transition:width 700ms var(--ease) 120ms}
 .in .meter i,.split.open .meter i{width:calc(var(--p)*1%)}
-.meter.hot i{background:var(--strong)}
+.meter.hot i{background:var(--warn-solid)}
 
 /* sow */
 .facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:32px;border-top:1px solid var(--line);padding-top:26px}
 .facts .v{font:600 26px/1.1 var(--sans);letter-spacing:-.02em;margin-top:8px}
 .timeline{display:flex;flex-direction:column}
 .ms{display:grid;grid-template-columns:18px minmax(0,1fr) auto auto;gap:14px;align-items:center;padding:13px 0;border-bottom:1px solid var(--line)}
-.dot{width:10px;height:10px;border-radius:50%;border:2px solid var(--line-2)} .dot.done{background:var(--accent);border-color:var(--accent)} .dot.late{background:var(--strong);border-color:var(--strong)}
+.dot{width:10px;height:10px;border-radius:50%;border:2px solid var(--line-2)} .dot.done{background:var(--accent);border-color:var(--accent)} .dot.late{background:var(--crit-solid);border-color:var(--crit-solid)}
 /* scorecard */
 .crit{border-bottom:1px solid var(--line);padding:22px 0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px 24px;align-items:start}
 .crit p{margin:4px 0 0;color:var(--ink-2);max-width:62ch}
@@ -169,7 +175,7 @@ button.tr:hover{background:var(--sunk)}
 .evi td,.evi th{text-align:left;padding:8px 10px 8px 0;border-bottom:1px solid var(--line);font-weight:400} .evi th{color:var(--ink-3);font:500 12.5px var(--sans)}
 .sticky{position:sticky;bottom:-72px;margin-top:8px;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:18px 22px;display:flex;align-items:center;gap:20px;flex-wrap:wrap}
 .overall{font:600 34px/1 var(--sans);letter-spacing:-.03em}
-.toast{position:absolute;left:50%;bottom:28px;transform:translate(-50%,80px);background:var(--strong);color:var(--on-strong);padding:11px 18px;border-radius:11px;font-weight:600;transition:transform var(--med) var(--ease);z-index:5}
+.toast{position:absolute;left:50%;bottom:28px;transform:translate(-50%,80px);background:var(--ink);color:var(--bg);padding:11px 18px;border-radius:11px;font-weight:600;transition:transform var(--med) var(--ease);z-index:5}
 .toast.show{transform:translate(-50%,0)}
 .note{font-size:12.5px;color:var(--ink-3)}
 
@@ -222,11 +228,11 @@ button.tr:hover{background:var(--sunk)}
           <div class="block">
             <h2>Needs attention</h2>
             <div class="rows stag">
-              <button class="row" data-go="sow"><span class="chip strong">Overdue</span><span class="t"><b>Kestrel Software · Reporting suite</b><span>Notice deadline passed 12 Nov, renews 10 Feb 2027</span></span><span class="num muted">€ 48,000</span></button>
-              <button class="row" data-go="sow"><span class="chip strong">83% used</span><span class="t"><b>Halden Systems · SOW 07 Ledger migration</b><span>Ends 28 Feb 2027, 2 milestones open</span></span><span class="num muted">€ 240,000</span></button>
-              <button class="row" data-go="scorecard"><span class="chip blue">Target missed</span><span class="t"><b>Halden Systems · First response</b><span>88% in October against a 95% target, second month running</span></span></button>
-              <button class="row" data-go="sow"><span class="chip blue">27 days</span><span class="t"><b>Varo Cloud · Data platform licence</b><span>Notice deadline 18 Dec 2026</span></span><span class="num muted">£ 31,500</span></button>
-              <button class="row" data-go="vendors"><span class="chip blue">NDA missing</span><span class="t"><b>Tessera Partners</b><span>Shortlisted for the treasury RFP</span></span></button>
+              <button class="row" data-go="sow"><span class="chip bad">Overdue</span><span class="t"><b>Kestrel Software · Reporting suite</b><span>Notice deadline passed 12 Nov, renews 10 Feb 2027</span></span><span class="num muted">€ 48,000</span></button>
+              <button class="row" data-go="sow"><span class="chip warn">83% used</span><span class="t"><b>Halden Systems · SOW 07 Ledger migration</b><span>Ends 28 Feb 2027, 2 milestones open</span></span><span class="num muted">€ 240,000</span></button>
+              <button class="row" data-go="scorecard"><span class="chip bad">Target missed</span><span class="t"><b>Halden Systems · First response</b><span>88% in October against a 95% target, second month running</span></span></button>
+              <button class="row" data-go="sow"><span class="chip warn">27 days</span><span class="t"><b>Varo Cloud · Data platform licence</b><span>Notice deadline 18 Dec 2026</span></span><span class="num muted">£ 31,500</span></button>
+              <button class="row" data-go="vendors"><span class="chip warn">NDA missing</span><span class="t"><b>Tessera Partners</b><span>Shortlisted for the treasury RFP</span></span></button>
             </div>
           </div>
           <div class="block">
@@ -273,7 +279,7 @@ button.tr:hover{background:var(--sunk)}
       </div></section>
 
       <section class="view" id="sow" hidden><div class="wrap">
-        <div class="head"><div><span class="eyebrow">Halden Systems · under MSA 2023</span><h1>SOW 07 Ledger migration</h1></div><span class="spacer"></span><span class="chip blue">Active</span><span class="chip">Fixed price</span><button class="btn">Add invoice</button></div>
+        <div class="head"><div><span class="eyebrow">Halden Systems · under MSA 2023</span><h1>SOW 07 Ledger migration</h1></div><span class="spacer"></span><span class="chip ok">Active</span><span class="chip">Fixed price</span><button class="btn">Add invoice</button></div>
         <div>
           <div style="display:flex;align-items:center;gap:16px"><span class="meter hot" style="--p:83;height:10px"><i></i></span><b class="num">83% invoiced</b></div>
           <div class="facts">
@@ -287,7 +293,7 @@ button.tr:hover{background:var(--sunk)}
           <div class="block"><h2>Milestones</h2><div class="timeline stag">
             <div class="ms"><span class="dot done"></span><span><b>Design sign-off</b></span><span class="muted num">15 Apr</span><span class="num">€ 42,000</span></div>
             <div class="ms"><span class="dot done"></span><span><b>Data model and mapping</b></span><span class="muted num">30 Jun</span><span class="num">€ 58,000</span></div>
-            <div class="ms"><span class="dot late"></span><span><b>First trial migration</b> <span class="chip strong" style="margin-left:6px">19 days late</span></span><span class="muted num">30 Sep</span><span class="num">€ 60,000</span></div>
+            <div class="ms"><span class="dot late"></span><span><b>First trial migration</b> <span class="chip bad" style="margin-left:6px">19 days late</span></span><span class="muted num">30 Sep</span><span class="num">€ 60,000</span></div>
             <div class="ms"><span class="dot"></span><span><b>Parallel run</b></span><span class="muted num">15 Jan</span><span class="num">€ 45,000</span></div>
             <div class="ms"><span class="dot"></span><span><b>Go-live and handover</b></span><span class="muted num">28 Feb</span><span class="num">€ 35,000</span></div>
           </div></div>
@@ -341,7 +347,7 @@ function movePill(){const b=$(`#nav [data-go="${cur}"]`);if(b)$("#pill").style.t
 function roll(el,str){if(el.dataset.len!=str.length){el.dataset.len=str.length;el.classList.add("odo");el.innerHTML=[...str].map(c=>/\d/.test(c)?`<b>${[0,1,2,3,4,5,6,7,8,9].map(n=>`<span>${n}</span>`).join("")}</b>`:`<em>${c}</em>`).join("");void el.offsetWidth}
   [...el.children].forEach((b,i)=>{if(b.tagName==="B"){b.style.transitionDelay=i*70+"ms";b.style.transform=`translateY(${-str[i]}em)`}else b.textContent=str[i]})}
 function burst(el,n){const r=el.getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2;for(let i=0;i<n;i++){const d=document.createElement("i"),a=Math.random()*6.283,m=50+Math.random()*120;d.className="bit";
-  d.style.cssText=`left:${x}px;top:${y}px;background:var(${i%3?"--accent":"--strong"});--dx:${Math.cos(a)*m}px;--dy:${Math.sin(a)*m-40}px;--r:${Math.random()*540-270}deg`;document.body.appendChild(d);d.addEventListener("animationend",()=>document.body.removeChild(d))}}
+  d.style.cssText=`left:${x}px;top:${y}px;background:var(${["--accent","--crit-solid","--warn-solid","--ok"][i%4]});--dx:${Math.cos(a)*m}px;--dy:${Math.sin(a)*m-40}px;--r:${Math.random()*540-270}deg`;document.body.appendChild(d);d.addEventListener("animationend",()=>document.body.removeChild(d))}}
 function enter(v){v.classList.remove("in");void v.offsetWidth;v.classList.add("in");
   $$("[data-count]",v).forEach(el=>{roll(el,"0");void el.offsetWidth;requestAnimationFrame(()=>roll(el,el.dataset.count))})}
 function go(id,instant){if(id===cur&&!instant)return;const a=$("#"+cur),b=$("#"+id);cur=id;movePill();const lg=$(".brand i");lg.classList.remove("hop");void lg.offsetWidth;lg.classList.add("hop");
@@ -361,15 +367,15 @@ let tk=0;setInterval(()=>{const sp=$$("#tick span");tk=(tk+1)%sp.length;sp.forEa
 $("#bars").innerHTML=spend.map((v,i)=>`<i style="--v:${v/240};--i:${i}" title="€${v}k"></i>`).join("");
 
 // ---- vendors: list narrows, panel slides in ----
-const chipFor=s=>s==="Active"?"blue":s==="Prospect"?"":"";
+const chipFor=s=>s==="Active"?"ok":s==="On hold"?"warn":"";
 $("#list").innerHTML=`<div class="tr h"><span>Vendor</span><span>Type</span><span>Owner</span><span>Invoiced 2026</span><span>Status</span></div>`+
- vendors.map((v,i)=>`<button class="tr" data-i="${i}"><b>${v[0]}</b><span class="muted">${v[1]}</span><span class="muted">${v[3]}</span><span class="num">${v[4]}</span><span><span class="chip ${chipFor(v[2])}">${v[2]}</span></span></button>`).join("");
+ vendors.map((v,i)=>`<button class="tr" data-i="${i}"><b><i class="va" style="background:var(--t${i%3+1});color:var(--${["crit","warn","accent-ink"][i%3]})">${v[0][0]}</i>${v[0]}</b><span class="muted">${v[1]}</span><span class="muted">${v[3]}</span><span class="num">${v[4]}</span><span><span class="chip ${chipFor(v[2])}">${v[2]}</span></span></button>`).join("");
 function tab(n){const bs=$$("#tabs button");bs.forEach((b,i)=>b.setAttribute("aria-selected",i===n));
   const b=bs[n];$("#ink").style.width=b.offsetWidth+"px";$("#ink").style.transform=`translateX(${b.offsetLeft}px)`;$("#track").style.transform=`translateX(${-n*33.3334}%)`}
 $$("#tabs button").forEach((b,i)=>b.onclick=()=>tab(i));
 function openVendor(i){const v=vendors[i];$$("#list .tr").forEach(r=>r.classList.toggle("sel",r.dataset.i==i));
   $("#p-type").textContent=v[1]+" · "+v[2];$("#p-name").textContent=v[0];$("#p-owner").textContent=v[3];$("#p-contact").textContent=v[5];
-  $("#p-nda").innerHTML=v[6]==="Missing"?'<span class="chip strong">Missing</span>':v[6];$("#p-spend").textContent=v[4];$("#p-scored").textContent=v[7]?"Yes, monthly from Jira":"No";
+  $("#p-nda").innerHTML=v[6]==="Missing"?'<span class="chip bad">Missing</span>':v[6];$("#p-spend").textContent=v[4];$("#p-scored").textContent=v[7]?"Yes, monthly from Jira":"No";
   $("#split").classList.add("open");setTimeout(()=>tab(0),30)}
 $("#list").onclick=e=>{const r=e.target.closest("button.tr");if(r)openVendor(r.dataset.i)};
 $("#close").onclick=()=>{$("#split").classList.remove("open");$$("#list .tr").forEach(r=>r.classList.remove("sel"))};
@@ -379,7 +385,7 @@ $("#crits").innerHTML=crits.map((c,i)=>`<div class="crit" data-i="${i}">
   <div><h2>${c.n}</h2><p>${c.d}</p></div>
   <div class="seg ${c.ai?"ghost":""}" ${c.ai?`data-v="${c.ai}"`:""} role="group" aria-label="Score for ${c.n}"><span class="thumb" ${c.ai?`style="transform:translateX(${(c.ai-1)*40}px)"`:""}></span>${[1,2,3,4,5].map(n=>`<button class="${c.ai===n?"on":""}" data-n="${n}">${n}</button>`).join("")}</div>
   ${c.ai?`<div class="proposal"><span class="chip ai">AI suggests ${c.ai}</span><span class="txt">${c.why}</span><button class="linkbtn" data-ev>Show evidence</button><button class="btn primary" data-accept style="height:32px">Accept ${c.ai}</button></div>
-  <div class="evi"><div><table><tr><th>Measure</th><th>Q3 result</th><th>Target</th><th></th></tr>${c.ev.map(r=>`<tr><td>${r[0]}</td><td class="num">${r[1]}</td><td class="num muted">${r[2]}</td><td>${r[3]==="Missed"?'<span class="chip strong">Missed</span>':r[3]==="Met"?'<span class="chip blue">Met</span>':""}</td></tr>`).join("")}</table></div></div>`:""}
+  <div class="evi"><div><table><tr><th>Measure</th><th>Q3 result</th><th>Target</th><th></th></tr>${c.ev.map(r=>`<tr><td>${r[0]}</td><td class="num">${r[1]}</td><td class="num muted">${r[2]}</td><td>${r[3]==="Missed"?'<span class="chip bad">Missed</span>':r[3]==="Met"?'<span class="chip ok">Met</span>':""}</td></tr>`).join("")}</table></div></div>`:""}
  </div>`).join("");
 function setScore(i,n){scores[i]=n;const el=$(`.crit[data-i="${i}"]`),seg=$(".seg",el);seg.classList.remove("ghost");seg.dataset.v=n;
   $(".thumb",seg).style.transform=`translateX(${(n-1)*40}px)`;$$("button",seg).forEach(b=>b.classList.toggle("on",+b.dataset.n===n));
