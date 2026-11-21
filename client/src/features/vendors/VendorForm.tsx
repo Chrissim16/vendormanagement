@@ -27,6 +27,9 @@ export function VendorForm({ vendor, onClose, onSaved }: { vendor?: VendorDetail
     { onSaved },
   );
   const { values: v, set } = form;
+  const owners = [...(people.data ?? [])];
+  if (vendor && !owners.some((p) => p.id === vendor.ownerUserId))
+    owners.push({ id: vendor.ownerUserId, email: vendor.ownerName, displayName: `${vendor.ownerName} (no longer has access)` });
   return (
     <Dialog title={vendor ? `Edit ${vendor.name}` : "Add vendor"} onClose={onClose}>
       <form onSubmit={form.submit} noValidate className="flex flex-col gap-5">
@@ -49,7 +52,7 @@ export function VendorForm({ vendor, onClose, onSaved }: { vendor?: VendorDetail
             ))}
           </SelectField>
           <SelectField form={form} name="ownerUserId" label="Owner" value={v.ownerUserId} onChange={(e) => set("ownerUserId", e.target.value)}>
-            {people.data?.map((p) => (
+            {owners.map((p) => (
               <option key={p.id} value={p.id}>
                 {personName(p)}
               </option>

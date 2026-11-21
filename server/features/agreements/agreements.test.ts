@@ -63,6 +63,17 @@ describe("A-1 add an agreement", () => {
     const former = (await t.as(ADMIN).get("/api/admin/users").query({ q: "former@" })).body.items[0].id;
     expect((await add({ kind: "nda", ownerUserId: former })).body.error.fields.ownerUserId).toBeTruthy();
   });
+  it("never leaves an offboarded vendor with an active agreement", async () => {
+    const v = (await t.as(MEMBER).post("/api/vendors").send({ name: "Leaving Co", type: "software", ownerUserId: me })).body;
+    const draft = (await add({ kind: "nda", vendorId: v.id })).body;
+    expect((await t.as(MEMBER).patch(`/api/vendors/${v.id}`).send({ status: "offboarded" })).status).toBe(200);
+    const res = await t.as(MEMBER).patch(`/api/agreements/${draft.id}`).send({ status: "active", signedOn: "2026-11-01" });
+    expect(res.status).toBe(400);
+    expect(res.body.error.fields.status).toMatch(/offboarded/);
+    expect((await t.as(MEMBER).get(`/api/agreements/${draft.id}`)).body.status).toBe("draft");
+    // Other changes to an offboarded vendor's agreements are still allowed, such as ending one.
+    expect((await t.as(MEMBER).patch(`/api/agreements/${draft.id}`).send({ status: "ended", endReason: "terminated" })).status).toBe(200);
+  });
   it("refuses impossible dates and negative or fractional amounts", async () => {
     expect((await add({ ...sow, endDate: "2026-02-31" })).status).toBe(400);
     expect((await add({ ...sow, budgetMinor: -1 })).status).toBe(400);
@@ -105,19 +116,28 @@ describe("A-3 agreement list", () => {
         .query({ pageSize: "200", ...q })
     ).body.items.map((a: { title: string }) => a.title);
   it("filters by kind, vendor, status and owner, and searches title, reference and vendor", async () => {
-    const bluefinch = (await t.as(MEMBER).get("/api/vendors").query({ q: "Bluefinch" })).body.items[0].id;
-    expect((await titles({ vendorId: bluefinch, kind: "sow" })).sort()).toEqual(["SOW 04 Discovery", "SOW 07 Ledger migration", "SOW 09 Helpdesk run"]);
-    expect(await titles({ vendorId: bluefinch, status: "ended" })).toEqual(["SOW 04 Discovery"]);
-    expect(await titles({ q: "tarnwick" })).toContain("Reporting suite");
     const jonas = (await t.as(MEMBER).get("/api/people")).body.find((p: { email: string }) => p.email === "jonas@example.test").id;
-    expect((await titles({ owner: jonas, kind: "subscription" })).sort()).toEqual(["Data platform licence", "Reporting suite"]);
+    const v = (await t.as(MEMBER).post("/api/vendors").send({ name: "Filter Vendor Zeta", type: "software", ownerUserId: me })).body.id;
+    const mk = (o: Record<string, unknown>) => add({ vendorId: v, ...o });
+    await mk({ ...sow, title: "Zeta SOW one" });
+    await mk({ ...sow, title: "Zeta SOW two", status: "ended", endReason: "completed", signedOn: "2026-01-01" });
+    await mk({ kind: "nda", title: "Zeta NDA", reference: "REF-ZETA-9", ownerUserId: jonas });
+    expect((await titles({ vendorId: v, kind: "sow" })).sort()).toEqual(["Zeta SOW one", "Zeta SOW two"]);
+    expect(await titles({ vendorId: v, status: "ended" })).toEqual(["Zeta SOW two"]);
+    expect(await titles({ vendorId: v, owner: jonas })).toEqual(["Zeta NDA"]);
+    expect(await titles({ q: "ref-zeta" })).toEqual(["Zeta NDA"]);
+    expect((await titles({ q: "filter vendor zeta" })).length).toBe(3);
   });
   it("sorts by any column, with empty values last", async () => {
     const ends = (await t.as(MEMBER).get("/api/agreements").query({ sort: "endDate", pageSize: "200" })).body.items.map((a: { endDate: string | null }) => a.endDate);
     const dated = ends.filter(Boolean);
     expect(dated).toEqual([...dated].sort());
     expect(ends.slice(dated.length).every((e: string | null) => e === null)).toBe(true);
-    expect((await titles({ sort: "value", dir: "desc" }))[0]).toBe("SOW 07 Ledger migration");
+    const values = (await t.as(MEMBER).get("/api/agreements").query({ sort: "value", dir: "desc", pageSize: "200" })).body.items.map(
+      (a: { budgetMinor: number | null; annualValueMinor: number | null }) => a.budgetMinor ?? a.annualValueMinor,
+    );
+    const priced = values.filter((x: number | null) => x != null);
+    expect(priced).toEqual([...priced].sort((a: number, b: number) => b - a));
     expect((await t.as(MEMBER).get("/api/agreements").query({ sort: "nope" })).status).toBe(400);
   });
   it("exports the filtered list as a CSV that Excel opens correctly", async () => {
@@ -134,7 +154,9 @@ describe("A-3 agreement list", () => {
     expect(lines.length - 1).toBe((await t.as(MEMBER).get("/api/agreements").query({ vendorId })).body.total);
     expect(text).toContain(`"'=HYPERLINK(""http://evil.example.test"")","Quote "" and, comma"`);
     expect(lines.every((l) => l.startsWith('"Agreement Test Vendor"') || l.startsWith('"Vendor"'))).toBe(true);
-    expect(text).toMatch(/"48000\.00"/);
+    await add({ ...sow, title: "Priced", pricing: "time_and_materials" });
+    const again = ((await t.as(MEMBER).get("/api/agreements/export.csv").query({ vendorId, q: "Priced" }).buffer(true).parse(binary)).body as Buffer).toString("utf8");
+    expect(again).toContain('"100000.00","","Time and materials"');
   });
 });
 
@@ -167,6 +189,7 @@ describe("A-5 documents", () => {
     expect((down.body as Buffer).equals(PDF)).toBe(true);
     expect(down.headers["content-disposition"]).toContain("filename*=UTF-8''Signed%20NDA%20%C3%A9.pdf");
     expect(down.headers["x-content-type-options"]).toBe("nosniff");
+    expect(down.headers["cache-control"]).toBe("private, no-store");
     expect((await t.as(MEMBER).get(`/api/agreements/${a.id}`)).body.documents).toHaveLength(1);
     expect((await t.as(MEMBER).delete(`/api/documents/${up.body.id}`)).status).toBe(200);
     expect((await t.as(MEMBER).get(`/api/documents/${up.body.id}/download`)).status).toBe(404);
@@ -176,10 +199,11 @@ describe("A-5 documents", () => {
   it("accepts PDF, Word and Excel and refuses everything else", async () => {
     const a = (await add({ kind: "nda" })).body;
     const zip = Buffer.from([0x50, 0x4b, 0x03, 0x04, 1, 2, 3]);
+    const office = (part: string) => Buffer.concat([zip, Buffer.from(`[Content_Types].xml ${part}document.xml`)]);
     const ole = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 1, 2, 3]);
     for (const [name, data] of [
-      ["a.docx", zip],
-      ["a.xlsx", zip],
+      ["a.docx", office("word/")],
+      ["a.xlsx", office("xl/")],
       ["a.doc", ole],
       ["a.xls", ole],
       ["A.PDF", PDF],
@@ -191,6 +215,8 @@ describe("A-5 documents", () => {
       ["no-extension", PDF],
       ["fake.pdf", Buffer.from("<html>")],
       ["fake.docx", PDF],
+      ["any-zip.docx", zip],
+      ["sheet-as-doc.docx", office("xl/")],
       ["empty.pdf", Buffer.alloc(0)],
     ] as const) {
       const res = await attach(a.id, name, data);
@@ -211,6 +237,8 @@ describe("A-5 documents", () => {
     const res = await attach(a.id, "../../etc/passwd.pdf", PDF);
     expect(res.status).toBe(201);
     expect(res.body.fileName).not.toMatch(/[\\/]/);
+    // Invisible characters that would make "exe.pdf" read as "fdp.exe" are dropped.
+    expect((await attach(a.id, "a\u202efdp.exe.pdf", PDF)).body.fileName).toBe("afdp.exe.pdf");
     expect((await attach("00000000-0000-4000-8000-000000000000", "a.pdf", PDF)).status).toBe(404);
   });
 });

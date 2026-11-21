@@ -17,10 +17,13 @@ export function useForm<V extends Record<string, unknown>, R>(
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const set = <K extends keyof V>(key: K, value: V[K]) => {
+  /** `alsoClear` names server-side fields whose message belongs to this box (the box "budget" holds the server's "budgetMinor"). */
+  const set = <K extends keyof V>(key: K, value: V[K], alsoClear: string[] = []) => {
     setValues((v) => ({ ...v, [key]: value }));
-    setErrors((e) => (e[key as string] ? { ...e, [key as string]: "" } : e));
+    setErrors((e) => ([key as string, ...alsoClear].some((k) => e[k]) ? { ...e, ...Object.fromEntries([key as string, ...alsoClear].map((k) => [k, ""])) } : e));
   };
+  /** Replace several values at once, for example when one choice makes other fields irrelevant. */
+  const patch = (changes: Partial<V>) => setValues((v) => ({ ...v, ...changes }));
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (busy) return;
@@ -41,16 +44,24 @@ export function useForm<V extends Record<string, unknown>, R>(
       setBusy(false);
     }
   };
-  return { values, set, errors, problem, busy, submit };
+  return { values, set, patch, errors, problem, busy, submit };
 }
 
 type Form = { errors: Record<string, string> };
 const invalid = (form: Form, name: string) => (form.errors[name] ? { "aria-invalid": true as const, "aria-describedby": `f-${name}-error` } : {});
 
-export function TextField({ form, name, label, className, ...props }: { form: Form; name: string; label: string } & Omit<InputHTMLAttributes<HTMLInputElement>, "form">) {
+export function TextField({
+  form,
+  name,
+  label,
+  hint,
+  className,
+  ...props
+}: { form: Form; name: string; label: string; hint?: string } & Omit<InputHTMLAttributes<HTMLInputElement>, "form">) {
   return (
     <Field label={label} htmlFor={`f-${name}`} error={form.errors[name]}>
       <TextInput id={`f-${name}`} {...invalid(form, name)} {...props} className={clsx(form.errors[name] && "border-crit", className)} />
+      {hint && !form.errors[name] && <p className="num text-[12.5px] text-ink-2">{hint}</p>}
     </Field>
   );
 }

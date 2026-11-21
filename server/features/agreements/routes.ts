@@ -1,11 +1,10 @@
 import { Router } from "express";
-import multer from "multer";
 import { z } from "zod";
-import { agreementStatuses, kinds, MAX_DOCUMENT_BYTES } from "../../../shared/agreements";
+import { agreementStatuses, kinds } from "../../../shared/agreements";
 import type { Day } from "../../../shared/dates";
 import { currentUser } from "../../platform/auth";
 import { AppError } from "../../platform/errors";
-import { dir, id, paging, text } from "../../platform/http";
+import { dir, id, paging, text, upload } from "../../platform/http";
 import type { Db, StoragePort } from "../../platform/ports/types";
 import { agreementSorts } from "./repo";
 import * as service from "./service";
@@ -28,8 +27,6 @@ const renewalsQuery = z.object({
     .default(90),
   owner: id.optional(),
 });
-
-export const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_DOCUMENT_BYTES, files: 1 } });
 
 export function agreementRoutes(db: Db, storage: StoragePort, today: () => Day) {
   const r = Router();
@@ -62,12 +59,15 @@ export function agreementRoutes(db: Db, storage: StoragePort, today: () => Day) 
   r.get("/documents/:id/download", async (req, res) => {
     const { doc, data } = await service.readDocument(db, storage, id.parse(req.params.id));
     const ascii = doc.fileName.replace(/[^\x20-\x7e]|["\\]/g, "_");
+    // RFC 5987 allows fewer characters than encodeURIComponent leaves alone.
+    const encoded = encodeURIComponent(doc.fileName).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
     res
       .set({
         "Content-Type": doc.contentType,
         "Content-Length": String(data.length),
-        "Content-Disposition": `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(doc.fileName)}`,
+        "Content-Disposition": `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`,
         "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "private, no-store",
       })
       .send(data);
   });

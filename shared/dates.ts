@@ -27,7 +27,10 @@ export const daysBetween = (from: Day, to: Day) => Math.round((utc(to).getTime()
 
 /** Today's date in the team's time zone. */
 export function todayIn(timeZone: string, now: Date = new Date()): Day {
-  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now).map((p) => [p.type, p.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

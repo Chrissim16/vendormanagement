@@ -15,6 +15,9 @@ wrong. Answered questions move to the bottom.
 | Q6 | When a subscription is renewed, should the start date move to the new term or stay as the original start? | It stays; only the renewal date moves. | M1 |
 | Q7 | A SOW that is still marked active after its end date: is a red warning right? | Yes, it is shown as "Past end date" until someone ends or extends it. | M1 |
 | Q8 | In the import, who owns a row with no owner email? | The person doing the import. | M1 |
+| Q9 | When recording "renew", the box "move the renewal date to the next term" is ticked by default. Right? | Yes. Otherwise a renewed subscription would never ask for a decision again. | M1 |
+| Q10 | Two people editing the same vendor or agreement at once: the last save wins. Acceptable for five people? | Yes for now. | M1 |
+| Q11 | An amount typed as 1.234 is read as one thousand two hundred and thirty-four, and the form shows "Read as € 1,234.00" before saving. Is that the right reading for you? | Yes, since a dot before three digits is how thousands are usually written here. | M1 |
 
 ## To check at work before M9
 
@@ -34,6 +37,7 @@ These cannot be answered from outside the company. None block the build.
 
 | Date | Question | Answer |
 |---|---|---|
+| 2026-11-21 | The mockup's sample vendor names resembled real firms. | Replaced everywhere, in the mockup too, by the app's invented names. Every sample vendor's legal name says "(invented)". |
 | 2026-11-21 | Who is it for? | The VS Finance team, at most 5 users. |
 | 2026-11-21 | Roles? | Admin and member. No restricted role; everyone sees all contract values. |
 | 2026-11-21 | Vendor kinds? | Software, consultancy, IT research and advisory. No hardware, telecom, facilities. |

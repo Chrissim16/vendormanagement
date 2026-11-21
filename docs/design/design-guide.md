@@ -24,6 +24,8 @@ with a dark mode the user switches to.
 | Brand accent (links, chart highlight, focus) | `#0089DD` | `#39A9F0` |
 | Primary fill (main button, selected score) | `#0077C8` | `#39A9F0` |
 | Brand tint (AI suggestion, selected row, hover) | `#EBF5FC` | accent at 16% |
+| Red text (field errors) | `#C4283D` | `#FF8D95` |
+| Red fill behind white text (header count) | `#C4283D` | same |
 | Critical | `#E5484D` | same |
 | Warning | `#F5A524` | same |
 | Good | `#0B7A53` | `#6FD8AC` |
@@ -79,6 +81,17 @@ Figures that line up use tabular numerals. Dates read `21 Nov 2026`. Money reads
 - Inside a panel, sections are tabs.
 - A record with a lot of its own content (a SOW, a scorecard, an RFP) gets a full page.
 - The dashboard opens with a greeting that states what needs doing, three neutral tiles, then what needs attention.
+
+## Forms and dialogs
+
+- Adding or editing a record happens in a dialog over the page: 24px radius, the same shadow as the side panel, a dimmed page behind. It rises into place with the spring.
+- Focus starts in the first field, stays inside the dialog, Escape closes it, and focus returns to the button that opened it.
+- Fields sit in two columns with the label above each field. Only the fields that apply are shown; choosing a different kind empties the ones that no longer apply.
+- A problem is written under its field in red text, and a summary sits above the buttons. Nothing typed is lost when saving fails.
+- An amount shows what the app understood under the box ("Read as € 12,500.00") before anything is saved.
+- The buttons are bottom right: Cancel, then the one primary action named for what it does.
+- A file is attached with an "Attach document" button, never a bare browser file box. Type and size are checked before sending.
+- Sections inside a panel are tabs with a sliding underline; arrow keys, Home and End move between them.
 
 ## Motion
 

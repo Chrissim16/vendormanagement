@@ -34,7 +34,7 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, next) => {
   } else if (err?.type === "entity.too.large") {
     status = 413;
     body = { error: { code: "too_large", message: "That is too much to send at once." } };
-  } else if (err?.type === "entity.parse.failed" || (typeof err?.status === "number" && err.status >= 400 && err.status < 500)) {
+  } else if (err?.type === "entity.parse.failed" || (err?.expose === true && typeof err?.status === "number" && err.status >= 400 && err.status < 500)) {
     status = err.status ?? 400;
     body = { error: { code: "bad_request", message: "The request could not be read." } };
   } else {

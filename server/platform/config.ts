@@ -21,6 +21,12 @@ export interface Config {
   ai: { strongEndpoint: string | null; fastEndpoint: string | null };
 }
 
+function pinnedDay(value: string): string {
+  const d = new Date(`${value}T00:00:00Z`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== value) throw new Error("TODAY must be a real date written YYYY-MM-DD.");
+  return value;
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const platform = env.PLATFORM === "databricks" ? "databricks" : "local";
   // The Databricks Apps runtime sets DATABRICKS_APP_NAME. Running there with stand-ins would
@@ -51,7 +57,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     filesDir: env.FILES_DIR || `${dataDir}/files`,
     seedOnStart: env.SEED_ON_START === "1",
     timeZone: env.APP_TIME_ZONE || "Europe/Amsterdam",
-    today: platform === "local" && env.TODAY ? env.TODAY : null,
+    today: platform === "local" && env.TODAY ? pinnedDay(env.TODAY) : null,
     clientDir: env.CLIENT_DIR || "dist/client",
     volumePath: env.VOLUME_PATH || null,
     jira: { baseUrl: env.JIRA_BASE_URL || null, email: env.JIRA_EMAIL || null, token: env.JIRA_API_TOKEN || null },

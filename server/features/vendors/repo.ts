@@ -54,7 +54,7 @@ export const getVendor = async (db: Queryable, id: string) =>
 export const findByName = async (db: Queryable, name: string) =>
   (
     await db
-      .select({ id: vendors.id })
+      .select({ id: vendors.id, status: vendors.status })
       .from(vendors)
       .where(sql`lower(${vendors.name}) = lower(${name})`)
   )[0];

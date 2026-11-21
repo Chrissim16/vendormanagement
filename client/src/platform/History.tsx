@@ -33,6 +33,8 @@ const fieldName = (key: string) =>
     .map((part) => names[part] ?? part)
     .join(" ");
 const money = new Set(["budgetMinor", "annualValueMinor"]);
+/** Fields whose values are the app's own codes, such as in_negotiation. */
+const codes = new Set(["status", "kind", "type", "pricing", "endReason", "role"]);
 const hidden = new Set(["ownerUserId", "parentMsaId"]);
 
 function show(key: string, v: unknown): string {
@@ -41,7 +43,7 @@ function show(key: string, v: unknown): string {
   if (v === false) return "no";
   if (money.has(key) && typeof v === "number") return (v / 100).toLocaleString("en-GB", { minimumFractionDigits: 2 });
   if (isDay(v)) return formatDay(v);
-  return String(v).replace(/_/g, " ");
+  return codes.has(key) ? String(v).replace(/_/g, " ") : String(v);
 }
 
 /** What changed, in words: "status from draft to active, signed on set to 1 Nov 2026". */

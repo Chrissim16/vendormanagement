@@ -26,6 +26,15 @@ test.describe("A-1 add an agreement", () => {
     await expect(dialog.getByLabel("Valid until (optional)")).toBeVisible();
     await expect(dialog.getByLabel("Annual value")).toHaveCount(0);
 
+    // Values typed for one kind do not linger unseen when the kind changes.
+    await dialog.getByLabel("Kind").selectOption("subscription");
+    await dialog.getByLabel("Start date").fill("2026-12-01");
+    await dialog.getByLabel("Annual value").fill("900");
+    await dialog.getByLabel("Kind").selectOption("sow");
+    await expect(dialog.getByLabel("Start date")).toHaveValue("");
+    await dialog.getByLabel("Kind").selectOption("subscription");
+    await expect(dialog.getByLabel("Annual value")).toHaveValue("");
+
     await dialog.getByLabel("Kind").selectOption("sow");
     await dialog.getByLabel("Title").fill("SOW 01 Typed in");
     await dialog.getByRole("button", { name: "Add agreement" }).click();
@@ -41,6 +50,8 @@ test.describe("A-1 add an agreement", () => {
     await dialog.getByRole("button", { name: "Add agreement" }).click();
     await expect(dialog.getByText("Enter an amount like 12,500.00.")).toBeVisible();
     await dialog.getByLabel("Budget").fill("12.500,00");
+    // What the app understood is shown before anything is saved.
+    await expect(dialog.getByText("Read as € 12,500.00")).toBeVisible();
     await dialog.getByRole("button", { name: "Add agreement" }).click();
     await expect(dialog.getByText("The end date is before the start date.")).toBeVisible();
     await dialog.getByLabel("End date").fill("2026-12-31");
@@ -293,7 +304,8 @@ test.describe("A-8 import", () => {
     await expect(rows.filter({ hasText: `Broken ${tag}` })).toContainText("Has problems");
     await expect(rows.filter({ hasText: "Bluefinch Systems" })).toContainText("Already there");
     await expect(rows.filter({ hasText: "Bad SOW" })).toContainText('End date: "31-02-2026" is not a date.');
-    await expect(rows.filter({ hasText: "Bad SOW" })).toContainText('Budget: "lots" is not an amount.');
+    await expect(rows.filter({ hasText: "Bad SOW" })).toContainText('Budget: "lots" is not an amount with at most two decimals.');
+    await expect(rows.filter({ hasText: `Broken ${tag}` })).toContainText("Type: use software, consultancy or advisory.");
     await expectAccessible(page);
 
     // Nothing is saved by the preview.
@@ -369,9 +381,61 @@ test.describe("throughout M1", () => {
 
   test("X-2 an empty list says what belongs there and offers the first action", async ({ page, context }) => {
     await signInAs(context, MEMBER);
+    // The shared test database is never empty, so the empty answer is supplied here; the screen is the real one.
+    await page.route(/\/api\/(vendors|agreements)\?/, (route) => route.fulfill({ json: { items: [], total: 0 } }));
+    await page.goto("/vendors");
+    await expect(page.getByRole("heading", { name: "No vendors yet" })).toBeVisible();
+    await expect(page.getByText("Every software vendor, consultancy and advisory firm the team works with belongs here")).toBeVisible();
+    await page.getByRole("button", { name: "Add the first vendor" }).click();
+    await expect(page.getByRole("dialog", { name: "Add vendor" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await page.goto("/agreements");
+    await expect(page.getByRole("heading", { name: "No agreements yet" })).toBeVisible();
+    await page.getByRole("button", { name: "Add the first agreement" }).click();
+    await expect(page.getByRole("dialog", { name: "Add agreement" })).toBeVisible();
+    await page.unroute(/\/api\/(vendors|agreements)\?/);
+
     await page.goto("/vendors?q=zzzz-nothing-matches");
     await expect(page.getByRole("heading", { name: "No vendors match these filters" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Add the first vendor" })).toHaveCount(0);
     await page.goto("/agreements?q=zzzz-nothing-matches");
     await expect(page.getByRole("heading", { name: "No agreements match these filters" })).toBeVisible();
+  });
+
+  test("X-4 dates are shown as day month year on every M1 page", async ({ page, context, request }) => {
+    const v = await newVendor(request, "Dates", { ndaRequired: true });
+    const a = await newAgreement(request, v, { ...sub, title: "Dated licence" });
+    await newAgreement(request, v, { kind: "dpa", title: "Dated DPA", status: "active", signedOn: "2025-03-04", endDate: "2026-10-05" });
+    await signInAs(context, MEMBER);
+    const pages = [`/agreements/${a.id}`, `/vendors?open=${v.id}`, "/agreements", "/agreements/renewals", "/warnings", "/"];
+    for (const path of pages) {
+      await page.goto(path);
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      if (path.startsWith("/vendors")) await page.getByRole("tab", { name: /Agreements/ }).click();
+      await page.waitForTimeout(500);
+      const text = await page.locator("main").innerText();
+      // No date written the database's way (2026-11-12) or with slashes anywhere a person reads.
+      expect(text.match(/\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}\/\d{1,2}\/\d{4}\b/g) ?? [], path).toEqual([]);
+    }
+    await page.goto(`/agreements/${a.id}`);
+    for (const shown of ["1 Feb 2026", "10 Feb 2026", "10 Feb 2027", "12 Nov 2026"]) await expect(page.getByText(shown).first()).toBeVisible();
+    await page.goto("/warnings");
+    await expect(page.getByRole("listitem").filter({ hasText: v.name }).filter({ hasText: "Data processing agreement expired on 5 Oct 2026." })).toBeVisible();
+  });
+
+  test("X-5 every M1 page is ready within 2 seconds", async ({ page, context }) => {
+    await signInAs(context, MEMBER);
+    await page.goto("/");
+    for (const [path, ready] of [
+      ["/vendors", page.getByRole("table", { name: "Vendors" })],
+      ["/agreements", page.getByRole("table", { name: "Agreements" })],
+      ["/agreements/renewals", page.getByRole("list", { name: "Renewals" })],
+      ["/warnings", page.getByRole("list", { name: "Warnings" })],
+    ] as const) {
+      const started = Date.now();
+      await page.goto(path);
+      await expect(ready.getByRole(path.includes("renewals") || path === "/warnings" ? "listitem" : "row").first()).toBeVisible();
+      expect(Date.now() - started, path).toBeLessThan(2000);
+    }
   });
 });

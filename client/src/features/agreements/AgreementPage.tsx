@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { kindLabels, pricingLabels, statusLabels, type AgreementDetail, type DocumentInfo } from "../../../../shared/agreements";
+import { documentTypes, kindLabels, MAX_DOCUMENT_BYTES, pricingLabels, statusLabels, type AgreementDetail, type DocumentInfo } from "../../../../shared/agreements";
 import { formatDay } from "../../../../shared/dates";
 import { formatMoney } from "../../../../shared/money";
 import { api, ApiError, messageOf } from "../../lib/api";
@@ -70,7 +70,12 @@ function Documents({ a }: { a: AgreementDetail }) {
             onChange={(e) => {
               const file = e.target.files?.[0];
               e.target.value = "";
-              if (file) upload.mutate(file);
+              if (!file) return;
+              // Checked here first so a 40 MB file is not sent only to be refused. The server checks again.
+              const ext = file.name.includes(".") ? file.name.split(".").pop()!.toLowerCase() : "";
+              if (!(ext in documentTypes)) setProblem("Only PDF, Word and Excel files can be attached.");
+              else if (file.size > MAX_DOCUMENT_BYTES) setProblem("That file is larger than 25 MB.");
+              else upload.mutate(file);
             }}
           />
           <Button onClick={() => input.current?.click()} aria-disabled={upload.isPending || undefined}>
@@ -175,21 +180,13 @@ export function AgreementPage() {
       </div>
 
       {a.kind === "subscription" && a.status === "active" && (
-        <Section
-          title="Renewal"
-          action={
-            a.renewalState !== "ok" || !a.decisions.some((d) => d.termEndDate === a.endDate) ? <Button onClick={() => setDialog("decision")}>Record decision</Button> : undefined
-          }
-        >
+        <Section title="Renewal" action={!a.decidedForTerm ? <Button onClick={() => setDialog("decision")}>Record decision</Button> : undefined}>
           <div className="flex flex-wrap items-center gap-3">
-            {pill ? <Pill tone={pill.tone}>{pill.label}</Pill> : <Pill tone="ok">{a.decisions.some((d) => d.termEndDate === a.endDate) ? "Decided" : "Nothing due"}</Pill>}
+            {pill ? <Pill tone={pill.tone}>{pill.label}</Pill> : <Pill tone="ok">{a.decidedForTerm ? "Decided" : "Nothing due"}</Pill>}
             <p className="text-ink-2">
               {a.renewalState === "overdue" && `The notice deadline passed on ${formatDay(a.noticeDeadline!)} and no decision has been recorded.`}
               {a.renewalState === "due_soon" && `Decide before ${formatDay(a.noticeDeadline!)} whether to renew, renegotiate or terminate.`}
-              {a.renewalState === "ok" &&
-                (a.decisions.some((d) => d.termEndDate === a.endDate)
-                  ? "A decision has been recorded for the current term."
-                  : `The notice deadline is ${formatDay(a.noticeDeadline!)}.`)}
+              {a.renewalState === "ok" && (a.decidedForTerm ? "A decision has been recorded for the current term." : `The notice deadline is ${formatDay(a.noticeDeadline!)}.`)}
             </p>
           </div>
           {a.decisions.length > 0 && (

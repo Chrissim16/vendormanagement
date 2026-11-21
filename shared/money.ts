@@ -29,6 +29,8 @@ export function parseAmount(input: string): number | null {
   }
   const groups = whole.split(/[.,]/);
   if (groups.some((g, n) => g === "" || (n > 0 && g.length !== 3)) || (groups.length > 1 && groups[0]!.length > 3)) return null;
+  // 0.500 or 0,123 cannot be thousands, and with three decimals is not money either: refuse rather than guess.
+  if (groups.length > 1 && /^0+$/.test(groups[0]!)) return null;
   if (frac.length > 2 || /[.,]/.test(frac)) return null;
   const cents = Number(groups.join("")) * 100 + Number((frac + "00").slice(0, 2));
   return Number.isSafeInteger(cents) ? cents : null;

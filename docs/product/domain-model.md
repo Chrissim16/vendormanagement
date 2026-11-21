@@ -1,7 +1,8 @@
 # Domain model
 
 Fields marked `*` are required. Every table also has `id`, `created_at`, `created_by`,
-`updated_at`, `updated_by`. Records are ended or archived, not deleted, unless stated.
+`updated_at`, `updated_by`, except records that are never edited after they are written
+(renewal decisions, documents, audit entries), which only record who created them and when. Records are ended or archived, not deleted, unless stated.
 
 ## People and settings
 
@@ -18,7 +19,7 @@ Fields marked `*` are required. Every table also has `id`, `created_at`, `create
 `status*` (prospect | active | on_hold | offboarded), `owner_user_id*`, `website`, `country`, `description`, `notes`,
 `scoring_enabled*` (default yes), `nda_required*` (default yes), `dpa_required*` (default yes).
 - A vendor with an active agreement cannot be offboarded.
-- An offboarded vendor cannot receive new agreements. Every other status can, so a prospect can sign an NDA.
+- An offboarded vendor cannot receive new agreements, and none of its agreements can be made active. Every other status can, so a prospect can sign an NDA.
 - Names are stored with extra spaces removed and compared ignoring case.
 - The owner must be a person who has access to the app.
 - RFP candidates are vendors with status `prospect`.
@@ -41,7 +42,7 @@ One table, with a `kind`.
 | msa | none | No end date; runs until ended by hand. |
 | sow | `parent_msa_id`, `pricing*` (fixed | time_and_materials), `budget_minor*`, `start_date*`, `end_date*` | Parent must be an MSA of the same vendor. Not subject to renewal. |
 | subscription | `annual_value_minor*`, `end_date*` (renewal date), `notice_period_days*` (default 90), `auto_renews*`, `renewal_term_months` | Has a notice deadline. |
-| nda, dpa | `signed_on*`, `end_date` (valid until, optional) | Counts as in place when active and not past `end_date`. |
+| nda, dpa | `signed_on` (required once active), `end_date` (valid until, optional). No start date | Counts as in place when active and not past `end_date`. One that has been set to ended counts as missing, not expired. |
 
 - `signed_on*` is required once status is `active`, for every kind. A subscription also needs its `start_date*` then. An NDA or data processing agreement being negotiated has no signing date yet.
 - `end_date` is on or after `start_date`.
@@ -77,7 +78,7 @@ Derived, not stored:
 
 Warnings are sorted with what is already wrong first, then the soonest date. The windows (90 and 30 days) are fixed for now and become admin settings in M2.
 
-**Import** (A-8): a vendor row whose name is already in the app, and an agreement row whose vendor, kind and title are already in the app, are left alone. A row that appears twice in the file is a problem. An empty owner means the person importing.
+**Import** (A-8): a vendor row whose name is already in the app, and an agreement row whose vendor, kind and title are already in the app, are left alone. A row that appears twice in the file is a problem, for every copy. An empty owner means the person importing. A cell showing a formula error is a problem, never read as empty. A number finer than a cent is refused, not rounded. A subscription row must say whether it renews automatically. The template's example rows are refused if left in. The preview and the import run the same analysis and always agree.
 
 ## SOW delivery and money
 
@@ -163,4 +164,4 @@ per criterion a `score` 1 to 5, a `vendor_comment` and an `internal_note`, plus 
 **AI suggestion** (every AI output): `kind*`, `subject_type*`, `subject_id*`, `model*`, `prompt_version*`, `input_summary`, `output*`,
 `status*` (proposed | accepted | edited | rejected), `reviewed_by`, `reviewed_at`.
 
-**Audit log entry**: `at*`, `user_email*`, `action*`, `entity_type*`, `entity_id*`, `summary` (a readable label for the record, such as a vendor name), `changes`. Written in the same transaction as the change. Never edited or removed. Changes the app makes by itself are recorded with `system` as the user.
+**Audit log entry**: `at*`, `user_email*`, `action*`, `entity_type*`, `entity_id*`, `summary` (a readable label for the record, such as a vendor name), `changes`. Written in the same transaction as the change. Never edited or removed: the database itself refuses any update, delete or truncate of the audit log. Changes the app makes by itself are recorded with `system` as the user.

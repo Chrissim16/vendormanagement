@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, boolean, check, date, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, check, date, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
 
 const stamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -113,7 +113,7 @@ export const agreements = pgTable(
     endReason: text("end_reason", { enum: ["completed", "expired", "terminated", "replaced"] }),
     notes: text("notes"),
     // SOW
-    parentMsaId: uuid("parent_msa_id"),
+    parentMsaId: uuid("parent_msa_id").references((): AnyPgColumn => agreements.id),
     pricing: text("pricing", { enum: ["fixed", "time_and_materials"] }),
     budgetMinor: bigint("budget_minor", { mode: "number" }),
     // Subscription

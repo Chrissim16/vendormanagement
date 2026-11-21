@@ -81,6 +81,7 @@ export function databaseContract(port: DatabasePort): ContractCase[] {
         await port.db.execute(sql`insert into audit_log (user_email, action, entity_type, entity_id) values ('contract@example.test', 'create', 'contract', ${marker})`);
         await assert.rejects(() => port.db.execute(sql`update audit_log set user_email = 'someone-else' where entity_id = ${marker}`));
         await assert.rejects(() => port.db.execute(sql`delete from audit_log where entity_id = ${marker}`));
+        await assert.rejects(() => port.db.execute(sql`truncate audit_log`));
       },
     },
     {

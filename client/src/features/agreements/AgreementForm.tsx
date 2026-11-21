@@ -11,7 +11,7 @@ import {
   type AgreementDetail,
   type Kind,
 } from "../../../../shared/agreements";
-import { amountForInput, currencies, parseAmount } from "../../../../shared/money";
+import { amountForInput, currencies, formatMoney, parseAmount } from "../../../../shared/money";
 import type { Page } from "../../../../shared/types";
 import type { Vendor } from "../../../../shared/vendors";
 import { api } from "../../lib/api";
@@ -87,6 +87,17 @@ export function AgreementForm({
     },
   );
   const { values: v, set } = form;
+  // What the app understood from a typed amount, shown before saving so "1.234" is never a surprise.
+  const reading = (typed: string) => {
+    const minor = typed ? parseAmount(typed) : null;
+    return minor == null ? undefined : `Read as ${formatMoney(minor, v.currency)}`;
+  };
+  // Changing the kind empties the fields that belonged to the old kind, so nothing unseen is sent.
+  const changeKind = (kind: Kind) =>
+    form.patch({ kind, parentMsaId: "", pricing: "", budget: "", annualValue: "", startDate: "", endDate: "", noticePeriodDays: "90", renewalTermMonths: "12", autoRenews: false });
+  // A person who no longer has access is not in the list, but must still show as the current owner.
+  const owners = [...(people.data ?? [])];
+  if (a && !owners.some((p) => p.id === a.ownerUserId)) owners.push({ id: a.ownerUserId, email: a.ownerName, displayName: `${a.ownerName} (no longer has access)` });
   // The server names the amount fields by what is stored; show its messages on the boxes people type in.
   const shown = {
     errors: { ...form.errors, budget: form.errors.budget || form.errors.budgetMinor || "", annualValue: form.errors.annualValue || form.errors.annualValueMinor || "" },
@@ -105,7 +116,16 @@ export function AgreementForm({
     name: "title" | "reference" | "signedOn" | "startDate" | "endDate" | "budget" | "annualValue" | "noticePeriodDays" | "renewalTermMonths",
     label: string,
     props: Record<string, unknown> = {},
-  ) => <TextField form={shown} name={name} label={label} value={v[name]} onChange={(e) => set(name, e.target.value)} {...props} />;
+  ) => (
+    <TextField
+      form={shown}
+      name={name}
+      label={label}
+      value={v[name]}
+      onChange={(e) => set(name, e.target.value, name === "budget" ? ["budgetMinor"] : name === "annualValue" ? ["annualValueMinor"] : [])}
+      {...props}
+    />
+  );
   const currency = (
     <SelectField form={shown} name="currency" label="Currency" value={v.currency} onChange={(e) => set("currency", e.target.value as typeof v.currency)}>
       {currencies.map((c) => (
@@ -129,7 +149,7 @@ export function AgreementForm({
             </SelectField>
           )}
           {!a && (
-            <SelectField form={shown} name="kind" label="Kind" value={v.kind} onChange={(e) => set("kind", e.target.value as Kind)}>
+            <SelectField form={shown} name="kind" label="Kind" value={v.kind} onChange={(e) => changeKind(e.target.value as Kind)}>
               <option value="">Choose a kind</option>
               {kinds.map((k) => (
                 <option key={k} value={k}>
@@ -141,7 +161,7 @@ export function AgreementForm({
           {text("title", "Title", { autoFocus: true })}
           {text("reference", "Our reference (optional)")}
           <SelectField form={shown} name="ownerUserId" label="Owner" value={v.ownerUserId} onChange={(e) => set("ownerUserId", e.target.value)}>
-            {people.data?.map((p) => (
+            {owners.map((p) => (
               <option key={p.id} value={p.id}>
                 {personName(p)}
               </option>
@@ -195,7 +215,7 @@ export function AgreementForm({
                 </option>
               ))}
             </SelectField>
-            {text("budget", "Budget", { inputMode: "decimal", placeholder: "12,500.00" })}
+            {text("budget", "Budget", { inputMode: "decimal", placeholder: "12,500.00", hint: reading(v.budget) })}
             {currency}
             {text("startDate", "Start date", { type: "date" })}
             {text("endDate", "End date", { type: "date" })}
@@ -204,7 +224,7 @@ export function AgreementForm({
         {v.kind === "subscription" && (
           <>
             <Grid>
-              {text("annualValue", "Annual value", { inputMode: "decimal", placeholder: "12,500.00" })}
+              {text("annualValue", "Annual value", { inputMode: "decimal", placeholder: "12,500.00", hint: reading(v.annualValue) })}
               {currency}
               {text("startDate", "Start date", { type: "date" })}
               {text("endDate", "Renewal date", { type: "date" })}

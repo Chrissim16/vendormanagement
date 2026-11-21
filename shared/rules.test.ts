@@ -40,7 +40,7 @@ describe("money", () => {
     expect(parseAmount("1,234,567.89")).toBe(123_456_789);
   });
   it("refuses what is not an amount", () => {
-    for (const bad of ["", "abc", "-5", "1.2.3", "12,50,00", "1.234.56", "1e3", "1.234,567"]) expect(parseAmount(bad), bad).toBeNull();
+    for (const bad of ["", "abc", "-5", "1.2.3", "12,50,00", "1.234.56", "1e3", "1.234,567", "0.500", "0,123", "00.250"]) expect(parseAmount(bad), bad).toBeNull();
   });
   it("shows amounts with their currency and never drifts by a cent", () => {
     expect(formatMoney(1_250_000, "EUR")).toBe("€ 12,500.00");
@@ -110,6 +110,11 @@ describe("agreement rules per kind", () => {
   it("refuses impossible dates and negative amounts before any rule runs", () => {
     expect(agreementSchema.safeParse({ ...ids, kind: "nda", title: "T", signedOn: "2026-02-31" }).success).toBe(false);
     expect(agreementSchema.safeParse({ ...ids, kind: "sow", title: "T", budgetMinor: -1 }).success).toBe(false);
+  });
+  it("an NDA or data processing agreement has no start date, so a stale one can never block its valid-until date", () => {
+    const r = check({ kind: "nda", startDate: "2026-12-01", endDate: "2026-11-30" });
+    expect(r.errors).toEqual({});
+    expect(r.value.startDate).toBeNull();
   });
 });
 

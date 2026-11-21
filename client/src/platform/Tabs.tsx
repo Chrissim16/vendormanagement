@@ -40,6 +40,8 @@ export function Tabs<T extends string>({
             onKeyDown={(e) => {
               if (e.key === "ArrowRight") move(1);
               if (e.key === "ArrowLeft") move(-1);
+              if (e.key === "Home") move(-tabs.findIndex((x) => x.id === value));
+              if (e.key === "End") move(tabs.length - 1 - tabs.findIndex((x) => x.id === value));
             }}
             className={clsx("relative py-2.5 font-medium transition-colors", t.id === value ? "text-ink" : "text-ink-2 hover:text-ink")}
           >

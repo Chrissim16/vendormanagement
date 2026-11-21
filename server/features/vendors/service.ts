@@ -104,9 +104,11 @@ export async function updateVendor(db: Db, id: string, input: unknown, by: User,
 
 const contactLabel = (c: { name: string }) => `contact ${c.name}`;
 
-/** Adds, changes or removes a contact. Contact changes appear in the vendor's history. */
+/**
+ * Adds, changes or removes a contact. A change may send only the fields that change.
+ * Contact changes appear in the vendor's history.
+ */
 export async function saveContact(db: Db, target: { vendorId: string } | { contactId: string }, input: unknown, by: User): Promise<Contact[]> {
-  const c: ContactInput | null = input === null ? null : contactSchema.parse(input);
   return db.transaction(async (tx) => {
     const existing = "contactId" in target ? await repo.getContact(tx, target.contactId) : undefined;
     if ("contactId" in target && !existing) throw notFound("That contact");
@@ -115,22 +117,32 @@ export async function saveContact(db: Db, target: { vendorId: string } | { conta
     const vendor = (await repo.getVendor(tx, vendorId))?.vendor;
     if (!vendor) throw notFound("That vendor");
     const entry = { userEmail: by.email, action: "update" as const, entityType: "vendor", entityId: vendorId, summary: vendor.name };
-    if (c === null) {
+    if (input === null) {
       await repo.deleteContact(tx, existing!.id);
       await audit(tx, { ...entry, changes: { [contactLabel(existing!)]: { from: "listed", to: "removed" } } });
-    } else {
-      if (c.isPrimary) await repo.clearPrimary(tx, vendorId);
-      if (existing) {
-        await repo.updateContact(tx, existing.id, c, by.email);
-        const changes = diff(existing as unknown as Record<string, unknown>, c);
-        if (Object.keys(changes).length) await audit(tx, { ...entry, changes: Object.fromEntries(Object.entries(changes).map(([k, v]) => [`${contactLabel(c)} ${k}`, v])) });
-      } else {
-        await repo.insertContact(tx, vendorId, c, by.email);
-        await audit(tx, { ...entry, changes: { [contactLabel(c)]: { from: null, to: "added" } } });
-      }
+      return repo.listContacts(tx, vendorId);
     }
+    // Fields that were not sent keep their stored value.
+    const c: ContactInput = contactSchema.parse(existing ? { ...existing, ...(input as object) } : input);
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    if (c.isPrimary) {
+      const previous = (await repo.listContacts(tx, vendorId)).find((x) => x.isPrimary && x.id !== existing?.id);
+      if (previous) changes[`${contactLabel(previous)} isPrimary`] = { from: true, to: false };
+      await repo.clearPrimary(tx, vendorId);
+    }
+    if (existing) {
+      await repo.updateContact(tx, existing.id, c, by.email);
+      for (const [k, v] of Object.entries(diff(existing as unknown as Record<string, unknown>, c))) changes[`${contactLabel(c)} ${k}`] = v;
+    } else {
+      await repo.insertContact(tx, vendorId, c, by.email);
+      changes[contactLabel(c)] = { from: null, to: "added" };
+    }
+    if (Object.keys(changes).length) await audit(tx, { ...entry, changes });
     return repo.listContacts(tx, vendorId);
   });
 }
 
 export const listPeople = (db: Db) => repo.listActiveUsers(db);
+
+/** For other features: the vendor with this name (ignoring case), with its status. */
+export const findVendorByName = repo.findByName;

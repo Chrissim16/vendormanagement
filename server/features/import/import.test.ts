@@ -45,7 +45,16 @@ describe("A-8 import", () => {
 
   it("previews valid and invalid rows with the reason for each, and saves nothing", async () => {
     const file = await workbook(
-      [v("Import Alpha"), v("Import Beta", "hardware"), v(""), v("Bluefinch Systems"), v("Import Alpha"), v("Import Gamma", "advisory", "", "nobody@example.test")],
+      [
+        v("Import Alpha"),
+        v("Import Beta", "hardware"),
+        v(""),
+        v("Bluefinch Systems"),
+        v("Import Twice"),
+        v("import twice"),
+        v("Import Gamma", "advisory", "", "nobody@example.test"),
+        v("Import Eps", "software", "paused"),
+      ],
       [
         a("Import Alpha", "MSA", "Alpha MSA", { 4: "active", 7: new Date("2026-03-01T00:00:00Z") }),
         a("Import Alpha", "SOW", "Alpha SOW 1", { 8: "01-04-2026", 9: "2026-09-30", 10: "Alpha MSA", 11: "fixed", 12: "12.500,50" }),
@@ -54,6 +63,7 @@ describe("A-8 import", () => {
         a("Import Alpha", "Lease", "Car"),
         a("Bluefinch Systems", "MSA", "master services agreement"),
         a("Import Alpha", "SOW", "Orphan", { 8: "2026-04-01", 9: "2026-05-01", 10: "No such MSA", 11: "fixed", 12: 100 }),
+        a("Import Alpha", "NDA", "Odd NDA", { 4: "signed", 6: "USD", 10: "Alpha MSA" }),
       ],
     );
     const before = (await t.as(ADMIN).get("/api/vendors").query({ status: "all" })).body.total;
@@ -62,21 +72,102 @@ describe("A-8 import", () => {
     expect(res.body.applied).toBe(false);
     const rows = Object.fromEntries(res.body.rows.map((r: { sheet: string; row: number; outcome: string; problems: string[] }) => [`${r.sheet[0]}${r.row}`, r]));
     expect(rows.V2).toMatchObject({ outcome: "add", label: "Import Alpha" });
-    expect(rows.V3.outcome).toBe("invalid");
-    expect(rows.V4.problems.join(" ")).toMatch(/name/i);
+    expect(rows.V3.problems).toEqual(["Type: use software, consultancy or advisory."]);
+    expect(rows.V4.problems.join(" ")).toMatch(/Name: Give the vendor a name/);
     expect(rows.V5).toMatchObject({ outcome: "exists", problems: [] });
+    // Both copies of a repeated vendor are refused, not just the second.
     expect(rows.V6.problems.join(" ")).toMatch(/more than once/);
-    expect(rows.V7.problems.join(" ")).toMatch(/nobody@example.test has not opened the app/);
+    expect(rows.V7.problems.join(" ")).toMatch(/more than once/);
+    expect(rows.V8.problems.join(" ")).toMatch(/nobody@example.test has not opened the app/);
+    expect(rows.V9.problems).toEqual(["Status: use one of prospect, active, on_hold or offboarded."]);
     expect(rows.A2.outcome).toBe("add");
     expect(rows.A3.outcome).toBe("add");
-    expect(rows.A4.problems.join(" ")).toMatch(/End date: "31-02-2026" is not a date/);
-    expect(rows.A4.problems.join(" ")).toMatch(/Budget: "lots" is not an amount/);
-    expect(rows.A5.problems.join(" ")).toMatch(/Vendor "Nobody Ltd" is not in the app/);
+    expect(rows.A4.problems).toEqual(['End date: "31-02-2026" is not a date. Use 2026-12-31 or 31-12-2026.', 'Budget: "lots" is not an amount with at most two decimals.']);
+    expect(rows.A5.problems.join(" ")).toMatch(/Vendor name: "Nobody Ltd" is not in the app/);
     expect(rows.A6.problems.join(" ")).toMatch(/Kind: use MSA/);
     expect(rows.A7).toMatchObject({ outcome: "exists" });
     expect(rows.A8.problems.join(" ")).toMatch(/no MSA called "No such MSA"/);
-    expect(res.body.counts).toEqual({ add: 3, exists: 2, invalid: 8 });
+    expect(rows.A9.problems.sort()).toEqual([
+      "Currency: use EUR or GBP.",
+      "Parent MSA title: only a SOW can sit under an MSA.",
+      "Status: use one of draft, in_negotiation, out_for_signature, active or ended.",
+    ]);
+    // No message leaks the validator's own wording.
+    expect(JSON.stringify(res.body.rows)).not.toMatch(/Invalid option|expected one of|Too big/);
+    expect(res.body.counts).toEqual({ add: 3, exists: 2, invalid: 11 });
     expect((await t.as(ADMIN).get("/api/vendors").query({ status: "all" })).body.total).toBe(before);
+  });
+
+  it("reads formula cells by their result and reports cells that show an error", async () => {
+    const file = await workbook(
+      [v("Formula Co")],
+      [
+        a("Formula Co", "SOW", "Exact", { 8: "2026-01-01", 9: "2026-12-31", 11: "fixed", 12: { formula: "1250*10", result: 12500 } }),
+        a("Formula Co", "SOW", "Too fine", { 8: "2026-01-01", 9: "2026-12-31", 11: "fixed", 12: { formula: "125/8", result: 15.625 } }),
+        a("Formula Co", "SOW", "Plain too fine", { 8: "2026-01-01", 9: "2026-12-31", 11: "fixed", 12: 15.625 }),
+        a("Formula Co", "Subscription", "Broken lookup", { 9: "2027-06-30", 13: 100, 14: { formula: "VLOOKUP(1,A1:B2,2)", result: { error: "#N/A" } }, 15: "yes" }),
+        a("Formula Co", "Subscription", "No auto renew answer", { 9: "2027-06-30", 13: 100 }),
+      ],
+    );
+    const res = await send("apply", file);
+    const rows = Object.fromEntries(res.body.rows.map((r: { label: string; outcome: string; problems: string[] }) => [r.label.split(" · ")[1] ?? r.label, r]));
+    expect(rows["Exact"].outcome).toBe("add");
+    expect(rows["Too fine"].problems).toEqual(['Budget: "15.625" is not an amount with at most two decimals.']);
+    expect(rows["Plain too fine"].problems).toEqual(['Budget: "15.625" is not an amount with at most two decimals.']);
+    expect(rows["Broken lookup"].problems).toEqual(["Notice period days: the cell shows an error (#N/A). Type the value in."]);
+    expect(rows["No auto renew answer"].problems).toEqual(["Auto renews: write yes or no for a subscription."]);
+    const vendor = (await t.as(ADMIN).get("/api/vendors").query({ q: "Formula Co" })).body.items[0].id;
+    const saved = (await t.as(ADMIN).get("/api/agreements").query({ vendorId: vendor })).body.items;
+    expect(saved.map((x: { title: string; budgetMinor: number }) => [x.title, x.budgetMinor])).toEqual([["Exact", 1_250_000]]);
+  });
+
+  it("preview and import agree on every row", async () => {
+    const gone = (
+      await t
+        .as(ADMIN)
+        .post("/api/vendors")
+        .send({ name: "Import Gone", type: "software", ownerUserId: (await t.as(ADMIN).get("/api/me")).body.id, status: "offboarded" })
+    ).body;
+    expect(gone.status).toBe("offboarded");
+    const file = await workbook(
+      [v("Pair A"), v("Pair B"), v("Pair Offboarded", "software", "offboarded"), v("Example Vendor (delete this row)")],
+      [
+        a("Pair B", "MSA", "Master"),
+        // Pair A has no MSA called Master; only Pair B does.
+        a("Pair A", "SOW", "Wrong parent", { 8: "2026-01-01", 9: "2026-12-31", 10: "Master", 11: "fixed", 12: 100 }),
+        a("Pair B", "SOW", "Right parent", { 8: "2026-01-01", 9: "2026-12-31", 10: "master", 11: "fixed", 12: 100 }),
+        a("Import Gone", "NDA", "For an offboarded vendor"),
+        a("Pair Offboarded", "NDA", "For a vendor imported as offboarded"),
+        a("Example Vendor (delete this row)", "SOW", "SOW 01 Example project", { 8: "2026-01-01", 9: "2026-12-31", 11: "fixed", 12: 120000 }),
+      ],
+    );
+    const outcomes = (r: { body: { rows: { sheet: string; row: number; outcome: string }[] } }) => r.body.rows.map((x) => `${x.sheet[0]}${x.row}:${x.outcome}`);
+    const preview = await send("preview", file);
+    expect(outcomes(preview)).toEqual(["V2:add", "V3:add", "V4:add", "V5:invalid", "A2:add", "A3:invalid", "A4:add", "A5:invalid", "A6:invalid", "A7:invalid"]);
+    const problems = Object.fromEntries(preview.body.rows.map((x: { sheet: string; row: number; problems: string[] }) => [`${x.sheet[0]}${x.row}`, x.problems.join(" ")]));
+    expect(problems.A3).toMatch(/no MSA called "Master" for this vendor/);
+    expect(problems.A5).toMatch(/offboarded and cannot receive new agreements/);
+    expect(problems.A6).toMatch(/offboarded and cannot receive new agreements/);
+    expect(problems.V5).toMatch(/example row/);
+    expect(problems.A7).toMatch(/example row/);
+    const applied = await send("apply", file);
+    expect(applied.status).toBe(200);
+    expect(outcomes(applied)).toEqual(outcomes(preview));
+    const b = (await t.as(ADMIN).get("/api/vendors").query({ q: "Pair B" })).body.items[0].id;
+    const list = (await t.as(ADMIN).get("/api/agreements").query({ vendorId: b, sort: "kind" })).body.items;
+    expect(list.map((x: { title: string }) => x.title)).toEqual(["Master", "Right parent"]);
+    expect(list[1].parentMsaId).toBe(list[0].id);
+    expect((await t.as(ADMIN).get("/api/vendors").query({ q: "Example Vendor", status: "all" })).body.total).toBe(0);
+  });
+
+  it("refuses a workbook that would unpack to an enormous size, before unpacking it", async () => {
+    // A ZIP directory entry that claims a 3 GB file inside a tiny archive.
+    const entry = Buffer.alloc(46);
+    entry.write("PK\x01\x02", 0, "latin1");
+    entry.writeUInt32LE(3_000_000_000, 24);
+    const res = await send("preview", Buffer.concat([Buffer.from("PK\x03\x04", "latin1"), entry]));
+    expect(res.status).toBe(413);
+    expect(res.body.error.message).toMatch(/too large to import/);
   });
 
   it("imports the valid rows, and importing the same file again adds nothing", async () => {

@@ -67,6 +67,8 @@ export function checkAgreement(a: AgreementInput): { errors: Record<string, stri
   const errors: Record<string, string> = {};
   if (v.kind !== "sow") Object.assign(v, { parentMsaId: null, pricing: null, budgetMinor: null });
   if (v.kind !== "subscription") Object.assign(v, { annualValueMinor: null, noticePeriodDays: null, autoRenews: null, renewalTermMonths: null });
+  // Signed-on and valid-until are the only dates an NDA or data processing agreement has.
+  if (v.kind === "nda" || v.kind === "dpa") v.startDate = null;
 
   if (v.kind === "msa") {
     // An MSA runs until someone ends it; the end date is only filled when it has ended.
@@ -153,6 +155,8 @@ export interface Agreement extends AgreementFields {
   createdAt: string;
   noticeDeadline: Day | null;
   renewalState: RenewalState;
+  /** A renewal decision has been recorded for the term that ends on the current end date. */
+  decidedForTerm: boolean;
 }
 export interface DocumentInfo {
   id: string;

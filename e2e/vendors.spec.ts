@@ -4,16 +4,21 @@ import { ADMIN, expectAccessible, MEMBER, newAgreement, newVendor, signInAs } fr
 test.describe("V-1 vendor list", () => {
   test("V-1 shows name, type, status, owner, active agreements and warnings, and hides offboarded vendors", async ({ page, context, request }) => {
     const gone = await newVendor(request, "Offboarded", { status: "offboarded" });
+    const v = await newVendor(request, "Listed", { type: "consultancy", ndaRequired: true });
+    await newAgreement(request, v, { kind: "msa", title: "Listed MSA", status: "active", signedOn: "2026-01-01" });
+    await newAgreement(request, v, { kind: "dpa", title: "Listed DPA", status: "active", signedOn: "2026-01-01" });
+    await newAgreement(request, v, { kind: "nda", title: "Listed draft NDA" });
     await signInAs(context, MEMBER);
-    await page.goto("/vendors");
+    await page.goto(`/vendors?q=${encodeURIComponent(v.name)}`);
     const table = page.getByRole("table", { name: "Vendors" });
-    const row = table.getByRole("row").filter({ hasText: "Bluefinch Systems" });
-    await expect(row).toContainText("Software");
-    await expect(row).toContainText("Mira Okafor");
+    const row = table.getByRole("row").filter({ hasText: v.name });
+    await expect(row).toContainText("Consultancy");
+    await expect(row).toContainText("Alex Admin");
     await expect(row).toContainText("Active");
-    await expect(row.getByRole("cell").nth(3)).toHaveText("5");
-    await expect(table.getByRole("row").filter({ hasText: "Larkspur Data" })).toContainText("1 warning");
-    await expect(table).not.toContainText(gone.name);
+    await expect(row.getByRole("cell").nth(3)).toHaveText("2");
+    await expect(row).toContainText("1 warning");
+    await page.goto(`/vendors?q=${encodeURIComponent(gone.name)}`);
+    await expect(page.getByRole("heading", { name: "No vendors match these filters" })).toBeVisible();
     await page.getByLabel("Status", { exact: true }).selectOption("offboarded");
     await expect(table).toContainText(gone.name);
   });
@@ -100,6 +105,11 @@ test.describe("V-3 vendor page", () => {
     const panel = page.getByRole("region", { name: v.name });
     await expect(panel.getByRole("definition").filter({ hasText: "In place" })).toHaveCount(1);
     await expect(panel.getByRole("definition").filter({ hasText: "Missing" })).toHaveCount(1);
+    // A data processing agreement past its valid-until date shows as expired, not missing.
+    await newAgreement(request, v, { kind: "dpa", title: "Lapsed DPA", status: "active", signedOn: "2025-01-01", endDate: "2026-11-20" });
+    await page.reload();
+    await expect(panel.getByRole("definition").filter({ hasText: "Expired" })).toHaveCount(1);
+    await expect(panel.getByRole("definition").filter({ hasText: "Missing" })).toHaveCount(0);
 
     await panel.getByRole("tab", { name: /Contacts/ }).click();
     await panel.getByRole("button", { name: "Add contact" }).click();
@@ -130,7 +140,7 @@ test.describe("V-3 vendor page", () => {
     await expect(rows.nth(1)).toContainText("SOW under it");
     await expect(rows.nth(1)).toContainText("€ 12,500.00");
     await expect(rows.nth(1)).toContainText("Ends 30 Jun 2027");
-    await expect(rows.nth(2)).toContainText("The NDA");
+    await expect(panel.getByRole("link").filter({ hasText: "The NDA" })).toBeVisible();
 
     await panel.getByRole("tab", { name: "History" }).click();
     await expect(panel.getByText("contact Bo Lind from listed to removed")).toBeVisible();

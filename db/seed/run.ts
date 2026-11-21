@@ -182,7 +182,8 @@ export async function seed(db: Db, today: Day) {
   const idOf = (email: string) => people.find((u) => u.email === email)!.id;
   const admin = toUser(people.find((u) => u.email === "admin@example.test")!);
   for (const s of sampleVendors(today)) {
-    const vendor = await createVendor(db, { ...s.vendor, ownerUserId: idOf(s.owner) }, admin, today);
+    // Every sample vendor says in its legal name that it is made up, so it can never be mistaken for a real firm.
+    const vendor = await createVendor(db, { legalName: `${s.vendor.name} (invented)`, ...s.vendor, ownerUserId: idOf(s.owner) }, admin, today);
     if (s.contact)
       await saveContact(
         db,

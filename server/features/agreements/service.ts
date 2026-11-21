@@ -9,6 +9,7 @@ import {
   MAX_DOCUMENT_BYTES,
   nextTermEnd,
   noticeDeadline,
+  pricingLabels,
   renewalState,
   statusLabels,
   type Agreement,
@@ -22,6 +23,7 @@ import { diff } from "../../../shared/users";
 import { audit } from "../../platform/audit";
 import { AppError, notFound } from "../../platform/errors";
 import { failFields, toCsv } from "../../platform/http";
+import { explain } from "../../platform/ports/explain";
 import type { Db, Queryable, StoragePort, Tx } from "../../platform/ports/types";
 import * as repo from "./repo";
 
@@ -29,7 +31,15 @@ type Row = NonNullable<Awaited<ReturnType<typeof repo.getAgreement>>>;
 
 function toAgreement({ agreement: a, vendorName, ownerName, decisionId }: Row, today: Day): Agreement {
   const { createdBy: _c, updatedBy: _u, updatedAt: _t, createdAt, ...fields } = a;
-  return { ...fields, vendorName, ownerName, createdAt: createdAt.toISOString(), noticeDeadline: noticeDeadline(a), renewalState: renewalState(a, today, decisionId !== null) };
+  return {
+    ...fields,
+    vendorName,
+    ownerName,
+    createdAt: createdAt.toISOString(),
+    noticeDeadline: noticeDeadline(a),
+    renewalState: renewalState(a, today, decisionId !== null),
+    decidedForTerm: decisionId !== null,
+  };
 }
 
 export async function listAgreements(db: Db, filter: repo.AgreementFilter, today: Day): Promise<Page<Agreement>> {
@@ -79,6 +89,8 @@ export async function createAgreement(db: Db, input: unknown, by: User, today: D
   const { errors, value } = checkAgreement(agreementSchema.parse(input));
   if (Object.keys(errors).length) failFields(errors);
   return db.transaction(async (tx) => {
+    // Lock the vendor so it cannot be offboarded while this agreement is being added.
+    await tx.execute(sql`select 1 from vendors where id = ${value.vendorId} for update`);
     const vendor = await repo.getVendorBrief(tx, value.vendorId);
     if (!vendor) failFields({ vendorId: "Choose a vendor." });
     if (vendor.status === "offboarded") failFields({ vendorId: "This vendor is offboarded and cannot receive new agreements." });
@@ -100,6 +112,12 @@ export async function updateAgreement(db: Db, id: string, input: unknown, by: Us
       if (fixed in body && body[fixed] !== current[fixed]) failFields({ [fixed]: "This cannot be changed once the agreement exists. Add a new agreement instead." });
     }
     const { errors, value } = checkAgreement(agreementSchema.parse({ ...current, ...body }));
+    if (value.status === "active" && current.status !== "active") {
+      // Same lock as offboarding takes, so the two cannot both go through.
+      await tx.execute(sql`select 1 from vendors where id = ${current.vendorId} for update`);
+      const vendor = await repo.getVendorBrief(tx, current.vendorId);
+      if (vendor?.status === "offboarded") failFields({ status: "This vendor is offboarded, so its agreements cannot be made active." });
+    }
     if (Object.keys(errors).length) failFields(errors);
     await checkLinks(tx, value, { owner: value.ownerUserId !== current.ownerUserId, parent: value.parentMsaId !== current.parentMsaId });
     if (value.parentMsaId === id) failFields({ parentMsaId: "An agreement cannot sit under itself." });
@@ -149,8 +167,11 @@ export async function listRenewals(db: Db, windowDays: number, owner: string | u
     .sort((a, b) => daysBetween(b.noticeDeadline!, a.noticeDeadline!) || a.title.localeCompare(b.title));
 }
 
+const EXPORT_LIMIT = 5000;
+
 export async function exportCsv(db: Db, filter: Omit<repo.AgreementFilter, "page" | "pageSize">, today: Day): Promise<string> {
-  const { items } = await repo.listAgreements(db, { ...filter, page: 1, pageSize: 5000 });
+  const { items, total } = await repo.listAgreements(db, { ...filter, page: 1, pageSize: EXPORT_LIMIT });
+  if (total > EXPORT_LIMIT) throw new AppError(400, "too_many", `There are ${total} agreements to export, more than fits in one file. Narrow the filters first.`);
   const money = (minor: number | null) => (minor == null ? "" : (minor / 100).toFixed(2));
   return toCsv(
     [
@@ -186,7 +207,7 @@ export async function exportCsv(db: Db, filter: Omit<repo.AgreementFilter, "page
         a.currency,
         money(a.budgetMinor),
         money(a.annualValueMinor),
-        a.pricing,
+        a.pricing ? pricingLabels[a.pricing] : "",
         a.autoRenews == null ? "" : a.autoRenews ? "yes" : "no",
       ];
     }),
@@ -201,6 +222,9 @@ const signatures: Record<string, number[][]> = {
   xls: [[0xd0, 0xcf, 0x11, 0xe0]],
 };
 
+/** Office files are ZIP archives; a real one names its parts inside. Old .doc and .xls files are OLE containers. */
+const inside: Record<string, string[]> = { docx: ["[Content_Types].xml", "word/"], xlsx: ["[Content_Types].xml", "xl/"] };
+
 /** Accepts PDF, Word and Excel up to 25 MB, judged by the file's content as well as its name (A-5). */
 export function checkDocument(fileName: string, data: Buffer): { ext: string; contentType: string } {
   const ext = fileName.includes(".") ? fileName.split(".").pop()!.toLowerCase() : "";
@@ -208,23 +232,42 @@ export function checkDocument(fileName: string, data: Buffer): { ext: string; co
   if (!contentType) throw new AppError(400, "file_type", "Only PDF, Word and Excel files can be attached.");
   if (data.length === 0) throw new AppError(400, "file_empty", "That file is empty.");
   if (data.length > MAX_DOCUMENT_BYTES) throw new AppError(413, "file_too_large", "That file is larger than 25 MB.");
-  if (!signatures[ext]!.some((sig) => sig.every((b, i) => data[i] === b))) throw new AppError(400, "file_type", `That file is not a real ${ext.toUpperCase()} file.`);
+  const genuine = signatures[ext]!.some((sig) => sig.every((b, i) => data[i] === b)) && (inside[ext] ?? []).every((part) => data.includes(part));
+  if (!genuine) throw new AppError(400, "file_type", `That file is not a real ${ext.toUpperCase()} file.`);
   return { ext, contentType };
 }
 
+/**
+ * A file name safe to show and store: no control characters, no path characters, and none
+ * of the invisible characters that can make a name display as something it is not.
+ */
+export function cleanFileName(name: string): string {
+  const bad = (c: number) => c < 32 || (c >= 127 && c <= 159) || (c >= 0x200b && c <= 0x200f) || (c >= 0x202a && c <= 0x202e) || (c >= 0x2066 && c <= 0x2069) || c === 0xfeff;
+  const cleaned = [...name.normalize("NFC")]
+    .filter((ch) => !bad(ch.codePointAt(0)!) && ch !== "/" && ch !== "\\")
+    .join("")
+    .trim()
+    .slice(0, 200);
+  return cleaned || "document";
+}
+
+/** A storage failure, said in plain words. Not-found and other deliberate errors pass through. */
+function storageFailed(what: string) {
+  return (e: unknown): never => {
+    if (e instanceof AppError) throw e;
+    console.error(`Document storage failed (${what}):`, (e as Error).message);
+    throw new AppError(502, "storage_failed", `The document could not be ${what}. ${explain(e).cause}`);
+  };
+}
+
 export async function addDocument(db: Db, storage: StoragePort, agreementId: string, file: { name: string; data: Buffer }, by: User): Promise<DocumentInfo> {
-  const fileName =
-    [...file.name]
-      .filter((c) => c.charCodeAt(0) >= 32 && c.charCodeAt(0) !== 127 && c !== "/" && c !== "\\")
-      .join("")
-      .trim()
-      .slice(0, 200) || "document";
+  const fileName = cleanFileName(file.name);
   const { ext, contentType } = checkDocument(fileName, file.data);
   const row = await repo.getAgreement(db, agreementId);
   if (!row) throw notFound("That agreement");
   // The stored name is generated, so nothing a person typed ever becomes part of a file path.
   const storageKey = `agreements/${agreementId}/${randomUUID()}.${ext}`;
-  await storage.put(storageKey, file.data, contentType);
+  await storage.put(storageKey, file.data, contentType).catch(storageFailed("stored"));
   try {
     return await db.transaction(async (tx) => {
       const doc = await repo.insertDocument(tx, { agreementId, title: fileName, fileName, contentType, sizeBytes: file.data.length, storageKey, createdBy: by.email });
@@ -247,7 +290,7 @@ export async function addDocument(db: Db, storage: StoragePort, agreementId: str
 export async function readDocument(db: Db, storage: StoragePort, id: string) {
   const doc = await repo.getDocument(db, id);
   if (!doc) throw notFound("That document");
-  return { doc, data: await storage.get(doc.storageKey) };
+  return { doc, data: await storage.get(doc.storageKey).catch(storageFailed("fetched")) };
 }
 
 export async function removeDocument(db: Db, storage: StoragePort, id: string, by: User): Promise<void> {
@@ -269,3 +312,6 @@ export async function removeDocument(db: Db, storage: StoragePort, id: string, b
   // The record is gone; a file that cannot be removed right now is only wasted space.
   await storage.remove(key).catch((e) => console.error("Could not remove a stored file:", (e as Error).message));
 }
+
+/** For other features: an agreement of this vendor with the same kind and title, if there is one. */
+export const findSameAgreement = repo.findSame;

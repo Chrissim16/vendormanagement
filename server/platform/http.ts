@@ -1,4 +1,6 @@
+import multer from "multer";
 import { z } from "zod";
+import { MAX_DOCUMENT_BYTES } from "../../shared/agreements";
 import { isDay } from "../../shared/dates";
 import { AppError } from "./errors";
 
@@ -43,3 +45,6 @@ export function toCsv(headers: string[], rows: (string | number | null | undefin
   };
   return "﻿" + [headers, ...rows].map((r) => r.map(cell).join(",")).join("\r\n") + "\r\n";
 }
+
+/** One uploaded file, held in memory, at most 25 MB. Used as `upload.single("file")`. */
+export const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_DOCUMENT_BYTES, files: 1 } });

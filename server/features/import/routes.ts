@@ -2,8 +2,8 @@ import { Router } from "express";
 import type { Day } from "../../../shared/dates";
 import { currentUser, requireRole } from "../../platform/auth";
 import { AppError } from "../../platform/errors";
+import { upload } from "../../platform/http";
 import type { Db } from "../../platform/ports/types";
-import { upload } from "../agreements/routes";
 import * as service from "./service";
 
 export function importRoutes(db: Db, today: () => Day) {

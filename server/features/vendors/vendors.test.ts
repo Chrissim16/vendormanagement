@@ -18,10 +18,25 @@ const vendorNamed = async (name: string) => (await t.as(MEMBER).get("/api/vendor
 
 describe("V-1 vendor list", () => {
   it("shows name, type, status, owner, active agreements and warnings", async () => {
-    const v = await vendorNamed("Bluefinch Systems");
-    expect(v).toMatchObject({ type: "software", status: "active", ownerName: "Mira Okafor", activeAgreements: 5, nda: "in_place", dpa: "in_place", warnings: 0 });
-    expect((await vendorNamed("Larkspur Data")).warnings).toBe(1);
-    expect((await vendorNamed("Mossgate IT")).dpa).toBe("expired");
+    const v = (await add({ name: "Listed Vendor", type: "consultancy" })).body;
+    const agreement = (o: Record<string, unknown>) =>
+      t
+        .as(MEMBER)
+        .post("/api/agreements")
+        .send({ vendorId: v.id, ownerUserId: me, ...o });
+    await agreement({ kind: "msa", title: "MSA", status: "active", signedOn: "2026-01-01" });
+    await agreement({ kind: "nda", title: "NDA", status: "active", signedOn: "2026-01-01" });
+    await agreement({ kind: "dpa", title: "Old DPA", status: "active", signedOn: "2025-01-01", endDate: "2026-11-01" });
+    await agreement({ kind: "nda", title: "Draft NDA" });
+    expect(await vendorNamed("Listed Vendor")).toMatchObject({
+      type: "consultancy",
+      status: "active",
+      ownerName: "Mira Okafor",
+      activeAgreements: 3,
+      nda: "in_place",
+      dpa: "expired",
+      warnings: 1,
+    });
   });
   it("searches by name and filters by type, status and owner", async () => {
     const list = (q: Record<string, string>) => t.as(MEMBER).get("/api/vendors").query(q);
@@ -29,7 +44,8 @@ describe("V-1 vendor list", () => {
     expect((await list({ type: "advisory" })).body.items.map((v: { name: string }) => v.name)).toEqual(["Emberline Advisory"]);
     expect((await list({ status: "prospect" })).body.items.map((v: { name: string }) => v.name)).toEqual(["Harrowick Partners"]);
     const sanne = (await t.as(MEMBER).get("/api/people")).body.find((p: { email: string }) => p.email === "sanne@example.test").id;
-    expect((await list({ owner: sanne })).body.total).toBe(3);
+    expect((await list({ owner: sanne })).body.items.every((v: { ownerName: string }) => v.ownerName === "Sanne de Wit")).toBe(true);
+    expect((await list({ owner: sanne })).body.total).toBeGreaterThan(0);
     expect((await list({ q: "%" })).body.total).toBe(0);
   });
   it("sorts by any column and pages", async () => {
@@ -37,7 +53,8 @@ describe("V-1 vendor list", () => {
     const asc = await names({ sort: "name" });
     expect(asc).toEqual([...asc].sort((a, b) => a.localeCompare(b)));
     expect(await names({ sort: "name", dir: "desc" })).toEqual([...asc].reverse());
-    expect((await names({ sort: "owner" }))[0]).toBe("Larkspur Data");
+    const owners = (await t.as(MEMBER).get("/api/vendors").query({ sort: "owner" })).body.items.map((v: { ownerName: string }) => v.ownerName);
+    expect(owners).toEqual([...owners].sort((a, b) => a.localeCompare(b)));
     expect((await names({ pageSize: "2", page: "2" })).length).toBe(2);
     expect((await t.as(MEMBER).get("/api/vendors").query({ sort: "secret" })).status).toBe(400);
   });
@@ -128,7 +145,17 @@ describe("V-3 vendor page", () => {
     expect((await t.as(MEMBER).get(`/api/vendors/${v.id}`)).body.contacts).toHaveLength(1);
     const history = (await t.as(MEMBER).get("/api/audit/history").query({ entityType: "vendor", entityId: v.id })).body.items;
     expect(history[0].changes).toEqual({ "contact Ada Vale": { from: "listed", to: "removed" } });
+    // Created, Ada added, Bo added (taking primary from Ada), Ada edited (taking it back), Ada removed.
     expect(history).toHaveLength(5);
+    expect(history[2].changes).toEqual({ "contact Ada Vale isPrimary": { from: true, to: false }, "contact Bo Lind": { from: null, to: "added" } });
+  });
+  it("changes only the contact fields that were sent", async () => {
+    const v = (await add()).body;
+    const [c] = (await t.as(MEMBER).post(`/api/vendors/${v.id}/contacts`).send({ name: "Pat Moss", email: "pat@vendor.example.test", phone: "+31 20 555 0100", isPrimary: true }))
+      .body;
+    const [after] = (await t.as(MEMBER).patch(`/api/contacts/${c.id}`).send({ jobTitle: "Lead" })).body;
+    expect(after).toMatchObject({ name: "Pat Moss", jobTitle: "Lead", email: "pat@vendor.example.test", phone: "+31 20 555 0100", isPrimary: true });
+    expect((await t.as(MEMBER).patch(`/api/contacts/${c.id}`).send({ email: "nope" })).status).toBe(400);
   });
   it("refuses a contact without a name or with a bad email", async () => {
     const v = (await add()).body;
