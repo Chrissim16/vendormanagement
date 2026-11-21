@@ -59,3 +59,15 @@ export async function readMissingText(db: Queryable, storage: StoragePort): Prom
   }
   return { read, failed };
 }
+
+/** One document attached to an agreement, with its text, for reading its contents (E-1). Undefined for a document of an RFP response. */
+export const documentText = async (db: Queryable, id: string) =>
+  (
+    await db
+      .select({ id: documents.id, fileName: documents.fileName, agreementId: documents.agreementId, text: documents.extractedText, readingSuggestionId: documents.readingSuggestionId })
+      .from(documents)
+      .where(and(eq(documents.id, id), isNotNull(documents.agreementId)))
+  )[0];
+
+/** Makes a suggestion the document's current reading (E-1). Recorded in the agreement's history by the caller. */
+export const setReading = (tx: Queryable, documentId: string, suggestionId: string) => tx.update(documents).set({ readingSuggestionId: suggestionId }).where(eq(documents.id, documentId));

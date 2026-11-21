@@ -64,6 +64,7 @@ Derived, not stored:
 - `terminate` does not end the agreement by itself; someone sets it to ended when it stops.
 
 **Document**: attached to an agreement, or to a candidate's response in an RFP; never both. `title*`, `file_name*`, `content_type*`, `size_bytes*`, `storage_key*`, `extracted_text`. PDF, Word and Excel only, 25 MB at most, judged by the file's content as well as its name. The stored file's name is generated, so nothing a person typed becomes part of a file path. Attaching and removing are recorded in the agreement's history.
+- `reading_suggestion_id`: the AI's current reading of the document's fields (E-1), when one was asked for. Which reading is current is written here; earlier ones stay as AI suggestions.
 - `extracted_text` holds the words in the file, read when it is attached, so that Ask can find passages in it (C-1): a PDF gives one part per page, a workbook one part per sheet, a Word file (.docx) one part, without text deleted under tracked changes. Empty when the file holds no words the app can read (a scan, an old .doc or .xls); absent only for a document attached before the app could read text, which the app reads at its next start. Reading never refuses an upload.
 
 **Warning** (worked out, not stored), for A-7:
@@ -296,6 +297,17 @@ per criterion a `score` 1 to 5, a `vendor_comment` and an `internal_note`, plus 
 - `output` is the model's answer exactly as given and is never changed; a person's edits are stored with the record the suggestion belongs to.
 - "Edited" means a person's value now differs from the AI's.
 - An answer to a question (C-1) is kept as a suggestion with kind `ask_answer` (or `ask_plan` when nothing was looked up), the person who asked as its subject, the question as `input_summary`, and the answer with the look-ups it rested on as `output`. It stays `proposed`: an answer is read, not accepted, and never becomes part of a record. There is no other record of a conversation; the conversation on screen lives in the browser tab.
+
+## Contract reading
+
+A **reading** (E-1) is an AI suggestion about one document attached to an agreement (kind `contract_fields`, the document as its subject). It holds, for each of kind, title, signed on, start date, end or renewal date, notice period in days, amount and currency, either nothing or a value with the passage it was read from.
+- A reading is refused as unusable unless every passage stands in the document word for word and itself holds its value: the date (year, day and the month by name or number), the amount, the number of days (or that many months written in figures), the currency's sign or name; a title must occur in the document. Nothing is worked out from other values.
+- The first 30,000 characters of the document are read; the page says when a document is longer.
+- Where a value goes depends on the agreement's kind: the amount is a SOW's budget or a subscription's annual value; the notice period exists for subscriptions only; an MSA has no end date and an NDA or DPA no start date. The kind itself is compared and never changed.
+- Each read value is one of: the same as the agreement holds, different (can be taken over), or not applying to this kind of agreement.
+- Using values: a member chooses among the different ones. They are saved through the agreement's own rules in one transaction with the record of the review; if a rule refuses one, nothing is saved. An amount in another currency than the agreement's can only be taken together with the currency.
+- The reading is `accepted` when every different value was taken, `edited` when only some were, `rejected` when dismissed. A reading that has been used or rejected cannot be used again; the AI can be asked to read again at any time, which closes a reading nobody had looked at.
+- Asking, using and rejecting are each a line in the agreement's history. Only documents attached to an agreement can be read, not what an RFP candidate sent.
 
 ## Ask a question
 

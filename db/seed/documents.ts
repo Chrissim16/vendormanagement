@@ -3,6 +3,7 @@ import { Document, HeadingLevel, Packer, Paragraph } from "docx";
 import PDFDocument from "pdfkit";
 import { addDocument } from "../../server/features/agreements/service";
 import type { Db, StoragePort } from "../../server/platform/ports/types";
+import { formatDay, type Day } from "../../shared/dates";
 import type { User } from "../../shared/types";
 import { agreements, documents, vendors } from "../schema";
 
@@ -49,23 +50,47 @@ const quillonFramework: [clause: string, text: string][] = [
   ["Termination", "Either party may end this agreement by giving 60 days' written notice. Work in progress is handed over and invoiced up to the end date."],
 ];
 
-function pdf(): Promise<Buffer> {
+/** A PDF of headed clauses, one list of clauses per page. */
+function pdf(heading: string, pages: [clause: string, text: string][][]): Promise<Buffer> {
   return new Promise((resolve) => {
-    const doc = new PDFDocument({ size: "A4", margin: 64, info: { Title: bluefinchMsa.heading } });
+    const doc = new PDFDocument({ size: "A4", margin: 64, info: { Title: heading } });
     const chunks: Buffer[] = [];
     doc.on("data", (c: Buffer) => chunks.push(c));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
-    bluefinchMsa.pages.forEach((clauses, i) => {
+    pages.forEach((clauses, i) => {
       if (i > 0) doc.addPage();
-      else doc.font("Helvetica-Bold").fontSize(16).text(bluefinchMsa.heading).moveDown();
+      else doc.font("Helvetica-Bold").fontSize(16).text(heading).moveDown();
       for (const [clause, text] of clauses) {
-        doc.font("Helvetica-Bold").fontSize(11).text(clause);
+        if (clause) doc.font("Helvetica-Bold").fontSize(11).text(clause);
         doc.font("Helvetica").fontSize(11).text(text).moveDown();
       }
     });
     doc.end();
   });
 }
+
+/** "10 February 2027": a date as a contract writes it. */
+const longDay = (day: Day) => {
+  const [d, , y] = formatDay(day).split(" ");
+  return `${d} ${["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][Number(day.slice(5, 7)) - 1]} ${y}`;
+};
+
+/**
+ * An order form for a subscription that says two things differently from what was keyed
+ * in (the yearly fee and the notice period), so that contract reading has something to find.
+ */
+const orderForm = (a: { signedOn: Day; startDate: Day; endDate: Day }): [string, string][][] => [
+  [
+    ["", "Subscription: Reporting suite"],
+    ["Parties", "This order form is between the Finance IT team (the Customer) and Tarnwick Software (invented) (the Supplier)."],
+    [
+      "Term",
+      `This order form was signed on ${longDay(a.signedOn)}. The subscription starts on ${longDay(a.startDate)}. It renews on ${longDay(a.endDate)} for a further twelve months unless cancelled.`,
+    ],
+    ["Fees", "The annual fee is € 51,000.00, invoiced yearly in advance."],
+    ["Cancelling", "Either party may cancel the subscription by giving 60 days' written notice before the renewal date."],
+  ],
+];
 
 const word = () =>
   Packer.toBuffer(
@@ -93,6 +118,24 @@ export async function seedDocuments(db: Db, storage: StoragePort, by: User) {
         .where(and(eq(vendors.name, vendor), eq(agreements.title, title)))
     )[0]?.id;
   const [msa, framework] = [await agreementId("Bluefinch Systems", "Master services agreement"), await agreementId("Quillon Consulting", "Framework agreement")];
-  if (msa) await addDocument(db, storage, msa, { name: "Bluefinch MSA (invented sample).pdf", data: await pdf() }, by);
+  if (msa) await addDocument(db, storage, msa, { name: "Bluefinch MSA (invented sample).pdf", data: await pdf(bluefinchMsa.heading, bluefinchMsa.pages) }, by);
+  const suite = (
+    await db
+      .select({ id: agreements.id, signedOn: agreements.signedOn, startDate: agreements.startDate, endDate: agreements.endDate })
+      .from(agreements)
+      .innerJoin(vendors, eq(vendors.id, agreements.vendorId))
+      .where(and(eq(vendors.name, "Tarnwick Software"), eq(agreements.title, "Reporting suite")))
+  )[0];
+  if (suite?.signedOn && suite.startDate && suite.endDate)
+    await addDocument(
+      db,
+      storage,
+      suite.id,
+      {
+        name: "Tarnwick order form (invented sample).pdf",
+        data: await pdf("Order form (invented sample)", orderForm({ signedOn: suite.signedOn, startDate: suite.startDate, endDate: suite.endDate })),
+      },
+      by,
+    );
   if (framework) await addDocument(db, storage, framework, { name: "Quillon framework agreement (invented sample).docx", data: await word() }, by);
 }

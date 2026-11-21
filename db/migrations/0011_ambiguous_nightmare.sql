@@ -1,0 +1,1 @@
+ALTER TABLE "documents" ADD COLUMN "reading_suggestion_id" uuid;

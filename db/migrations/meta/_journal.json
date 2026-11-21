@@ -78,6 +78,13 @@
       "when": 1795287239660,
       "tag": "0010_slimy_chameleon",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795299833802,
+      "tag": "0011_ambiguous_nightmare",
+      "breakpoints": true
     }
   ]
 }

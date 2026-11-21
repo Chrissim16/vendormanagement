@@ -80,3 +80,19 @@ export async function newInvoice(request: APIRequestContext, agreementId: string
 /** Calls the API as the admin, to set a test up or put a setting back. */
 export const asAdminApi = (request: APIRequestContext, method: "post" | "put" | "patch", path: string, data: unknown) =>
   request[method](`${BASE}/api${path}`, { headers: asAdmin, data });
+
+/** A small PDF with one line of text per paragraph, attached to an agreement as the admin. Invented text only. */
+export async function attachPdf(request: APIRequestContext, agreementId: string, name: string, lines: string[]) {
+  const { default: PDFDocument } = await import("pdfkit");
+  const buffer = await new Promise<Buffer>((resolve) => {
+    const doc = new PDFDocument({ size: "A4", margin: 64 });
+    const chunks: Buffer[] = [];
+    doc.on("data", (c: Buffer) => chunks.push(c));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    for (const line of lines) doc.fontSize(11).text(line).moveDown();
+    doc.end();
+  });
+  const res = await request.post(`${BASE}/api/agreements/${agreementId}/documents`, { headers: asAdmin, multipart: { file: { name, mimeType: "application/pdf", buffer } } });
+  expect(res.ok(), await res.text()).toBe(true);
+  return (await res.json()) as { id: string; fileName: string };
+}

@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { documentTypes, kindLabels, MAX_DOCUMENT_BYTES, pricingLabels, statusLabels, type AgreementDetail, type DocumentInfo } from "../../../../shared/agreements";
 import { daysBetween, formatDay } from "../../../../shared/dates";
+import type { DocumentReading } from "../../../../shared/reading";
 import { formatMoney } from "../../../../shared/money";
 import { api, ApiError, messageOf } from "../../lib/api";
 import { formatDate } from "../../lib/format";
@@ -13,6 +14,7 @@ import { Button, ErrorState, Loading, PageHeader, Pill } from "../../platform/ui
 import { InvoicesSection } from "../invoices/InvoicesSection";
 import { SowDelivery } from "../sow/SowDelivery";
 import { AgreementForm } from "./AgreementForm";
+import { AgreementReadings } from "./DocumentReadings";
 import { DecisionDialog } from "./DecisionDialog";
 import { agreementTone, day, renewalPill } from "./display";
 
@@ -55,6 +57,23 @@ function Documents({ a }: { a: AgreementDetail }) {
     },
     onError: (e) => setProblem(messageOf(e)),
   });
+  // E-1: what the AI read in these documents, and asking it to read one.
+  const readings = useQuery({ queryKey: ["agreement", a.id, "readings"], queryFn: () => api<DocumentReading[]>(`/agreements/${a.id}/readings`) });
+  const read = useMutation({
+    mutationFn: (documentId: string) => api<DocumentReading>(`/documents/${documentId}/reading`, { method: "POST" }),
+    onSuccess: async (r) => {
+      setProblem(null);
+      await done();
+      // The reading is shown across the page, above this section: take the reader, and the keyboard, there.
+      requestAnimationFrame(() => {
+        const panel = document.getElementById(`reading-${r.documentId}`);
+        panel?.scrollIntoView({ block: "center", behavior: "smooth" });
+        panel?.focus({ preventScroll: true });
+      });
+    },
+    onError: (e) => setProblem(messageOf(e)),
+  });
+  const wasRead = new Set((readings.data ?? []).map((r) => r.documentId));
   const remove = useMutation({
     mutationFn: (d: DocumentInfo) => api(`/documents/${d.id}`, { method: "DELETE" }),
     onSuccess: async (_r, d) => {
@@ -105,9 +124,19 @@ function Documents({ a }: { a: AgreementDetail }) {
                 </a>
                 <span className="num block text-[13px] text-ink-2">
                   {size(d.sizeBytes)} · added {formatDate(d.createdAt)} by {d.createdBy ?? "someone"}
-                  {d.readable === false && " · no readable text, so Ask cannot search it"}
+                  {d.readable === false && " · no readable text, so it cannot be searched or read by the AI"}
                 </span>
               </span>
+              {d.readable && !wasRead.has(d.id) && (
+                <Button
+                  className={`h-8 px-3.5 text-[12.5px] ${read.isPending && read.variables === d.id ? "cursor-progress" : ""}`}
+                  onClick={() => !read.isPending && read.mutate(d.id)}
+                  aria-disabled={read.isPending || undefined}
+                  aria-label={`Ask the AI to read ${d.fileName}`}
+                >
+                  {read.isPending && read.variables === d.id ? "Reading" : "Read with AI"}
+                </Button>
+              )}
               <Button className="h-8 px-3.5 text-[12.5px]" onClick={() => remove.mutate(d)} aria-label={`Remove ${d.fileName}`}>
                 Remove
               </Button>
@@ -247,6 +276,8 @@ export function AgreementPage() {
       )}
 
       {a.kind === "sow" && <SowDelivery agreement={a} />}
+
+      <AgreementReadings agreementId={a.id} />
 
       <div className="grid grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] gap-14">
         <div className="flex min-w-0 flex-col gap-10">

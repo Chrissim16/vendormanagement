@@ -532,6 +532,80 @@ function askAnswer(ask: AskAnswerAsk): string {
   return JSON.stringify({ answered, answer: out.join("\n") || "The app looked, and found nothing to answer this from.", sources: sources.slice(0, 12) });
 }
 
+interface ContractFieldsAsk {
+  task: "contract_fields";
+  fileName: string;
+  document: string;
+}
+
+const MONTHS_LONG = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+const DATE_WORDS = String.raw`(\d{1,2})(?:st|nd|rd|th)? (january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\.? (\d{4})`;
+const DATE_FIGURES = String.raw`(\d{4})-(\d{2})-(\d{2})|(\d{1,2})[/.](\d{1,2})[/.](\d{4})`;
+
+/** The first date in a piece of text, as YYYY-MM-DD: "10 February 2027", "2027-02-10" or "10/02/2027" (day first). */
+function dateIn(text: string): string | null {
+  const two = (n: number | string) => String(n).padStart(2, "0");
+  const w = new RegExp(DATE_WORDS, "i").exec(text);
+  const f = new RegExp(DATE_FIGURES).exec(text);
+  if (w && (!f || w.index <= f.index)) return `${w[3]}-${two(MONTHS_LONG.findIndex((m) => m.startsWith(w[2]!.toLowerCase().slice(0, 3))) + 1)}-${two(w[1]!)}`;
+  if (f) return f[1] ? `${f[1]}-${f[2]}-${f[3]}` : `${f[6]}-${two(f[5]!)}-${two(f[4]!)}`;
+  return null;
+}
+
+/**
+ * Reads a contract by looking for the usual phrases, sentence by sentence. A real model
+ * understands a contract; this recognises only plain wording, and leaves the rest empty.
+ */
+function contractFieldsAnswer(ask: ContractFieldsAsk): string {
+  const sentences = ask.document
+    .split(/\n+|(?<=[.!?])\s+(?=[A-Z0-9])/)
+    .map((s) => s.trim())
+    .filter((s) => s.length >= 8 && s.length <= 400);
+  const find = (pattern: RegExp) => sentences.find((s) => pattern.test(s));
+  const dated = (pattern: RegExp) => {
+    for (const s of sentences) {
+      const m = pattern.exec(s);
+      const value = m && dateIn(s.slice(m.index));
+      if (value) return { value, passage: s };
+    }
+    return null;
+  };
+  const kindOf: [RegExp, string][] = [
+    [/statement of work|\bsow\b/i, "sow"],
+    [/master services agreement|framework agreement|\bmsa\b/i, "msa"],
+    [/data processing agreement/i, "dpa"],
+    [/non-disclosure|confidentiality agreement|\bnda\b/i, "nda"],
+    [/subscription|licen[cs]e|order form/i, "subscription"],
+  ];
+  const head = sentences.slice(0, 4);
+  const kind = kindOf.map(([p, value]) => ({ value, passage: head.find((s) => p.test(s)) })).find((k) => k.passage) ?? null;
+  const named = find(/^(?:title|subject|subscription|statement of work|agreement|order form for)\s*[:-]\s*\S/i);
+  const title = named
+    ? {
+        value: named
+          .replace(/^[^:-]*[:-]\s*/, "")
+          .replace(/[.]$/, "")
+          .slice(0, 200),
+        passage: named,
+      }
+    : null;
+  const notice = sentences.map((s) => ({ s, m: /(\d{1,3}) days'? (?:written |prior )*notice/i.exec(s) })).find((x) => x.m);
+  const money = sentences
+    .map((s) => ({ s, m: /(?:budget|annual fee|yearly fee|annual value|fixed price|fee is|price is|fees? of)[^.\d€£]*?(€|£|EUR|GBP)\s?(\d[\d,.]*\d)/i.exec(s) }))
+    .find((x) => x.m);
+  const amount = money?.m ? money.m[2]!.replace(/[.,](?=\d{3}\b)/g, "").replace(",", ".") : null;
+  return JSON.stringify({
+    kind,
+    title,
+    signedOn: dated(/\bsigned\b|\bdated\b|date of signature/i),
+    startDate: dated(/\bstarts?\b|\bcommences?\b|effective (?:date|from|on)|\bbegins?\b/i),
+    endDate: dated(/\bends?\b|\buntil\b|\bexpires?\b|\brenews on\b|\bterminates on\b/i),
+    noticePeriodDays: notice?.m ? { value: Number(notice.m[1]), passage: notice.s } : null,
+    amount: amount && money ? { value: amount, passage: money.s } : null,
+    currency: money?.m ? { value: /€|EUR/i.test(money.m[1]!) ? "EUR" : "GBP", passage: money.s } : null,
+  });
+}
+
 /** Answers the prompts it knows; anything else gets the plain stand-in answer. */
 export function standInAnswer(req: AiRequest): string | undefined {
   if (!req.json) return undefined;
@@ -542,6 +616,7 @@ export function standInAnswer(req: AiRequest): string | undefined {
     if (ask.task === "briefing") return briefing(ask as BriefingAsk);
     if (ask.task === "rfp_draft") return rfpDraft(ask as RfpDraftAsk);
     if (ask.task === "rfp_comparison") return rfpComparison(ask as RfpComparisonAsk);
+    if (ask.task === "contract_fields") return contractFieldsAnswer(ask as ContractFieldsAsk);
     if (ask.task === "ask_plan") return askPlan(ask as AskPlanAsk);
     if (ask.task === "ask_answer") return askAnswer(ask as AskAnswerAsk);
   } catch {

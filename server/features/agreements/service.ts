@@ -109,9 +109,13 @@ export async function createAgreement(db: Db, input: unknown, by: User, today: D
   });
 }
 
-export async function updateAgreement(db: Db, id: string, input: unknown, by: User, today: Day): Promise<AgreementDetail> {
+export const updateAgreement = (db: Db, id: string, input: unknown, by: User, today: Day): Promise<AgreementDetail> =>
+  db.transaction((tx) => changeAgreement(tx, id, input, by, today));
+
+/** Changes an agreement inside a transaction that is already open, for a change that must stand or fall with something else. */
+export async function changeAgreement(tx: Tx, id: string, input: unknown, by: User, today: Day): Promise<AgreementDetail> {
   const body = (input ?? {}) as Record<string, unknown>;
-  return db.transaction(async (tx) => {
+  {
     await tx.execute(sql`select 1 from agreements where id = ${id} for update`);
     const row = await repo.getAgreement(tx, id);
     if (!row) throw notFound("That agreement");
@@ -143,7 +147,7 @@ export async function updateAgreement(db: Db, id: string, input: unknown, by: Us
       await audit(tx, { userEmail: by.email, action: "update", entityType: "agreement", entityId: id, summary: `${row.vendorName} · ${value.title}`, changes });
     }
     return getAgreement(tx, id, today);
-  });
+  }
 }
 
 /** Records what was decided for the current term of a subscription (A-6). */
@@ -345,3 +349,4 @@ export async function removeDocument(db: Db, storage: StoragePort, id: string, b
 export const findSameAgreement = repo.findSame;
 
 export { documentsWithText, readMissingText } from "./documents";
+export { documentText, setReading } from "./documents";

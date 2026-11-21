@@ -14,6 +14,7 @@ import { importRoutes } from "./features/import/routes";
 import { invoiceRoutes } from "./features/invoices/routes";
 import { performanceRoutes } from "./features/performance/routes";
 import type { PerformanceContext } from "./features/performance/service";
+import { readingRoutes } from "./features/reading/routes";
 import { overviewRoutes } from "./features/reports/routes";
 import { rfpRoutes } from "./features/rfp/routes";
 import type { RfpContext } from "./features/rfp/service";
@@ -125,6 +126,7 @@ export function createApp(config: Config, ports: Ports) {
   api.use(briefingRoutes(scorecardContext(config, ports)));
   api.use(rfpRoutes(rfpContext(config, ports)));
   api.use(chatRoutes(scorecardContext(config, ports)));
+  api.use(readingRoutes(scorecardContext(config, ports)));
   api.get("/settings", async (_req, res) => res.json(await getSettings(db)));
   api.put("/admin/settings", requireRole("admin"), async (req, res) => res.json(await saveSettings(db, req.body, currentUser(req))));
   api.use("/admin/import", importRoutes(db, today));

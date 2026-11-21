@@ -164,6 +164,8 @@ export const documents = pgTable(
     sizeBytes: integer("size_bytes").notNull(),
     storageKey: text("storage_key").notNull(),
     extractedText: text("extracted_text"),
+    /** E-1: the AI's current reading of this document's fields, when it has been asked for one. Earlier readings stay as suggestion rows. */
+    readingSuggestionId: uuid("reading_suggestion_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     createdBy: text("created_by"),
   },
@@ -709,10 +711,7 @@ export const rfpCandidates = pgTable(
     unmatched: jsonb("unmatched").$type<{ row: number; number: string; question: string; answer: string }[]>().notNull().default([]),
     ...stamps,
   },
-  (t) => [
-    uniqueIndex("rfp_candidates_one_per_vendor").on(t.rfpId, t.vendorId),
-    check("rfp_candidates_list_check", sql`${t.list} in ('longlist', 'shortlist', 'dropped')`),
-  ],
+  (t) => [uniqueIndex("rfp_candidates_one_per_vendor").on(t.rfpId, t.vendorId), check("rfp_candidates_list_check", sql`${t.list} in ('longlist', 'shortlist', 'dropped')`)],
 );
 
 export const rfpAnswers = pgTable(
@@ -752,8 +751,5 @@ export const rfpScores = pgTable(
     suggestionId: uuid("suggestion_id").references(() => aiSuggestions.id),
     ...stamps,
   },
-  (t) => [
-    uniqueIndex("rfp_scores_one_per_evaluator").on(t.candidateId, t.criterionId, t.evaluatorUserId),
-    check("rfp_scores_score_check", sql`${t.score} between 1 and 5`),
-  ],
+  (t) => [uniqueIndex("rfp_scores_one_per_evaluator").on(t.candidateId, t.criterionId, t.evaluatorUserId), check("rfp_scores_score_check", sql`${t.score} between 1 and 5`)],
 );

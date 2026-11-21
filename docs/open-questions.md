@@ -85,6 +85,13 @@ wrong. Answered questions move to the bottom.
 | Q77 | What does the search field at the top find? | Vendors, agreements and RFPs by name, and the app's pages. Not invoices, people or tickets. Anything typed can be sent to Ask with Enter. | M7 |
 | Q78 | A filter was added to the agreement list | "Ends from" and "Ends to" were added to the Agreements page, because "SOWs ending this quarter" needs a list that shows exactly those. | M7 |
 | Q79 | Who may ask, and may everyone ask about everything? | Every team member, about everything the app holds, as on the pages themselves. Ask shows nothing a member could not open. | M7 |
+| Q80 | Where does contract reading start? | On an agreement that already exists: attach the document, then press "Read with AI" on its row. A draft with only a title is enough. The AI does not create an agreement from a document by itself. Say if you want "upload a contract and get a new agreement filled in". | M8 |
+| Q81 | Which fields does the AI propose? | Title, signed on, start date, end or renewal date, notice period (subscriptions), value (a subscription's annual value, a SOW's budget) and currency. The kind is compared only, since an agreement's kind cannot be changed. Not proposed: reference, automatic renewal, renewal term, fixed price or time and materials, and which MSA a SOW sits under. | M8 |
+| Q82 | May the AI work a value out? | No. It proposes only what the document states, and each value must be visible in the passage shown with it. It does not derive an end date from a start date and a term, or a yearly fee from a monthly one. "Three months' notice" may be proposed as 90 days. | M8 |
+| Q83 | How is a proposal taken over? | Field by field: you tick the values to use and press "Use the ticked values". Everything that differs is ticked to begin with. Any team member may do this; the history shows who did. Taking all of them counts as accepted, some of them as accepted with changes. | M8 |
+| Q84 | How much of a long contract is read? | The first 30,000 characters, roughly ten pages. The page says when a document is longer than that. | M8 |
+| Q85 | Can the AI read the same document again? | Yes, at any time; the new reading takes the place of the old one on the page. A reading that was used or rejected cannot be used a second time. | M8 |
+| Q86 | Which documents can be read? | Those attached to an agreement, with real text in them (PDF, .docx, .xlsx). Not scans, not the old .doc and .xls formats, and not documents an RFP candidate sent. | M8 |
 | Q27 | How long are tickets kept? | 24 months after they were resolved, as the data model says. Open tickets are kept however old. | M3 |
 
 ## To check at work before M9

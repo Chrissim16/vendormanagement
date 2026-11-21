@@ -1,6 +1,7 @@
 import type { AiPort } from "../../platform/ports/types";
 import { ask, type Prompt } from "../index";
 import { askAnswerCases, askPlanCases } from "./ask";
+import { contractFieldsCases } from "./contract-fields";
 import { monthlyProposalCases } from "./monthly-proposal";
 import { briefingCases, reportSummaryCases } from "./overview";
 import { rfpComparisonCases, rfpDraftCases } from "./rfp";
@@ -28,7 +29,16 @@ export interface EvalResult {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- each case carries its own input and output types.
-const cases: EvalCase<any, any>[] = [...monthlyProposalCases, ...reportSummaryCases, ...briefingCases, ...rfpDraftCases, ...rfpComparisonCases, ...askPlanCases, ...askAnswerCases];
+const cases: EvalCase<any, any>[] = [
+  ...monthlyProposalCases,
+  ...reportSummaryCases,
+  ...briefingCases,
+  ...rfpDraftCases,
+  ...rfpComparisonCases,
+  ...askPlanCases,
+  ...askAnswerCases,
+  ...contractFieldsCases,
+];
 
 export async function runEvals(ai: AiPort): Promise<EvalResult[]> {
   const out: EvalResult[] = [];

@@ -163,6 +163,17 @@ primary action ("Use this draft"); when using it would replace something, the bu
 once more in place. A comparison the AI makes across records (candidates' answers) is one
 tinted panel, folded per criterion, that says plainly that nothing in it is a score.
 
+What the AI read in a document (contract reading) is a tinted panel across the full width
+of the agreement's page, under the heading "Read from the documents". It is a table: the
+field, what the agreement holds, what the document says with "The same" or "Differs" under
+it, and the passage word for word with its page behind a thin rule. A value that differs
+has a tick box in front, ticked to begin with; the primary button "Use the ticked values"
+is the only thing that saves, and the line next to it says so. Once used or rejected, the
+panel shrinks to one quiet line on the sunken fill that says what was done, by whom and
+when, with the table behind "What it read" and a "Read again" button. The button that
+asks for a reading sits on the document's own row; when the reading arrives the page
+scrolls to the panel and the keyboard focus goes with it.
+
 Ask is the one place where the AI's text is the page. The page is a single field with its
 button, then the answers, newest first. Each answer has the question as its heading, the
 AI's text in the tinted panel labelled "AI answer" with when it was written, any document
