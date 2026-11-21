@@ -4,8 +4,7 @@ import type { ChangeRequestInput, ConsultantInput, MilestoneInput, RateLineInput
 import type { Queryable } from "../../platform/ports/types";
 
 /** The SOW a milestone, change or consultant belongs to, locked so its budget and dates cannot move underneath. */
-export async function lockSow(tx: Queryable, id: string) {
-  await tx.execute(sql`select 1 from agreements where id = ${id} for update`);
+export async function getSow(tx: Queryable, id: string) {
   return (
     await tx
       .select({
@@ -25,6 +24,12 @@ export async function lockSow(tx: Queryable, id: string) {
       .innerJoin(vendors, eq(vendors.id, agreements.vendorId))
       .where(eq(agreements.id, id))
   )[0];
+}
+
+/** The same, locked first, so its budget and dates cannot move underneath a change. Use inside a transaction. */
+export async function lockSow(tx: Queryable, id: string) {
+  await tx.execute(sql`select 1 from agreements where id = ${id} for update`);
+  return getSow(tx, id);
 }
 export const applyChange = (tx: Queryable, id: string, patch: { budgetMinor: number | null; endDate: string | null }, by: string) =>
   tx

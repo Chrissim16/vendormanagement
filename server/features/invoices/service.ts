@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { addMonths, type Day } from "../../../shared/dates";
 import type { Currency } from "../../../shared/money";
 import { invoiceSchema, summariseSpend, type Invoice, type Spend } from "../../../shared/sow";
@@ -11,12 +12,13 @@ import { getSettings } from "../settings/service";
 import * as repo from "./repo";
 
 type Row = NonNullable<Awaited<ReturnType<typeof repo.getInvoice>>>;
-const toInvoice = ({ invoice: i, vendorName, agreementTitle, milestoneTitle }: Row): Invoice => ({
+const toInvoice = ({ invoice: i, vendorName, agreementTitle, agreementKind, milestoneTitle }: Row): Invoice => ({
   id: i.id,
   vendorId: i.vendorId,
   vendorName,
   agreementId: i.agreementId,
   agreementTitle,
+  agreementKind,
   milestoneId: i.milestoneId,
   milestoneTitle,
   invoiceNumber: i.invoiceNumber,
@@ -28,7 +30,7 @@ const toInvoice = ({ invoice: i, vendorName, agreementTitle, milestoneTitle }: R
 });
 
 export async function listInvoices(db: Db, filter: repo.InvoiceFilter): Promise<Page<Invoice> & { sums: Record<Currency, number> }> {
-  const { items, total, sums } = await repo.listInvoices(db, filter);
+  const { items, total, sums } = await repo.listInvoices(db, filter, (await getSettings(db)).gbpToEurE4);
   const out: Record<Currency, number> = { EUR: 0, GBP: 0 };
   for (const s of sums) out[s.currency] = Number(s.n);
   return { items: items.map(toInvoice), total, sums: out };
@@ -40,13 +42,21 @@ const DUPLICATE = "This vendor already has an invoice with this number.";
 export async function saveInvoice(db: Db, id: string | null, input: unknown, by: User, today: Day): Promise<Invoice> {
   try {
     return await db.transaction(async (tx) => {
-      const existing = id ? (await repo.getInvoice(tx, id))?.invoice : undefined;
-      if (id && !existing) throw notFound("That invoice");
+      const found = id ? (await repo.getInvoice(tx, id))?.invoice : undefined;
+      if (id && !found) throw notFound("That invoice");
+      const target = z.object({ agreementId: z.string().uuid().optional() }).safeParse(input ?? {});
+      const agreementId = (target.success ? target.data.agreementId : undefined) ?? found?.agreementId;
+      const agreement = agreementId ? await repo.lockAgreement(tx, agreementId) : undefined;
+      // Read again now that the agreement is locked, and merge the change onto what is stored now.
+      const existing = found ? (await repo.getInvoice(tx, found.id))?.invoice : undefined;
+      if (found && !existing) throw notFound("That invoice");
       // A change may send only the fields that change.
       const v = invoiceSchema.parse(existing ? { ...existing, ...(input as object) } : input);
-      const agreement = await repo.lockAgreement(tx, v.agreementId);
       if (!agreement) failFields({ agreementId: "Choose the SOW or subscription this invoice is for." });
       if (agreement.kind !== "sow" && agreement.kind !== "subscription") failFields({ agreementId: "An invoice is booked against a SOW or a subscription." });
+      // An amount keeps its currency: an invoice never moves to an agreement in another one.
+      if (existing && existing.currency !== agreement.currency)
+        failFields({ agreementId: `This invoice is in ${existing.currency}. It cannot move to an agreement in ${agreement.currency}.` });
       if (v.invoiceDate > today) failFields({ invoiceDate: "The invoice date cannot be in the future." });
       if (v.milestoneId) {
         const m = await repo.getMilestone(tx, v.milestoneId);
@@ -103,7 +113,7 @@ export async function removeInvoice(db: Db, id: string, by: User): Promise<void>
 const EXPORT_LIMIT = 10000;
 
 export async function exportCsv(db: Db, filter: Omit<repo.InvoiceFilter, "page" | "pageSize">): Promise<string> {
-  const { items, total } = await repo.listInvoices(db, { ...filter, page: 1, pageSize: EXPORT_LIMIT });
+  const { items, total } = await repo.listInvoices(db, { ...filter, page: 1, pageSize: EXPORT_LIMIT }, (await getSettings(db)).gbpToEurE4);
   if (total > EXPORT_LIMIT) throw new AppError(400, "too_many", `There are ${total} invoices to export, more than fits in one file. Narrow the period first.`);
   return toCsv(
     ["Vendor", "Agreement", "Milestone", "Invoice number", "Invoice date", "Amount", "Currency", "Description"],
@@ -117,6 +127,17 @@ export async function exportCsv(db: Db, filter: Omit<repo.InvoiceFilter, "page" 
       r.invoice.currency,
       r.invoice.description,
     ]),
+  );
+}
+
+/** The spend overview as a file: one row per vendor, month and currency (M-6). */
+export async function exportSpendCsv(db: Queryable, from: Day, to: Day): Promise<string> {
+  if (to < from) failFields({ to: "The end of the period is before its start." });
+  const rows = await repo.spendRows(db, from, to);
+  rows.sort((a, b) => a.vendorName.localeCompare(b.vendorName) || a.month.localeCompare(b.month) || a.currency.localeCompare(b.currency));
+  return toCsv(
+    ["Vendor", "Month", "Currency", "Invoiced"],
+    rows.map((r) => [r.vendorName, r.month, r.currency, (Number(r.amountMinor) / 100).toFixed(2)]),
   );
 }
 

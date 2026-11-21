@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import type { Day } from "../../../shared/dates";
+import { formatMoney } from "../../../shared/money";
 import {
   budgetView,
   changeRequestSchema,
@@ -44,7 +45,7 @@ const record = (tx: Tx, sow: Sow, by: User, changes: Changes) =>
 const prefixed = (label: string, changes: Changes): Changes => Object.fromEntries(Object.entries(changes).map(([k, v]) => [`${label} ${k}`, v]));
 
 export async function getDelivery(db: Queryable, sowId: string, today: Day): Promise<SowDelivery> {
-  const sow = await repo.lockSow(db, sowId);
+  const sow = await repo.getSow(db, sowId);
   if (!sow) throw notFound("That agreement");
   if (sow.kind !== "sow") throw new AppError(409, "not_a_sow", "Only a SOW has milestones, change requests and consultants.");
   const [settings, ms, changes, people, lines, invoiced, perMilestone] = await Promise.all([
@@ -106,9 +107,11 @@ export async function getDelivery(db: Queryable, sowId: string, today: Day): Pro
 
 export async function saveMilestone(db: Db, target: { sowId: string } | { milestoneId: string }, input: unknown, by: User, today: Day): Promise<SowDelivery> {
   return db.transaction(async (tx) => {
-    const existing = "milestoneId" in target ? await repo.getMilestone(tx, target.milestoneId) : undefined;
-    if ("milestoneId" in target && !existing) throw notFound("That milestone");
-    const sow = await sowFor(tx, existing?.sowId ?? (target as { sowId: string }).sowId);
+    const found = "milestoneId" in target ? await repo.getMilestone(tx, target.milestoneId) : undefined;
+    if ("milestoneId" in target && !found) throw notFound("That milestone");
+    const sow = await sowFor(tx, found?.sowId ?? (target as { sowId: string }).sowId);
+    // Read again now that the SOW is locked, so a change is merged onto what is stored now.
+    const existing = found ? await repo.getMilestone(tx, found.id) : undefined;
     // A change may send only the fields that change.
     const parsed = milestoneSchema.parse(existing ? { ...existing, ...(input as object) } : input);
     const others = (await repo.milestonesOf(tx, sow.id)).filter((m) => m.id !== existing?.id);
@@ -130,9 +133,11 @@ export async function saveMilestone(db: Db, target: { sowId: string } | { milest
 
 export async function saveChange(db: Db, target: { sowId: string } | { changeId: string }, input: unknown, by: User, today: Day): Promise<SowDelivery> {
   return db.transaction(async (tx) => {
-    const existing = "changeId" in target ? await repo.getChange(tx, target.changeId) : undefined;
-    if ("changeId" in target && !existing) throw notFound("That change request");
-    const sow = await sowFor(tx, existing?.sowId ?? (target as { sowId: string }).sowId);
+    const found = "changeId" in target ? await repo.getChange(tx, target.changeId) : undefined;
+    if ("changeId" in target && !found) throw notFound("That change request");
+    const sow = await sowFor(tx, found?.sowId ?? (target as { sowId: string }).sowId);
+    // Read again now that the SOW is locked: an approval that was in progress has finished, and is seen here.
+    const existing = found ? await repo.getChange(tx, found.id) : undefined;
     if (existing && existing.status !== "proposed") throw new AppError(409, "already_decided", "This change has already been decided and can no longer be edited.");
     const value = changeRequestSchema.parse(existing ? { ...existing, ...(input as object) } : input);
     if (value.requestedOn > today) failFields({ requestedOn: "The request date cannot be in the future." });
@@ -177,9 +182,13 @@ export async function decideChange(db: Db, changeId: string, decision: "approved
 
 export async function saveConsultant(db: Db, target: { sowId: string } | { consultantId: string }, input: unknown, by: User, today: Day): Promise<SowDelivery> {
   return db.transaction(async (tx) => {
-    const existing = "consultantId" in target ? await repo.getConsultant(tx, target.consultantId) : undefined;
-    if ("consultantId" in target && !existing) throw notFound("That consultant");
-    const sow = await sowFor(tx, existing?.sowId ?? (target as { sowId: string }).sowId);
+    const found = "consultantId" in target ? await repo.getConsultant(tx, target.consultantId) : undefined;
+    if ("consultantId" in target && !found) throw notFound("That consultant");
+    const sow = await sowFor(tx, found?.sowId ?? (target as { sowId: string }).sowId);
+    // The vendor's rate card is checked below; lock the vendor so a role cannot be removed in the same moment.
+    await tx.execute(sql`select 1 from vendors where id = ${sow.vendorId} for update`);
+    const existing = found ? await repo.getConsultant(tx, found.id) : undefined;
+    if (found && !existing) throw notFound("That consultant");
     if (input === null) {
       await repo.deleteConsultant(tx, existing!.id);
       await record(tx, sow, by, { [`consultant ${existing!.name}`]: { from: "listed", to: "removed" } });
@@ -241,7 +250,10 @@ export async function saveRateLine(db: Db, target: { vendorId: string } | { line
             );
         }
         await repo.deleteRateLine(tx, existing.id);
-        await audit(tx, { ...entry, changes: { [`rate for ${existing.role} from ${existing.validFrom}`]: { from: existing.dayRateMinor, to: "removed" } } });
+        await audit(tx, {
+          ...entry,
+          changes: { [`rate for ${existing.role} from ${existing.validFrom}`]: { from: `${formatMoney(existing.dayRateMinor, existing.currency)} a day`, to: "removed" } },
+        });
       } else {
         const value = rateLineSchema.parse(input);
         if (lines.some((l) => l.role.toLowerCase() === value.role.toLowerCase() && l.validFrom === value.validFrom)) failFields({ validFrom: SAME_DAY });
@@ -250,7 +262,7 @@ export async function saveRateLine(db: Db, target: { vendorId: string } | { line
         await repo.insertRateLine(tx, vendorId, value, by.email);
         await audit(tx, {
           ...entry,
-          changes: { [`rate for ${value.role} from ${value.validFrom}`]: { from: null, to: `${(value.dayRateMinor / 100).toFixed(2)} ${value.currency} a day` } },
+          changes: { [`rate for ${value.role} from ${value.validFrom}`]: { from: null, to: `${formatMoney(value.dayRateMinor, value.currency)} a day` } },
         });
       }
       return getRateCard(tx, vendorId, today);
@@ -261,13 +273,30 @@ export async function saveRateLine(db: Db, target: { vendorId: string } | { line
   }
 }
 
-/** For the agreements feature: a SOW's budget may not drop below its milestones, and amounts only exist on fixed-price SOWs. */
-export async function checkSowEdit(tx: Queryable, sowId: string, next: { pricing: string | null; budgetMinor: number | null }): Promise<Record<string, string>> {
+/**
+ * For the agreements feature: what may not be edited directly on a SOW.
+ * - Once a change request has been approved, the budget and end date only move through
+ *   further change requests, so the path from the original to today stays complete.
+ * - The budget may not drop below its milestones, and amounts only exist on fixed-price SOWs.
+ */
+export async function checkSowEdit(
+  tx: Queryable,
+  sowId: string,
+  current: { budgetMinor: number | null; endDate: string | null },
+  next: { pricing: string | null; budgetMinor: number | null; endDate: string | null },
+): Promise<Record<string, string>> {
+  const errors: Record<string, string> = {};
+  if ((await repo.changesOf(tx, sowId)).some((c) => c.status === "approved")) {
+    const via = "has been set by an approved change request. Add another change request to change it again.";
+    if (next.budgetMinor !== current.budgetMinor) errors.budgetMinor = `This SOW's budget ${via}`;
+    if (next.endDate !== current.endDate) errors.endDate = `This SOW's end date ${via}`;
+  }
   const ms = (await repo.milestonesOf(tx, sowId)).filter((m) => m.status !== "cancelled" && m.amountMinor != null);
-  if (!ms.length) return {};
-  if (next.pricing !== "fixed") return { pricing: "This SOW has milestones with amounts. Remove the amounts before changing it to time and materials." };
+  if (!ms.length) return errors;
+  if (next.pricing !== "fixed") return { ...errors, pricing: "This SOW has milestones with amounts. Remove the amounts before changing it to time and materials." };
   const planned = ms.reduce((sum, m) => sum + (m.amountMinor ?? 0), 0);
-  return next.budgetMinor != null && planned > next.budgetMinor ? { budgetMinor: "The milestones add up to more than this budget." } : {};
+  if (next.budgetMinor != null && planned > next.budgetMinor) errors.budgetMinor ??= "The milestones add up to more than this budget.";
+  return errors;
 }
 
 export { invoicedByAgreement } from "./repo";

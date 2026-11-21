@@ -138,6 +138,25 @@ describe("M-2 change requests", () => {
     expect(twice.budget).toMatchObject({ budgetMinor: 235_000_00, originalMinor: 210_000_00 });
     expect(twice.changeRequests.find((c: { title: string }) => c.title === "Trim")).toMatchObject({ budgetBeforeMinor: 240_000_00, endDateBefore: "2027-02-28" });
   });
+  it("once a change is approved, the budget and end date only move through further change requests", async () => {
+    const s = await sow();
+    const c = (await change(s.id, { budgetChangeMinor: 20_000_00 })).body.changeRequests[0];
+    // Before any approval the budget and end date can still be corrected directly.
+    expect((await t.as(MEMBER).patch(`/api/agreements/${s.id}`).send({ budgetMinor: 101_000_00, endDate: "2027-01-31" })).status).toBe(200);
+    await t.as(MEMBER).post(`/api/change-requests/${c.id}/approve`);
+    const direct = await t.as(MEMBER).patch(`/api/agreements/${s.id}`).send({ budgetMinor: 150_000_00, endDate: "2027-06-30" });
+    expect(direct.status).toBe(400);
+    expect(direct.body.error.fields.budgetMinor).toMatch(/set by an approved change request/);
+    expect(direct.body.error.fields.endDate).toMatch(/set by an approved change request/);
+    // Everything else on the SOW can still be edited, and sending the same budget back is not a change.
+    expect((await t.as(MEMBER).patch(`/api/agreements/${s.id}`).send({ title: "Renamed SOW", budgetMinor: 121_000_00, notes: "Still editable" })).body).toMatchObject({
+      title: "Renamed SOW",
+      budgetMinor: 121_000_00,
+    });
+    const d = (await t.as(MEMBER).get(`/api/agreements/${s.id}/delivery`)).body;
+    expect(d.budget).toMatchObject({ originalMinor: 101_000_00, budgetMinor: 121_000_00 });
+    expect(d.endDateOriginal).toBe("2027-01-31");
+  });
   it("rejecting changes nothing on the SOW, and a decided change cannot be decided or edited again", async () => {
     const s = await sow();
     const c = (await change(s.id, { budgetChangeMinor: 5_000_00 })).body.changeRequests[0];
@@ -201,7 +220,7 @@ describe("M-3 consultants and rate cards", () => {
     expect(dup.body.error.fields.validFrom).toMatch(/already has a rate starting/);
     expect(Object.keys((await rate({ role: "", dayRateMinor: 0 })).body.error.fields).sort()).toEqual(["dayRateMinor", "role"]);
     const h = (await t.as(MEMBER).get("/api/audit/history").query({ entityType: "vendor", entityId: vendorId })).body.items;
-    expect(h[0].changes).toEqual({ "rate for Lead architect from 2027-01-01": { from: null, to: "1400.00 EUR a day" } });
+    expect(h[0].changes).toEqual({ "rate for Lead architect from 2027-01-01": { from: null, to: "€ 1,400.00 a day" } });
   });
   it("names consultants on a SOW with a role from the card, and shows each one's current day rate", async () => {
     await rate({ role: "Tester", dayRateMinor: 700_00, validFrom: "2027-06-01" });
@@ -240,6 +259,8 @@ describe("M-3 consultants and rate cards", () => {
     ).body;
     await t.as(MEMBER).post(`/api/agreements/${s.id}/consultants`).send({ name: "Jo Specimen", role: "Analyst" });
     expect((await t.as(MEMBER).delete(`/api/rate-card/${first.id}`)).body).toHaveLength(1);
+    const h = (await t.as(MEMBER).get("/api/audit/history").query({ entityType: "vendor", entityId: other })).body.items;
+    expect(h[0].changes).toEqual({ "rate for Analyst from 2026-01-01": { from: "€ 800.00 a day", to: "removed" } });
     const last = await t.as(MEMBER).delete(`/api/rate-card/${card.find((l: { validFrom: string }) => l.validFrom === "2026-06-01").id}`);
     expect(last.status).toBe(409);
     expect(last.body.error.message).toMatch(/only rate for Analyst, and Jo Specimen still has that role/);

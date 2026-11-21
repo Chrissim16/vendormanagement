@@ -126,7 +126,7 @@ export async function updateAgreement(db: Db, id: string, input: unknown, by: Us
     }
     if (Object.keys(errors).length) failFields(errors);
     if (value.kind === "sow") {
-      const sowErrors = await checkSowEdit(tx, id, value);
+      const sowErrors = await checkSowEdit(tx, id, current, value);
       if (Object.keys(sowErrors).length) failFields(sowErrors);
     }
     // Invoices are in the agreement's currency; changing it would silently relabel what was paid.
@@ -168,10 +168,10 @@ export async function recordDecision(db: Db, id: string, input: unknown, by: Use
   });
 }
 
-export const renewalWindows = [30, 60, 90, 180] as const;
-
 /** Active subscriptions whose notice deadline has passed or falls within the window, soonest first (A-6). */
-export async function listRenewals(db: Db, windowDays: number, owner: string | undefined, today: Day): Promise<Agreement[]> {
+export async function listRenewals(db: Db, window: number | undefined, owner: string | undefined, today: Day): Promise<Agreement[]> {
+  // Without a window, the admin's own notice window applies, so this page and the warnings agree.
+  const windowDays = window ?? (await getSettings(db)).noticeDays;
   const rows = await repo.activeSubscriptions(db, owner);
   return rows
     .filter((r) => r.decisionId === null && r.agreement.endDate)

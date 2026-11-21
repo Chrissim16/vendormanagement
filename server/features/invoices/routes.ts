@@ -39,6 +39,15 @@ export function invoiceRoutes(db: Db, today: () => Day) {
     await service.removeInvoice(db, id.parse(req.params.id), currentUser(req));
     res.json({ ok: true });
   });
+  r.get("/spend/export.csv", async (req, res) => {
+    const q = spendQuery.parse(req.query);
+    const period = service.defaultPeriod(today());
+    const from = q.from ?? period.from;
+    const to = q.to ?? period.to;
+    res
+      .set({ "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="spend-${from}-to-${to}.csv"` })
+      .send(await service.exportSpendCsv(db, from, to));
+  });
   r.get("/spend", async (req, res) => {
     const q = spendQuery.parse(req.query);
     const period = service.defaultPeriod(today());

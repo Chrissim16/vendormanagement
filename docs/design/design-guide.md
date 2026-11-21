@@ -46,6 +46,8 @@ The dot carries the colour; the pill itself never has a coloured background.
 | Green | Fine | Active, Met |
 | None | Plain label | MSA, NDA, Fixed price, Prospect, Proposed |
 
+A row in a list of steps (milestones) may carry the same dot without a pill: hollow for open, brand for delivered, red for late.
+
 Kind labels that belong to a record (SOW, Approved) may use the brand tint. The label text
 always says what the colour means, so nothing relies on colour alone. Dashboard summary
 tiles are neutral so they do not compete with the pills below them.
@@ -90,6 +92,7 @@ Figures that line up use tabular numerals. Dates read `21 Nov 2026`. Money reads
 - A problem is written under its field in red text, and a summary sits above the buttons. Nothing typed is lost when saving fails.
 - An amount shows what the app understood under the box ("Read as € 12,500.00") before anything is saved.
 - The buttons are bottom right: Cancel, then the one primary action named for what it does.
+- Removing a record that carries money or people (an invoice, a consultant, a rate) asks once more in place: the button turns red and reads "Really remove?", and goes back to rest after five seconds or when focus leaves it. No separate dialog.
 - A file is attached with an "Attach document" button, never a bare browser file box. Type and size are checked before sending.
 - Sections inside a panel are tabs with a sliding underline; arrow keys, Home and End move between them.
 

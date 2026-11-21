@@ -84,7 +84,7 @@ Warnings are sorted with what is already wrong first, then the soonest date. The
 
 ## SOW delivery and money
 
-**Settings** (admin, one set for the whole team): `gbp_to_eur_rate*` (up to four decimals, default 1.17), `notice_days*` (default 90), `sow_end_days*` (default 30), `budget_warning_pct*` (default 80). The defaults apply until an admin first saves. Changes are recorded in the audit log.
+**Settings** (admin, one set for the whole team): `gbp_to_eur_rate*` (up to four decimals, default 1.17), `notice_days*` (default 90), `sow_end_days*` (default 30), `budget_warning_pct*` (default 80). The defaults apply until an admin first saves. The Renewals page starts at `notice_days` and can be set to another window for a look further ahead. Changes are recorded in the audit log.
 
 **Milestone**: `sow_id*`, `title*`, `due_date*`, `status*` (open | delivered | cancelled), `delivered_on`, `amount_minor` (fixed-price SOWs only).
 - On a fixed-price SOW the amounts of the milestones that are not cancelled may not add up to more than the SOW budget. The budget may not be cut below that sum either.
@@ -99,18 +99,21 @@ Warnings are sorted with what is already wrong first, then the soonest date. The
 - **Original budget and end date** of a SOW are what it held before its first approved change.
 - An approval is refused when it would take the budget below zero, below what the milestones add up to (fixed price), or the end date before the start date, or when the SOW has ended.
 - A decided change cannot be edited or decided again. A proposed one can be edited.
+- Once a SOW has an approved change, its budget and end date can no longer be edited directly; they move only through further change requests. Before the first approval they can still be corrected on the SOW itself.
 
 **Rate card line**: `vendor_id*`, `role*`, `day_rate_minor*`, `currency*`, `valid_from*`. One line per role and start date.
 - The rate in force for a role on a day is the latest line that has started. A rate is changed by adding a newer line; the old one stays on record.
 - Role names are compared ignoring case, and keep the spelling first used.
 - The last line of a role cannot be removed while a consultant still holds that role.
+- Rate card lines and consultants can be removed; the removal is recorded in the vendor's or the SOW's history.
+- A rate may be in a different currency from the SOW (a pound rate on a euro SOW); the SOW shows the rate in its own currency.
 
 **Consultant**: `sow_id*`, `name*`, `role*` (a role on the vendor's rate card), `from_date`, `to_date`. For information; days worked are not tracked. The SOW shows each consultant's day rate in force today.
 
 **Invoice**: `agreement_id*` (sow or subscription), `milestone_id` (a milestone of that SOW), `invoice_number*`, `invoice_date*`, `amount_minor*` (above zero), `description`. The vendor and the currency are taken from the agreement.
 - The same `invoice_number` cannot be entered twice for one vendor, ignoring case and extra spaces.
 - The invoice date cannot be in the future.
-- Once an agreement has invoices, its currency cannot be changed.
+- Once an agreement has invoices, its currency cannot be changed, and an invoice cannot be moved to an agreement in another currency.
 - Invoices can be edited and removed; each is recorded in the audit log.
 
 **Budget view** (worked out): invoiced = the sum of the SOW's invoices; remaining = budget minus invoiced; used % is rounded down, so 79.9% never reads as 80%. From `budget_warning_pct` the SOW is close to budget; above 100% it is over budget. The comparison is exact, in cents.

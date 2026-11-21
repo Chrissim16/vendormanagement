@@ -1,3 +1,4 @@
+import { DEFAULT_SETTINGS, type Settings } from "../../../shared/sow";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createContext, useContext, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -79,4 +80,9 @@ export function Session({ children }: { children: ReactNode }) {
     );
   }
   return <Ctx.Provider value={q.data}>{children}</Ctx.Provider>;
+}
+
+/** The admin's warning windows and exchange rate; the built-in defaults until they have loaded. */
+export function useSettings(): Settings {
+  return useQuery({ queryKey: ["settings"], queryFn: () => api<Settings>("/settings"), staleTime: 60_000 }).data ?? DEFAULT_SETTINGS;
 }

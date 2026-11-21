@@ -254,7 +254,7 @@ describe("A-6 renewals", () => {
     const titles = async (window: string) => (await renewals({ window })).body.map((a: { title: string }) => a.title);
     expect(await titles("30")).not.toContain("Data platform licence");
     expect(await titles("180")).toContain("Data platform licence");
-    expect((await renewals({ window: "45" })).status).toBe(400);
+    expect((await renewals({ window: "400" })).status).toBe(400);
   });
   it("never lists an MSA, a SOW or a subscription that is not active", async () => {
     await add({ ...sub, status: "draft", title: "Draft subscription" });

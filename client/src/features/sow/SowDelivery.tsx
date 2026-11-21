@@ -12,7 +12,7 @@ import { api, messageOf } from "../../lib/api";
 import { Dialog } from "../../platform/Dialog";
 import { FormFooter, Grid, SelectField, TextAreaField, TextField, useForm } from "../../platform/form";
 import { useToday } from "../../platform/session";
-import { Button, ErrorState, Loading, Pill } from "../../platform/ui";
+import { Button, ConfirmButton, ErrorState, Loading, Pill } from "../../platform/ui";
 
 const AMOUNT = "Enter an amount like 12,500.00.";
 const small = "h-8 px-3.5 text-[12.5px]";
@@ -263,7 +263,12 @@ export function SowDelivery({ agreement: a }: { agreement: AgreementDetail }) {
                         : m.status === "cancelled"
                           ? "Cancelled"
                           : `Due ${formatDay(m.dueDate)}`}
-                      {m.invoicedMinor > 0 && (m.invoicedMinor === m.amountMinor ? " · invoiced in full" : ` · ${formatMoney(m.invoicedMinor, a.currency)} invoiced`)}
+                      {m.invoicedMinor > 0 &&
+                        (m.invoicedMinor === m.amountMinor
+                          ? " · invoiced in full"
+                          : m.amountMinor != null && m.invoicedMinor > m.amountMinor
+                            ? ` · ${formatMoney(m.invoicedMinor, a.currency)} invoiced, more than its amount`
+                            : ` · ${formatMoney(m.invoicedMinor, a.currency)} invoiced`)}
                     </span>
                   </span>
                   {m.late && <Pill tone="bad">{m.daysLate === 1 ? "1 day late" : `${m.daysLate} days late`}</Pill>}
@@ -271,6 +276,7 @@ export function SowDelivery({ agreement: a }: { agreement: AgreementDetail }) {
                   {m.status === "open" && (
                     <Button
                       className={small}
+                      disabled={act.isPending}
                       onClick={() => act.mutate({ path: `/milestones/${m.id}`, method: "PATCH", body: { status: "delivered" }, message: `${m.title} marked delivered` })}
                       aria-label={`Mark ${m.title} delivered`}
                     >
@@ -301,9 +307,7 @@ export function SowDelivery({ agreement: a }: { agreement: AgreementDetail }) {
               <ul aria-label="Change requests" className="flex flex-col">
                 {d.changeRequests.map((c) => (
                   <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line py-3.5">
-                    <Pill tone={c.status === "approved" ? "brand" : c.status === "proposed" ? "warn" : "none"}>
-                      {c.status === "approved" ? "Approved" : c.status === "proposed" ? "Proposed" : "Rejected"}
-                    </Pill>
+                    <Pill tone={c.status === "approved" ? "brand" : "none"}>{c.status === "approved" ? "Approved" : c.status === "proposed" ? "Proposed" : "Rejected"}</Pill>
                     <span className="min-w-0 flex-1 basis-40">
                       <span className="block truncate font-semibold">{c.title}</span>
                       <span className="num block text-[13px] text-ink-2">
@@ -316,6 +320,7 @@ export function SowDelivery({ agreement: a }: { agreement: AgreementDetail }) {
                       <>
                         <Button
                           className={small}
+                          disabled={act.isPending}
                           onClick={() => act.mutate({ path: `/change-requests/${c.id}/approve`, message: `${c.title} approved` })}
                           aria-label={`Approve ${c.title}`}
                         >
@@ -323,6 +328,7 @@ export function SowDelivery({ agreement: a }: { agreement: AgreementDetail }) {
                         </Button>
                         <Button
                           className={small}
+                          disabled={act.isPending}
                           onClick={() => act.mutate({ path: `/change-requests/${c.id}/reject`, message: `${c.title} rejected` })}
                           aria-label={`Reject ${c.title}`}
                         >
@@ -361,13 +367,12 @@ export function SowDelivery({ agreement: a }: { agreement: AgreementDetail }) {
                   <Button className={small} onClick={() => setOpen({ consultant: c })} aria-label={`Edit ${c.name}`}>
                     Edit
                   </Button>
-                  <Button
+                  <ConfirmButton
                     className={small}
-                    onClick={() => act.mutate({ path: `/consultants/${c.id}`, method: "DELETE", message: `Removed ${c.name}` })}
-                    aria-label={`Remove ${c.name}`}
-                  >
-                    Remove
-                  </Button>
+                    disabled={act.isPending}
+                    onConfirm={() => act.mutate({ path: `/consultants/${c.id}`, method: "DELETE", message: `Removed ${c.name}` })}
+                    label={`Remove ${c.name}`}
+                  />
                 </li>
               ))}
             </ul>

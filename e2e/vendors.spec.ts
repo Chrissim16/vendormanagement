@@ -143,7 +143,7 @@ test.describe("V-3 vendor page", () => {
     await expect(panel.getByRole("link").filter({ hasText: "The NDA" })).toBeVisible();
 
     await panel.getByRole("tab", { name: "History" }).click();
-    await expect(panel.getByText("contact Bo Lind from listed to removed")).toBeVisible();
+    await expect(panel.getByText("contact Bo Lind removed")).toBeVisible();
     await expectAccessible(page);
   });
 });

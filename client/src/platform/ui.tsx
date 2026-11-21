@@ -1,7 +1,46 @@
 import clsx from "clsx";
 import { motion } from "motion/react";
-import { useId, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from "react";
+import { useEffect, useId, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from "react";
 import { bouncy } from "../lib/motion";
+
+/**
+ * A remove button that asks once more: the first click arms it, the second does it.
+ * It goes back to rest after five seconds or when focus moves away.
+ */
+export function ConfirmButton({
+  label,
+  onConfirm,
+  className,
+  disabled,
+  children = "Remove",
+}: {
+  label: string;
+  onConfirm: () => void;
+  className?: string;
+  disabled?: boolean;
+  children?: ReactNode;
+}) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 5000);
+    return () => clearTimeout(t);
+  }, [armed]);
+  return (
+    <Button
+      className={clsx(className, armed && "border-crit text-crit-text")}
+      disabled={disabled}
+      aria-label={armed ? `${label}: click again to confirm` : label}
+      onBlur={() => setArmed(false)}
+      onClick={() => {
+        setArmed(!armed);
+        if (armed) onConfirm();
+      }}
+    >
+      {armed ? "Really remove?" : children}
+    </Button>
+  );
+}
 
 export function Button({ variant = "plain", className, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "plain" | "primary" }) {
   return (

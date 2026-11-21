@@ -20,13 +20,7 @@ const filters = {
 };
 const listQuery = z.object({ ...filters, ...paging });
 const exportQuery = z.object(filters);
-const renewalsQuery = z.object({
-  window: z.coerce
-    .number()
-    .refine((n) => (service.renewalWindows as readonly number[]).includes(n), "Choose 30, 60, 90 or 180 days.")
-    .default(90),
-  owner: id.optional(),
-});
+const renewalsQuery = z.object({ window: z.coerce.number().int().min(1, "Choose at least 1 day.").max(365, "Choose at most 365 days.").optional(), owner: id.optional() });
 
 export function agreementRoutes(db: Db, storage: StoragePort, today: () => Day) {
   const r = Router();

@@ -60,7 +60,7 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 
 ## SOW delivery and money (M2)
 
-**M-1 Milestones.** A member can add, edit, deliver and cancel milestones on a SOW. Fixed-price milestones carry an amount, and the total may not exceed the budget. Late milestones are marked.
+**M-1 Milestones.** A member can add, edit, deliver and cancel milestones on a SOW. Fixed-price milestones can carry an amount, and the total may not exceed the budget. A milestone invoiced for more than its amount says so. Late milestones are marked.
 
 **M-2 Change requests.** A member can record a change request with a budget change and a new end date. Approving it updates the SOW's budget and end date, and the SOW page shows original and current values with the changes in between.
 
@@ -73,9 +73,9 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 
 **M-5 Budget view.** A SOW shows budget, invoiced, remaining and percentage used. At 80% or more it appears on the warnings page; over 100% is marked as overrun.
 
-**M-6 Spend overview.** Spend per vendor and per month for a chosen period, in each currency and as a EUR total marked as converted. The invoices behind it can be listed, filtered and exported as CSV.
+**M-6 Spend overview.** Spend per vendor and per month for a chosen period, in each currency and as a EUR total marked as converted. The overview itself can be exported as CSV, and the invoices behind it can be listed, filtered and exported as CSV.
 
-**M-7 Exchange rate and warning thresholds.** An admin sets the GBP to EUR rate; changing it changes converted totals only. The same page sets how many days ahead to warn of a notice deadline and of a SOW ending, and at what percentage of a budget to warn.
+**M-7 Exchange rate and warning thresholds.** An admin sets the GBP to EUR rate; changing it changes converted totals only. The same page sets how many days ahead to warn of a notice deadline and of a SOW ending, and at what percentage of a budget to warn. Warnings, the Renewals page and the explanations on screen all follow these settings.
 
 ## Performance from Jira (M3)
 

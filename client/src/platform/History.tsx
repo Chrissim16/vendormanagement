@@ -71,9 +71,11 @@ export function describeChanges(e: AuditEntry): string {
       const last = k.split(" ").pop()!;
       // Internal ids mean nothing to a reader; say that it changed, not to what.
       if (hidden.has(last)) return `${fieldName(k)} changed`;
-      return c.from === null || c.from === undefined || c.from === ""
-        ? `${fieldName(k)} set to ${show(last, c.to)}`
-        : `${fieldName(k)} from ${show(last, c.from)} to ${show(last, c.to)}`;
+      const blank = c.from === null || c.from === undefined || c.from === "";
+      // A line of a list (a milestone, a consultant, a rate) that came or went reads as that, not as a field change.
+      if (c.to === "added" && blank) return `${fieldName(k)} added`;
+      if (c.to === "removed") return blank || c.from === "listed" || c.from === "attached" ? `${fieldName(k)} removed` : `${fieldName(k)} removed (was ${show(last, c.from)})`;
+      return blank ? `${fieldName(k)} set to ${show(last, c.to)}` : `${fieldName(k)} from ${show(last, c.from)} to ${show(last, c.to)}`;
     })
     .join(", ");
 }

@@ -23,7 +23,10 @@ export function useForm<V extends Record<string, unknown>, R>(
     setErrors((e) => ([key as string, ...alsoClear].some((k) => e[k]) ? { ...e, ...Object.fromEntries([key as string, ...alsoClear].map((k) => [k, ""])) } : e));
   };
   /** Replace several values at once, for example when one choice makes other fields irrelevant. */
-  const patch = (changes: Partial<V>) => setValues((v) => ({ ...v, ...changes }));
+  const patch = (changes: Partial<V>) => {
+    setValues((v) => ({ ...v, ...changes }));
+    setErrors((e) => (Object.keys(changes).some((k) => e[k]) ? { ...e, ...Object.fromEntries(Object.keys(changes).map((k) => [k, ""])) } : e));
+  };
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (busy) return;

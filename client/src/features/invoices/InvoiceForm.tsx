@@ -60,12 +60,12 @@ export function InvoiceForm({
   });
   const options = [...(sows.data?.items ?? []), ...(subs.data?.items ?? [])].filter((a) => a.status !== "ended");
   const chosen = options.find((a) => a.id === v.agreementId);
-  const kind = agreement?.kind ?? chosen?.kind ?? (invoice?.milestoneId ? "sow" : undefined);
+  const kind = agreement?.kind ?? chosen?.kind ?? (invoice && invoice.agreementId === v.agreementId ? invoice.agreementKind : undefined);
   const currency: Currency = agreement?.currency ?? chosen?.currency ?? invoice?.currency ?? "EUR";
   const delivery = useQuery({
     queryKey: ["delivery", v.agreementId],
     queryFn: () => api<SowDelivery>(`/agreements/${v.agreementId}/delivery`),
-    enabled: !!v.agreementId && (kind === "sow" || (!!invoice && kind === undefined)),
+    enabled: !!v.agreementId && kind === "sow",
     retry: false,
   });
   const milestones = (delivery.data?.milestones ?? []).filter((m) => m.status !== "cancelled" || m.id === invoice?.milestoneId);

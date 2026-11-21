@@ -1,3 +1,4 @@
+import { useSettings } from "../../platform/session";
 import { motion } from "motion/react";
 import { Link } from "react-router-dom";
 import type { Warning } from "../../../../shared/vendors";
@@ -28,10 +29,11 @@ export function WarningRow({ w }: { w: Warning }) {
 export function WarningsPage() {
   const q = useWarnings();
   const n = q.data?.length ?? 0;
+  const w = useSettings();
   return (
     <>
       <PageHeader
-        context="Renewal deadlines, SOWs ending and missing paperwork"
+        context="Renewal deadlines, SOWs ending, budgets and missing paperwork"
         title={q.data ? (n === 0 ? "Nothing needs attention" : `${n} ${n === 1 ? "thing needs" : "things need"} attention`) : "Warnings"}
       />
       {q.isPending ? (
@@ -40,8 +42,8 @@ export function WarningsPage() {
         <ErrorState message={messageOf(q.error)} onRetry={() => void q.refetch()} />
       ) : n === 0 ? (
         <EmptyState title="All clear">
-          A warning appears here when a subscription's notice deadline is within 90 days or has passed, when a SOW ends within 30 days, and when an active vendor has no valid NDA
-          or data processing agreement.
+          A warning appears here when a subscription's notice deadline is within {w.noticeDays} days or has passed, when a SOW ends within {w.sowEndDays} days or has used{" "}
+          {w.budgetWarningPct}% of its budget, and when an active vendor has no valid NDA or data processing agreement.
         </EmptyState>
       ) : (
         <motion.ul variants={list} initial="initial" animate="animate" aria-label="Warnings" className="flex flex-col">

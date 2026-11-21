@@ -21,6 +21,9 @@ wrong. Answered questions move to the bottom.
 | Q12 | Credit notes: can an invoice be negative? | No. An invoice amount is above zero; a credit is handled by correcting or removing the invoice. | M2 |
 | Q13 | Can an invoice be dated in the future? | No. | M2 |
 | Q14 | Who may approve a change request? | Any team member, like every other change. The history shows who did. | M2 |
+| Q16 | After a change request is approved, can the SOW's budget or end date still be typed over directly? | No. From then on they change only through change requests, so "started at, now at" stays true. Before any approval they can be corrected freely. | M2 |
+| Q17 | Must every milestone on a fixed-price SOW have an amount? | No, the amount is optional. A milestone invoiced above its amount is marked rather than refused. | M2 |
+| Q18 | May a consultant's day rate be in pounds on a euro SOW? | Yes; the rate is shown in its own currency. Say if it should be refused instead. | M2 |
 | Q15 | The pound to euro rate starts at 1.17 until an admin sets it. | Fine as a starting value; set the real one on the Settings page. | M2 |
 
 ## To check at work before M9

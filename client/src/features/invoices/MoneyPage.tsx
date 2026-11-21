@@ -36,11 +36,14 @@ const monthLabel = (ym: string) => `${MONTHS[Number(ym.slice(5)) - 1]} ${ym.slic
 function ceiling(minor: number): number {
   if (minor <= 0) return 100_00;
   const unit = 10 ** Math.floor(Math.log10(minor));
-  return [1, 2, 2.5, 5, 10].map((s) => s * unit).find((s) => s >= minor)!;
+  return [1, 2, 5, 10].map((s) => s * unit).find((s) => s >= minor)!;
 }
 const eur = (minor: number) => formatMoney(minor, "EUR");
-const short = (minor: number) =>
-  minor >= 1_000_000_00 ? `€${(minor / 1_000_000_00).toFixed(1)}m` : minor >= 1_000_00 ? `€${Math.round(minor / 1_000_00)}k` : `€${Math.round(minor / 100)}`;
+/** A scale label: whole where it can be, one decimal where it cannot (€2.5k, never a rounded €3k). */
+const short = (minor: number) => {
+  const n = (x: number) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
+  return minor >= 1_000_000_00 ? `€${n(minor / 1_000_000_00)}m` : minor >= 1_000_00 ? `€${n(minor / 1_000_00)}k` : `€${n(minor / 100)}`;
+};
 
 /** Spend per month and per vendor for a chosen period (M-6). */
 export function SpendPage() {
@@ -57,7 +60,7 @@ export function SpendPage() {
   const q = useQuery({
     queryKey: ["spend", range.from, range.to],
     queryFn: () => api<Spend>("/spend", { query: { from: range.from, to: range.to } }),
-    enabled: ready,
+    enabled: ready && range.from <= range.to,
     placeholderData: (p) => p,
   });
   const s = q.data;
@@ -67,7 +70,17 @@ export function SpendPage() {
 
   return (
     <>
-      <PageHeader context={ready ? `${formatDay(range.from)} to ${formatDay(range.to)}` : "Choose both dates"} title="Spend" />
+      <PageHeader context={ready ? `${formatDay(range.from)} to ${formatDay(range.to)}` : "Choose both dates"} title="Spend">
+        {ready && (
+          <a
+            href={`/api/spend/export.csv?from=${range.from}&to=${range.to}`}
+            download
+            className="inline-flex h-[38px] items-center rounded-full border border-line-2 px-[18px] text-[13.5px] font-semibold transition hover:bg-sunk active:scale-[.96]"
+          >
+            Export CSV
+          </a>
+        )}
+      </PageHeader>
       <MoneyTabs />
       <div className="flex flex-wrap items-end gap-3">
         <Field label="Period" htmlFor="spend-period">
@@ -96,7 +109,9 @@ export function SpendPage() {
         )}
       </div>
 
-      {!ready ? null : q.isPending ? (
+      {!ready ? null : range.from > range.to ? (
+        <EmptyState title="The end of the period is before its start">Choose an end date on or after the start date.</EmptyState>
+      ) : q.isPending ? (
         <Loading />
       ) : q.isError ? (
         <ErrorState message={messageOf(q.error)} onRetry={() => void q.refetch()} />
@@ -199,6 +214,7 @@ export function SpendPage() {
 
             <section className="flex min-w-0 flex-col gap-4">
               <h2 className="text-base font-semibold">By vendor</h2>
+              {mixed && <p className="text-[12.5px] text-ink-2">Each figure in euros is rounded on its own, so a column can differ from the total by a cent.</p>}
               <ol aria-label="Spend per vendor" className="flex flex-col">
                 {s!.byVendor.map((v) => (
                   <li key={v.vendorId} className="border-b border-line py-3.5">

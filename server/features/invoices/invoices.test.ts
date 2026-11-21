@@ -62,8 +62,6 @@ describe("M-4 invoices", () => {
       expect(res.body.error.fields.invoiceNumber).toMatch(/already has an invoice with this number/);
     }
     const elsewhere = (await t.as(MEMBER).post("/api/vendors").send({ name: "Other Invoice Vendor", type: "software", ownerUserId: me })).body.id;
-    const theirs = await sow({});
-    expect(theirs.vendorId).toBe(vendorId);
     const foreign = await agreement({ kind: "sow", pricing: "fixed", budgetMinor: 1_000_00, startDate: "2026-01-01", endDate: "2027-06-30" }, elsewhere);
     expect((await invoice(foreign.id, { invoiceNumber: "DUP-77" })).status).toBe(201);
     const two = await Promise.all([invoice(s.id, { invoiceNumber: "RACE-1" }), invoice(other.id, { invoiceNumber: "race-1" })]);
@@ -75,6 +73,21 @@ describe("M-4 invoices", () => {
     expect(res.body.currency).toBe("GBP");
     // Once invoiced, the agreement's currency is fixed.
     expect((await t.as(MEMBER).patch(`/api/agreements/${gbp.id}`).send({ currency: "EUR" })).body.error.fields.currency).toMatch(/already has invoices in GBP/);
+  });
+  it("moves an invoice to another agreement only within the same currency, re-checking everything for the new place", async () => {
+    const eur = await sow();
+    const other = await sow();
+    const gbp = await sow({ currency: "GBP" });
+    const nda = await agreement({ kind: "nda" });
+    const inv = (await invoice(eur.id, { invoiceNumber: "MOVE-1", amountMinor: 1_000_00 })).body;
+    const to = (agreementId: string) => t.as(MEMBER).patch(`/api/invoices/${inv.id}`).send({ agreementId });
+    const blocked = await to(gbp.id);
+    expect(blocked.status).toBe(400);
+    expect(blocked.body.error.fields.agreementId).toMatch(/is in EUR. It cannot move to an agreement in GBP/);
+    expect((await to(nda.id)).body.error.fields.agreementId).toMatch(/SOW or a subscription/);
+    expect((await to(other.id)).body).toMatchObject({ agreementId: other.id, currency: "EUR", amountMinor: 1_000_00 });
+    expect((await t.as(MEMBER).get(`/api/agreements/${eur.id}/delivery`)).body.budget.invoicedMinor).toBe(0);
+    expect((await t.as(MEMBER).get("/api/invoices").query({ agreementId: other.id })).body.items[0]).toMatchObject({ invoiceNumber: "MOVE-1", agreementKind: "sow" });
   });
   it("refuses an invoice for an MSA or NDA, a milestone of another SOW, a future date, and a zero or fractional amount", async () => {
     const s = await sow();
@@ -137,21 +150,18 @@ describe("M-5 budget view", () => {
     const who = (await other.as(MEMBER).get("/api/me")).body.id;
     const v = (await other.as(MEMBER).post("/api/vendors").send({ name: "Budget Vendor", type: "software", ownerUserId: who, ndaRequired: false, dpaRequired: false })).body.id;
     const s = (
-      await other
-        .as(MEMBER)
-        .post("/api/agreements")
-        .send({
-          vendorId: v,
-          ownerUserId: who,
-          kind: "sow",
-          title: "Budget SOW",
-          pricing: "time_and_materials",
-          budgetMinor: 100_000_00,
-          startDate: "2026-01-01",
-          endDate: "2027-06-30",
-          status: "active",
-          signedOn: "2026-01-01",
-        })
+      await other.as(MEMBER).post("/api/agreements").send({
+        vendorId: v,
+        ownerUserId: who,
+        kind: "sow",
+        title: "Budget SOW",
+        pricing: "time_and_materials",
+        budgetMinor: 100_000_00,
+        startDate: "2026-01-01",
+        endDate: "2027-06-30",
+        status: "active",
+        signedOn: "2026-01-01",
+      })
     ).body;
     const book = (amountMinor: number) =>
       other
@@ -246,6 +256,48 @@ describe("M-6 spend overview and M-7 exchange rate", () => {
     const log = (await other.as(ADMIN).get("/api/admin/audit").query({ entityType: "settings" })).body.items;
     expect(log[0]).toMatchObject({ userEmail: ADMIN, changes: { gbpToEurE4: { from: 11700, to: 12000 } } });
     expect((await spend({ from: "2026-03-01", to: "2026-02-01" })).error.fields.to).toBeTruthy();
+    await other.close();
+  });
+  it("exports the spend overview as a file, one row per vendor, month and currency", async () => {
+    const other = await testApp({}, { empty: true });
+    const who = (await other.as(ADMIN).get("/api/me")).body.id;
+    const v = (await other.as(ADMIN).post("/api/vendors").send({ name: '=Export, "Vendor"', type: "software", ownerUserId: who })).body.id;
+    const s2 = (
+      await other.as(ADMIN).post("/api/agreements").send({
+        vendorId: v,
+        ownerUserId: who,
+        kind: "sow",
+        title: "S",
+        pricing: "time_and_materials",
+        budgetMinor: 1,
+        startDate: "2025-01-01",
+        endDate: "2027-12-31",
+        currency: "GBP",
+      })
+    ).body.id;
+    for (const [d, a] of [
+      ["2026-01-05", 100_00],
+      ["2026-01-20", 50_50],
+      ["2026-03-01", 7],
+    ] as const)
+      await other
+        .as(ADMIN)
+        .post("/api/invoices")
+        .send({ agreementId: s2, invoiceNumber: `X-${d}`, invoiceDate: d, amountMinor: a });
+    const res = await other.as(MEMBER).get("/api/spend/export.csv").query({ from: "2026-01-01", to: "2026-03-31" }).buffer(true).parse(binary);
+    expect(res.headers["content-disposition"]).toBe('attachment; filename="spend-2026-01-01-to-2026-03-31.csv"');
+    const lines = (res.body as Buffer).toString("utf8").slice(1).trimEnd().split("\r\n");
+    expect(lines).toEqual(['"Vendor","Month","Currency","Invoiced"', '"\'=Export, ""Vendor""","2026-01","GBP","150.50"', '"\'=Export, ""Vendor""","2026-03","GBP","0.07"']);
+    await other.close();
+  });
+  it("lists renewals within the admin's own notice window unless another is asked for", async () => {
+    const other = await testApp();
+    const titles = async (q: Record<string, string> = {}) => (await other.as(MEMBER).get("/api/renewals").query(q)).body.map((x: { title: string }) => x.title);
+    expect(await titles()).toEqual(["Reporting suite", "Service desk licence"]);
+    await other.as(ADMIN).put("/api/admin/settings").send({ gbpToEurE4: 11700, noticeDays: 20, sowEndDays: 30, budgetWarningPct: 80 });
+    expect(await titles()).toEqual(["Reporting suite"]);
+    expect(await titles({ window: "45" })).toEqual(["Reporting suite", "Service desk licence"]);
+    expect((await other.as(MEMBER).get("/api/renewals").query({ window: "0" })).status).toBe(400);
     await other.close();
   });
   it("uses the admin's warning windows and refuses nonsense settings", async () => {

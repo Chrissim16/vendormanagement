@@ -8,7 +8,7 @@ Newest entry first. Written for the owner, in plain language.
 |---|---|
 | M0 Foundation | Done |
 | M1 Vendors and agreements | Done |
-| M2 SOW delivery and money | Not started |
+| M2 SOW delivery and money | Done |
 | M3 Performance from Jira | Not started |
 | M4 Scorecards and AI scoring | Not started |
 | M5 Briefings, risk flags, dashboard, report | Not started |
@@ -17,9 +17,35 @@ Newest entry first. Written for the owner, in plain language.
 | M8 Contract reading | Not started |
 | M9 Move to Databricks | Not started; done at work |
 
-**Next:** M2 SOW delivery and money, and M3 Performance from Jira. They do not depend on each other.
+**Next:** M3 Performance from Jira.
 
 ## Log
+
+### 2026-11-21 M2 SOW delivery and money done
+The app now follows what each SOW delivers and what it costs. What you can do in it:
+
+- **Milestones.** On a SOW's page, add milestones with a due date, mark them delivered or cancel them. A late one says how many days late. On a fixed-price SOW a milestone can carry a payment amount, and the amounts can never add up to more than the budget.
+- **Change requests.** Record an extension or a budget change as proposed, then approve or reject it. Approving moves the SOW's budget and end date, and the page keeps showing where the SOW started and where it is now.
+- **Rate cards and consultants.** Each vendor has a Money tab with its day rates per role, each with a start date, so a new rate does not erase the old one. On a SOW you name the consultants and their role, and the page shows each one's current day rate.
+- **Invoices.** Key in an invoice against a SOW (optionally against a milestone) or a subscription. The currency follows the agreement, and the same invoice number cannot be entered twice for one vendor.
+- **Budget.** Every SOW shows budget, invoiced, remaining and the percentage used, as a meter. From 80% it is marked close to budget, and past 100% over budget; both also appear under the bell and on the warnings page.
+- **Spend.** The Money section shows spend per month and per vendor for any period, in euros, in pounds, and together in euros. Both the overview and the invoice list download as a file for Excel.
+- **Settings (admin).** One page sets the pound to euro rate and the warning thresholds: days before a notice deadline, days before a SOW ends, and the budget percentage. Changing the rate changes converted totals only, never an invoice.
+
+The sample data now includes milestones, an approved extension, consultants, rates and invoices, so every screen has something to show.
+
+How it was checked: an independent tester used the running app against all seven requirements and the general ones (keyboard use, empty screens, failed saves, dates, speed); all passed, and the figures on the spend page were added up by hand against the invoices. An independent reviewer read the code and found one real defect: after a change request was approved, the budget could still be typed over directly, which made "started at, now at" untrue. That is fixed, along with about fifteen smaller points from both, such as a confirmation before removing an invoice and clearer wording in the history.
+
+Decided on your behalf (see `docs/open-questions.md`, Q12 to Q18):
+
+- An invoice cannot be negative or dated in the future. A credit is handled by correcting or removing the invoice.
+- Any team member may approve a change request; the history shows who did.
+- Once a change request is approved, the SOW's budget and end date change only through further change requests.
+- A milestone's amount is optional, and a milestone invoiced above its amount is marked, not refused.
+- A consultant's rate may be in pounds on a euro SOW.
+- The pound to euro rate starts at 1.17 until you set the real one in Settings.
+
+Three requirements were reworded slightly to match what was built: milestone amounts are optional (M-1), the spend overview itself can also be exported (M-6), and the Renewals page and on-screen explanations follow the thresholds you set (M-7).
 
 ### 2026-11-21 M1 Vendors and agreements done
 The app now holds your vendors and contracts. What you can do in it:
@@ -75,11 +101,13 @@ First version of the brief, requirements, plan and agent workflow. No applicatio
 
 ## Follow-ups
 - Search and sorting do not ignore accents: searching "beta" does not find "Béta", and "École" sorts after "Z".
-- Sorting agreements by value compares EUR and GBP amounts as if they were the same currency.
 - The app allows two agreements with the same vendor, kind and title; the import treats that combination as "already there".
 - The date boxes in forms follow the browser's own date format, which may be month-first on some machines. Everything the app itself writes is day month year.
 - A renewal term shorter than a year that starts on the 31st drifts to the 28th after passing through February.
 - A person's name is taken at first sign-in and not refreshed if it later changes in the company directory.
-- The warning windows (90 and 30 days) are fixed; they become settings in M2.
+- Removing a contact or a document happens at once; only invoices, consultants and rates ask "Really remove?" first.
+- A cancelled milestone keeps its amount if the SOW is later switched to time and materials.
+- The rate dialog shows one problem at a time when both the role and the rate are wrong.
+- Two people changing the same SOW at the very same moment has been reasoned through and guarded, but not tried with two real people.
 - PDF export moved from M1 to M4, the first milestone that produces a PDF.
 - Deploy the app once at work as a rehearsal (open question Q3). With M1 done there is now something real to try there.

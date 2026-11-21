@@ -7,7 +7,7 @@ import { formatMoney } from "../../../../shared/money";
 import type { Invoice } from "../../../../shared/sow";
 import type { Page } from "../../../../shared/types";
 import { api, messageOf } from "../../lib/api";
-import { Button, ErrorState, Loading } from "../../platform/ui";
+import { Button, ConfirmButton, ErrorState, Loading } from "../../platform/ui";
 import { InvoiceForm } from "./InvoiceForm";
 
 /** The invoices booked against one SOW or subscription, on that agreement's page. */
@@ -52,9 +52,7 @@ export function InvoicesSection({ agreement: a }: { agreement: AgreementDetail }
               <Button className="h-8 px-3.5 text-[12.5px]" onClick={() => setDialog(i)} aria-label={`Edit invoice ${i.invoiceNumber}`}>
                 Edit
               </Button>
-              <Button className="h-8 px-3.5 text-[12.5px]" onClick={() => remove.mutate(i)} aria-label={`Remove invoice ${i.invoiceNumber}`}>
-                Remove
-              </Button>
+              <ConfirmButton className="h-8 px-3.5 text-[12.5px]" disabled={remove.isPending} onConfirm={() => remove.mutate(i)} label={`Remove invoice ${i.invoiceNumber}`} />
             </li>
           ))}
         </ul>

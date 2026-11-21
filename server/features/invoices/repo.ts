@@ -27,7 +27,7 @@ export interface InvoiceFilter {
   pageSize: number;
 }
 
-const columns = { invoice: invoices, vendorName: vendors.name, agreementTitle: agreements.title, milestoneTitle: milestones.title };
+const columns = { invoice: invoices, vendorName: vendors.name, agreementTitle: agreements.title, agreementKind: agreements.kind, milestoneTitle: milestones.title };
 const base = (db: Queryable) =>
   db
     .select(columns)
@@ -46,9 +46,10 @@ function conditions(f: Pick<InvoiceFilter, "q" | "vendorId" | "agreementId" | "f
   return where.length ? and(...where) : undefined;
 }
 
-export async function listInvoices(db: Queryable, f: InvoiceFilter) {
+export async function listInvoices(db: Queryable, f: InvoiceFilter, gbpToEurE4: number) {
   const cond = conditions(f);
-  const col = sorts[f.sort];
+  // Amounts are compared in euros, so pounds and euros sort fairly together.
+  const col = f.sort === "amount" ? sql`${invoices.amountMinor} * (case when ${invoices.currency} = 'GBP' then ${gbpToEurE4}::numeric / 10000 else 1 end)` : sorts[f.sort];
   const [items, total, sums] = await Promise.all([
     base(db)
       .where(cond)

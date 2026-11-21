@@ -206,7 +206,7 @@ test.describe("A-5 documents", () => {
 
     await page.getByRole("button", { name: "Remove Signed NDA.pdf" }).click();
     await expect(page.getByText("No documents attached.")).toBeVisible();
-    await expect(page.getByText("document Signed NDA.pdf from attached to removed")).toBeVisible();
+    await expect(page.getByText("document Signed NDA.pdf removed")).toBeVisible();
   });
 });
 

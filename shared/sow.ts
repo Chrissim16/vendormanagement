@@ -221,6 +221,7 @@ export interface Invoice extends InvoiceInput {
   vendorId: string;
   vendorName: string;
   agreementTitle: string;
+  agreementKind: string;
   milestoneTitle: string | null;
   currency: Currency;
   createdBy: string | null;

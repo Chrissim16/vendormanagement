@@ -10,7 +10,7 @@ import { api, messageOf } from "../../lib/api";
 import { Dialog } from "../../platform/Dialog";
 import { FormFooter, Grid, SelectField, TextField, useForm } from "../../platform/form";
 import { useToday } from "../../platform/session";
-import { Button, ErrorState, Loading, Pill } from "../../platform/ui";
+import { Button, ConfirmButton, ErrorState, Loading, Pill } from "../../platform/ui";
 
 function RateForm({ vendorId, roles, onClose, onSaved }: { vendorId: string; roles: string[]; onClose: () => void; onSaved: () => void }) {
   const today = useToday();
@@ -119,9 +119,12 @@ export function VendorMoney({ vendorId, vendorName }: { vendorId: string; vendor
                 </span>
                 {l.current && <Pill tone="brand">In force</Pill>}
                 <span className="num">{formatMoney(l.dayRateMinor, l.currency)} a day</span>
-                <Button className="h-8 px-3.5 text-[12.5px]" onClick={() => remove.mutate(l)} aria-label={`Remove the ${l.role} rate from ${formatDay(l.validFrom)}`}>
-                  Remove
-                </Button>
+                <ConfirmButton
+                  className="h-8 px-3.5 text-[12.5px]"
+                  disabled={remove.isPending}
+                  onConfirm={() => remove.mutate(l)}
+                  label={`Remove the ${l.role} rate from ${formatDay(l.validFrom)}`}
+                />
               </li>
             ))}
           </ul>

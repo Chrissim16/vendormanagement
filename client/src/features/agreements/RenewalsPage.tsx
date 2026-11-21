@@ -1,3 +1,4 @@
+import { useSettings } from "../../platform/session";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import { useState } from "react";
@@ -20,9 +21,14 @@ export function RenewalsPage() {
   const me = useMe();
   const qc = useQueryClient();
   const today = useToday();
-  const [url, setUrl] = useUrlState({ window: "90", mine: "" });
+  const [url, setUrl] = useUrlState({ window: "", mine: "" });
+  const usual = String(useSettings().noticeDays);
+  const windowDays = url.window || usual;
   const [deciding, setDeciding] = useState<Agreement | null>(null);
-  const q = useQuery({ queryKey: ["renewals", url], queryFn: () => api<Agreement[]>("/renewals", { query: { window: url.window, owner: url.mine ? me.id : undefined } }) });
+  const q = useQuery({
+    queryKey: ["renewals", url],
+    queryFn: () => api<Agreement[]>("/renewals", { query: { window: url.window || undefined, owner: url.mine ? me.id : undefined } }),
+  });
   const overdue = q.data?.filter((a) => a.renewalState === "overdue").length ?? 0;
   return (
     <>
@@ -30,12 +36,14 @@ export function RenewalsPage() {
       <AgreementTabs />
       <div className="flex flex-wrap items-end gap-3">
         <Field label="Notice deadline within" htmlFor="renewals-window">
-          <Select id="renewals-window" value={url.window} onChange={(e) => setUrl({ window: e.target.value })}>
-            {["30", "60", "90", "180"].map((w) => (
-              <option key={w} value={w}>
-                {w} days
-              </option>
-            ))}
+          <Select id="renewals-window" value={windowDays} onChange={(e) => setUrl({ window: e.target.value === usual ? "" : e.target.value })}>
+            {[...new Set(["30", "60", "90", "180", usual])]
+              .sort((a, b) => Number(a) - Number(b))
+              .map((w) => (
+                <option key={w} value={w}>
+                  {w} days
+                </option>
+              ))}
           </Select>
         </Field>
         <Field label="Whose" htmlFor="renewals-mine">
@@ -51,7 +59,7 @@ export function RenewalsPage() {
         <ErrorState message={messageOf(q.error)} onRetry={() => void q.refetch()} />
       ) : q.data.length === 0 ? (
         <EmptyState title="Nothing needs a renewal decision">
-          Subscriptions appear here when their notice deadline is within {url.window} days or has passed, until someone records a decision. MSAs and SOWs never appear, because they
+          Subscriptions appear here when their notice deadline is within {windowDays} days or has passed, until someone records a decision. MSAs and SOWs never appear, because they
           do not renew.
         </EmptyState>
       ) : (

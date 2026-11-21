@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { addDays, addMonths, daysBetween, isDay, type Day } from "./dates";
 import { currencies, type Currency } from "./money";
+import { DEFAULT_SETTINGS } from "./sow";
 
 export const kinds = ["msa", "sow", "subscription", "nda", "dpa"] as const;
 export type Kind = (typeof kinds)[number];
@@ -27,8 +28,8 @@ export const decisions = ["renew", "renegotiate", "terminate"] as const;
 export type Decision = (typeof decisions)[number];
 
 export const DEFAULT_NOTICE_DAYS = 90;
-/** Warning windows from the PRD. They become admin settings in a later milestone. */
-export const WINDOWS = { noticeDays: 90, sowEndDays: 30, budgetWarningPct: 80 };
+/** The warning windows used when no settings are passed in: the same defaults the Settings page starts from. */
+export const WINDOWS = { noticeDays: DEFAULT_SETTINGS.noticeDays, sowEndDays: DEFAULT_SETTINGS.sowEndDays, budgetWarningPct: DEFAULT_SETTINGS.budgetWarningPct };
 export type Windows = typeof WINDOWS;
 
 const day = z.string().refine(isDay, "Enter a real date.");

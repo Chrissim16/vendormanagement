@@ -148,6 +148,7 @@ test.describe("M-3 consultants and rate cards", () => {
     await expect(person).toContainText("Lead architect");
     await expect(person).toContainText("€ 1,350.00 a day");
     await page.getByRole("button", { name: "Remove Alex Example" }).click();
+    await page.getByRole("button", { name: "Remove Alex Example" }).click();
     await expect(page.getByText("Nobody named yet.")).toBeVisible();
   });
 });
@@ -211,6 +212,7 @@ test.describe("M-4 invoices and M-5 budget view", () => {
     await edit.getByLabel("Amount in EUR").fill("500");
     await edit.getByRole("button", { name: "Save changes" }).click();
     await expect(invoices.filter({ hasText: "INV-002" })).toContainText("€ 500.00");
+    await page.getByRole("button", { name: "Remove invoice INV-002" }).click();
     await page.getByRole("button", { name: "Remove invoice INV-002" }).click();
     await expect(invoices.filter({ hasText: "INV-002" })).toHaveCount(0);
     await expectAccessible(page);
@@ -323,6 +325,39 @@ test.describe("M-6 spend overview and M-7 exchange rate", () => {
     } finally {
       await rate(11700);
     }
+  });
+
+  test("M-7 the admin's warning thresholds decide what appears on the warnings page, and M-5 an overrun shows there", async ({ page, context, request }) => {
+    const v = await newVendor(request, "Thresholds");
+    const half = await newAgreement(request, v, { ...sow, title: "Half used SOW", pricing: "time_and_materials", endDate: "2027-12-31" });
+    const over = await newAgreement(request, v, { ...sow, title: "Overrun SOW", pricing: "time_and_materials", endDate: "2027-12-31" });
+    await newInvoice(request, half.id, { amountMinor: 55_000_00 });
+    await newInvoice(request, over.id, { amountMinor: 100_000_01 });
+    const settings = (budgetWarningPct: number) => asAdminApi(request, "put", "/admin/settings", { gbpToEurE4: 11700, noticeDays: 90, sowEndDays: 30, budgetWarningPct });
+    try {
+      await signInAs(context, MEMBER);
+      await page.goto("/warnings");
+      const warnings = page.getByRole("list", { name: "Warnings" });
+      await expect(warnings.getByRole("listitem").filter({ hasText: "Overrun SOW" })).toContainText("Over budget");
+      await expect(warnings.getByRole("listitem").filter({ hasText: "Half used SOW" })).toHaveCount(0);
+      await settings(50);
+      await page.reload();
+      await expect(warnings.getByRole("listitem").filter({ hasText: "Half used SOW" })).toContainText("55% of budget used");
+    } finally {
+      await settings(80);
+    }
+    await page.reload();
+    await expect(page.getByRole("list", { name: "Warnings" }).getByRole("listitem").filter({ hasText: "Overrun SOW" })).toBeVisible();
+    await expect(page.getByRole("list", { name: "Warnings" }).getByRole("listitem").filter({ hasText: "Half used SOW" })).toHaveCount(0);
+  });
+
+  test("M-6 the spend overview can be exported, and a period that ends before it starts says so", async ({ page, context }) => {
+    await signInAs(context, MEMBER);
+    await page.goto("/money?period=custom&from=2026-01-01&to=2026-11-21");
+    const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: "Export CSV" }).click()]);
+    expect(download.suggestedFilename()).toBe("spend-2026-01-01-to-2026-11-21.csv");
+    await page.goto("/money?period=custom&from=2026-12-01&to=2026-01-01");
+    await expect(page.getByText("The end of the period is before its start")).toBeVisible();
   });
 
   test("X-2 a period with no invoices says so and points to the invoices", async ({ page, context }) => {
