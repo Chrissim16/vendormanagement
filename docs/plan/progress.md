@@ -9,7 +9,7 @@ Newest entry first. Written for the owner, in plain language.
 | M0 Foundation | Done |
 | M1 Vendors and agreements | Done |
 | M2 SOW delivery and money | Done |
-| M3 Performance from Jira | Not started |
+| M3 Performance from Jira | Done here; the real Jira connection is unproven until tried at work |
 | M4 Scorecards and AI scoring | Not started |
 | M5 Briefings, risk flags, dashboard, report | Not started |
 | M6 RFP | Not started |
@@ -17,9 +17,41 @@ Newest entry first. Written for the owner, in plain language.
 | M8 Contract reading | Not started |
 | M9 Move to Databricks | Not started; done at work |
 
-**Next:** M3 Performance from Jira.
+**Next:** M4 Scorecards and AI scoring.
 
 ## Log
+
+### 2026-11-21 M3 Performance from Jira done
+The app now shows how each helpdesk vendor is performing, from its Jira tickets. Because the company's Jira cannot be reached from here, it runs on a stand-in Jira with invented boards and tickets; the real connection is written but has never run (see "Needs your attention").
+
+What you can do in it:
+
+- **Link a vendor to its Jira board (admin).** On Performance, press Link a board, choose the vendor and its board, and say whether a ticket's support level shows in its status or in a label, and which statuses or labels mean level 1, 2 and 3. Test link checks the board without saving, lists the statuses and labels it found and points out a misspelt one. Saving fetches the tickets at once.
+- **Sync.** Tickets are fetched every hour by the app itself, and whenever anyone presses Sync now. Each board shows when it was last fetched and how many tickets changed. If a fetch fails, the page says why in plain words and the tickets and figures already there stay as they were.
+- **A vendor's month.** Open a vendor from Performance (or from the new Performance tab in its panel on Vendors) to see five figures for the chosen month: first response, first-line closure, SLA breaches, backlog age and satisfaction, each with small bars for the last twelve months and a table of the same twelve months below.
+- **The tickets behind a number.** Every number is a link. "5 late" opens exactly those five tickets, which can be searched and sorted.
+- **Targets.** Any team member presses Set targets and types the targets from the contract. Every month then says met or missed, and a missed target says a service credit may apply. No amount is calculated.
+- **Overview.** Performance lists every scored vendor that has a board with this month's figures against target, worst first, sortable by any column, for any month of the last two years. Scored vendors without a board are named underneath.
+
+The sample data has three linked helpdesk vendors (one where escalation shows as a status, one as a label), one free board to try linking yourself, and a "flaky demo board" whose every second fetch fails, so you can see what a failure looks like.
+
+How it was checked: an independent tester used the running app against all five requirements and the general ones, and recalculated the figures by hand and by script for 36 vendor-months from the ticket lists; all passed. An independent reviewer read the code and found two real defects, both fixed with a test each: a ticket deleted or moved in Jira would have stayed "open" here for ever and made the backlog look older every day, and a month before a board's first ticket showed a backlog of "0 days, target met". About fifteen smaller points from both were fixed as well, such as the Back button after choosing a month and the overview fitting a smaller window.
+
+Needs your attention:
+
+- **The Jira documentation could not be opened from here.** The plan said to confirm Jira's field names from Atlassian's documentation before building. That site is blocked in this build environment; a separate environment that allows it was created with your approval, but this session could not be moved to it. The Jira connection is therefore written from general knowledge and proven only against the stand-in. It is built so that a wrong name gives empty figures, never wrong ones, and Test link and the System check page now say which measurement is missing. Either start the next session in the "vendormanagement" environment so the check can be done, or check at work with one Test link (open question W8).
+- **Three requirements were reworded slightly** to match what was built: any member may press Sync now and the schedule is hourly (J-2); whether a figure must be at least or at most its target follows from the metric (J-4); the overview covers scored vendors that have a board and names the others (J-5).
+
+Decided on your behalf (see `docs/open-questions.md`, Q19 to Q27):
+
+- Tickets are fetched every hour while the app runs.
+- A ticket that never had a level 2 or level 3 status or label counts as solved by the first line.
+- The backlog target is the age of the oldest open ticket; the SLA target is the share of tickets resolved late.
+- Today's targets are applied to every month shown; earlier targets are in the vendor's history but not re-applied.
+- Figures are rounded to one decimal and that rounded figure is judged, so 94.96% meets a 95% target.
+- First response counts tickets for which Jira has an outcome; one still waiting within its time is left out until it has one.
+- The overview opens on the running month, marked "so far".
+- A vendor with scoring switched off cannot be linked to a board and shows no performance figures.
 
 ### 2026-11-21 M2 SOW delivery and money done
 The app now follows what each SOW delivers and what it costs. What you can do in it:
@@ -100,6 +132,13 @@ architecture and plan were rewritten to match. The plan now has ten milestones.
 First version of the brief, requirements, plan and agent workflow. No application code yet.
 
 ## Follow-ups
+- Linking a board fetches its tickets while the admin waits. That is fine for a few thousand tickets; a board with tens of thousands could take minutes the first time, because Jira is asked once per ticket for its history. To be measured at work, and moved to the background if slow.
+- A board whose sync is switched off keeps its tickets beyond 24 months, since the clean-up runs with the sync.
+- A reopened ticket is judged on its final resolution; an earlier late resolution of the same ticket is not counted.
+- The median first response time leaves out tickets still waiting for an answer, so it reads slightly low while answers are slipping.
+- Two people saving the same vendor's targets at the same moment: the last save wins for every metric.
+- If Jira gains or renames a measurement, the app notices after a restart.
+- Whether Databricks keeps the app running at night decides whether the hourly sync runs then (open question W9).
 - A second branch from another session (`claude/adoring-curie-k6ewvw`) holds a wider spreadsheet import (contacts, rate cards, past invoices). It was started from M0, before M1 and M2, and is not part of the app yet. Decide whether to bring it in; it will need rework first.
 - Search and sorting do not ignore accents: searching "beta" does not find "Béta", and "École" sorts after "Z".
 - The app allows two agreements with the same vendor, kind and title; the import treats that combination as "already there".
