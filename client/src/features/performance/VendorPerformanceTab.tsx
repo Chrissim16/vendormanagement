@@ -30,7 +30,7 @@ export function VendorPerformanceTab({ vendorId }: { vendorId: string }) {
     <>
       <div className="flex flex-wrap items-center gap-3">
         <h3 className="flex-1 text-base font-semibold">{monthTitle(month.month, p.currentMonth)}</h3>
-        <MissedPill missed={month.missed} anyTarget={metricKeys.some((k) => month.cells[k].targetTenths != null)} />
+        <MissedPill metrics={month} />
       </div>
       <dl className="grid grid-cols-[190px_minmax(0,1fr)] gap-x-4 gap-y-3">
         {metricKeys.map((k) => (

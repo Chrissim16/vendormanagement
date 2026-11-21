@@ -331,6 +331,15 @@ test.describe("J-5 performance overview", () => {
       formatMetric("first_response", september.metrics.cells.first_response.valueTenths),
     );
 
+    // A month before the helpdesk had any ticket has nothing to judge, and does not claim its targets were met.
+    await page.goto("/performance?month=2025-06");
+    const early = page.getByRole("table", { name: "Performance in June 2025" }).locator("tbody tr").filter({ hasText: "Bluefinch Systems" });
+    await expect(early).toContainText("Nothing to measure");
+    await expect(early).not.toContainText("Targets met");
+    await expect(early).not.toContainText("Met ·");
+    await expect(page.getByText("nothing measured against a target", { exact: false })).toBeVisible();
+    await page.goto("/performance?month=2026-09");
+
     // Scored vendors without a board are named, so nobody wonders where they are.
     await expect(page.getByText(/Scored vendors without a Jira board: .*Quillon Consulting/)).toBeVisible();
     await expectAccessible(page);

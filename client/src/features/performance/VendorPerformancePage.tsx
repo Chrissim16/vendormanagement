@@ -94,7 +94,7 @@ function MetricRow({ vendorId, metric, month, months }: { vendorId: string; metr
         {to("backlog", `${plural(c.backlog, "ticket")} open`)}. Half are older than {plural(c.backlogMedianDays ?? 0, "day")}.
       </>
     ) : (
-      <span className="text-ink-2">No tickets open.</span>
+      <span className="text-ink-2">{c.existed ? "No tickets open." : "Nothing to measure this month."}</span>
     ),
     csat: c.ratings ? <>From {to("rated", plural(c.ratings, "rating"))}.</> : <span className="text-ink-2">No ratings this month.</span>,
   };
@@ -202,7 +202,7 @@ export function VendorPerformancePage() {
               <MonthSelect id="vendor-month" value={chosen.month} current={p!.currentMonth} onChange={setMonth} />
               <span className="flex-1" />
               <span className="pb-2">
-                <MissedPill missed={chosen.missed} anyTarget={metricKeys.some((k) => chosen.cells[k].targetTenths != null)} />
+                <MissedPill metrics={chosen} />
               </span>
             </div>
             <h2 className="sr-only">{monthTitle(chosen.month, p!.currentMonth)}</h2>

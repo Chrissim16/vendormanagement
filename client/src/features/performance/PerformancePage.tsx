@@ -28,7 +28,7 @@ const columns: Column<OverviewRow>[] = [
     sort: "missed",
     fit: true,
     className: "align-top",
-    cell: (r) => <MissedPill short missed={r.metrics.missed} anyTarget={metricKeys.some((k) => r.metrics.cells[k].targetTenths != null)} />,
+    cell: (r) => <MissedPill short metrics={r.metrics} />,
   },
 ];
 
@@ -49,6 +49,7 @@ export function PerformancePage() {
   const admin = me.role === "admin";
   const failed = o?.rows.filter((r) => r.link.active && r.link.lastSyncOk === false) ?? [];
   const missed = o?.rows.filter((r) => r.metrics.missed > 0).length ?? 0;
+  const judged = o?.rows.some((r) => metricKeys.some((k) => r.metrics.cells[k].verdict !== "none")) ?? false;
   const fetched = o?.rows
     .map((r) => r.link.lastSyncedAt)
     .filter((x): x is string => !!x)
@@ -60,7 +61,7 @@ export function PerformancePage() {
         context={
           !o
             ? " "
-            : `${monthTitle(o.month, o.currentMonth)} · ${plural(o.rows.length, "vendor")} with a Jira board${o.rows.length ? ` · ${missed === 0 ? "no targets missed" : `${plural(missed, "vendor")} missed a target`}` : ""}`
+            : `${monthTitle(o.month, o.currentMonth)} · ${plural(o.rows.length, "vendor")} with a Jira board${o.rows.length ? ` · ${missed > 0 ? `${plural(missed, "vendor")} missed a target` : judged ? "no targets missed" : "nothing measured against a target"}` : ""}`
         }
         title="Performance"
       >

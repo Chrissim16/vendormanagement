@@ -5,10 +5,12 @@ import {
   formatMetric,
   formatTarget,
   metricInfo,
+  metricKeys,
   monthName,
   type BoardLink,
   type MetricCell,
   type MetricKey,
+  type MonthMetrics,
   type Month,
   type SyncOutcome,
   type TicketSet,
@@ -70,9 +72,12 @@ export function MetricFigure({ metric, cell }: { metric: MetricKey; cell: Metric
   );
 }
 
-export function MissedPill({ missed, anyTarget, short }: { missed: number; anyTarget: boolean; short?: boolean }) {
+/** The month in one pill. "Targets met" only when something was actually measured against a target and nothing was missed. */
+export function MissedPill({ metrics, short }: { metrics: MonthMetrics; short?: boolean }) {
+  const { missed, cells } = metrics;
   if (missed > 0) return <Pill tone="bad">{short ? `${missed} missed` : missed === 1 ? "1 target missed" : `${missed} targets missed`}</Pill>;
-  return anyTarget ? <Pill tone="ok">Targets met</Pill> : <Pill>No targets</Pill>;
+  if (metricKeys.some((k) => cells[k].verdict === "met")) return <Pill tone="ok">Targets met</Pill>;
+  return <Pill>{metricKeys.some((k) => cells[k].targetTenths != null) ? "Nothing to measure" : "No targets"}</Pill>;
 }
 
 /** How often tickets arrive by themselves, in words. */
