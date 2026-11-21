@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import type { z } from "zod";
 import { aiSuggestions } from "../../db/schema";
+import type { TextSuggestion } from "../../shared/overview";
 import type { SuggestionStatus } from "../../shared/scorecards";
 import { AppError } from "../platform/errors";
 import type { AiPort, Queryable } from "../platform/ports/types";
@@ -104,4 +105,19 @@ export async function recordSuggestion(
 /** Records what a person decided about a suggestion. */
 export async function reviewSuggestion(tx: Queryable, id: string, status: Exclude<SuggestionStatus, "proposed">, byEmail: string, at: Date): Promise<void> {
   await tx.update(aiSuggestions).set({ status, reviewedBy: byEmail, reviewedAt: at }).where(eq(aiSuggestions.id, id));
+}
+
+/** A stored suggestion with the model's own text, for a record that shows it next to what a person made of it. */
+export async function readSuggestion<T>(db: Queryable, id: string | null): Promise<TextSuggestion<T> | null> {
+  const row = id ? (await db.select().from(aiSuggestions).where(eq(aiSuggestions.id, id)))[0] : undefined;
+  if (!row) return null;
+  return {
+    id: row.id,
+    status: row.status,
+    model: row.model,
+    createdAt: row.createdAt.toISOString(),
+    reviewedBy: row.reviewedBy,
+    reviewedAt: row.reviewedAt?.toISOString() ?? null,
+    output: row.output as T,
+  };
 }

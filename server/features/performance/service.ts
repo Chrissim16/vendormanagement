@@ -446,6 +446,26 @@ export async function figuresFor(ctx: PerformanceContext, vendorId: string, mont
   return { hasBoard: true, months: out };
 }
 
+/** The figures of every scored vendor with a board for the given months (oldest first), judged by today's targets. */
+export async function figuresOfAll(ctx: PerformanceContext, months: Month[]): Promise<{ vendorId: string; vendorName: string; months: MonthMetrics[] }[]> {
+  const links = (await repo.listLinks(ctx.db)).filter((l) => l.scoringEnabled);
+  if (!links.length) return [];
+  const ids = links.map((l) => l.link.id);
+  const now = ctx.now();
+  const [targets, ...counts] = await Promise.all([
+    targetsByVendor(
+      ctx.db,
+      links.map((l) => l.link.vendorId),
+    ),
+    ...months.map((m) => repo.monthCounts(ctx.db, ids, m, ctx.timeZone, now)),
+  ]);
+  return links.map(({ link, vendorName }) => ({
+    vendorId: link.vendorId,
+    vendorName,
+    months: months.map((m, i) => monthMetrics(m, counts[i]!.get(link.id) ?? emptyCounts, targets.get(link.vendorId)!)),
+  }));
+}
+
 /** The tickets created in a month, newest first, at most `limit`. */
 export async function ticketsCreatedIn(ctx: PerformanceContext, vendorId: string, month: Month, limit: number) {
   const link = await repo.linkOfVendor(ctx.db, vendorId);

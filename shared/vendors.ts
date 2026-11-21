@@ -92,8 +92,40 @@ export function paperwork(kind: "nda" | "dpa", required: boolean, agreements: Pa
   return mine.some((a) => a.status === "active") ? "expired" : "missing";
 }
 
-export type WarningType =
-  "renewal_overdue" | "renewal_due" | "sow_ending" | "sow_past_end" | "budget_warning" | "budget_overrun" | "nda_missing" | "nda_expired" | "dpa_missing" | "dpa_expired";
+export const warningTypes = [
+  "renewal_overdue",
+  "renewal_due",
+  "sow_past_end",
+  "sow_ending",
+  "budget_overrun",
+  "budget_warning",
+  "nda_expired",
+  "nda_missing",
+  "dpa_expired",
+  "dpa_missing",
+  // Risk flags (R-1): not wrong yet, but heading that way. The rules are in `risks.ts`.
+  "risk_budget_trend",
+  "risk_open_milestones",
+  "risk_metric_worsening",
+] as const;
+export type WarningType = (typeof warningTypes)[number];
+/** What each kind of warning is called where they are counted by kind. */
+export const warningTypeLabels: Record<WarningType, string> = {
+  renewal_overdue: "Notice deadline passed",
+  renewal_due: "Notice deadline coming up",
+  sow_past_end: "SOW past its end date",
+  sow_ending: "SOW ending soon",
+  budget_overrun: "Over budget",
+  budget_warning: "Close to budget",
+  nda_expired: "NDA expired",
+  nda_missing: "NDA missing",
+  dpa_expired: "Data processing agreement expired",
+  dpa_missing: "Data processing agreement missing",
+  risk_budget_trend: "Heading over budget",
+  risk_open_milestones: "Ending with open milestones",
+  risk_metric_worsening: "Helpdesk figure getting worse",
+};
+export const isRiskFlag = (w: Pick<Warning, "type">) => w.type.startsWith("risk_");
 
 export interface Warning {
   type: WarningType;
@@ -232,6 +264,11 @@ export function buildWarnings(vendors: WarningVendor[], agreements: WarningAgree
       });
     }
   }
+  return sortWarnings(out);
+}
+
+/** What is already wrong first, then the soonest date. */
+export function sortWarnings(out: Warning[]): Warning[] {
   const rank = (w: Warning) => (w.tone === "bad" ? 0 : 1);
   return out.sort((a, b) => rank(a) - rank(b) || (a.date ?? "9999").localeCompare(b.date ?? "9999") || a.title.localeCompare(b.title));
 }

@@ -41,8 +41,11 @@ export interface Pdf {
   gap(points?: number): void;
 }
 
-/** Builds a PDF by calling `draw` with the building blocks, and returns the file. `footer` is printed on every page next to the page number. */
-export function makePdf(info: { title: string; footer: string }, draw: (pdf: Pdf) => void): Promise<Buffer> {
+/**
+ * Builds a PDF by calling `draw` with the building blocks, and returns the file. `footer` is
+ * printed on every page next to the page number. `pages`, when given, is told how many pages it came to.
+ */
+export function makePdf(info: { title: string; footer: string }, draw: (pdf: Pdf) => void, pages?: (count: number) => void): Promise<Buffer> {
   const doc = new PDFDocument({
     size: "A4",
     margins: { top: MARGIN, bottom: 64, left: MARGIN, right: MARGIN },
@@ -120,9 +123,10 @@ export function makePdf(info: { title: string; footer: string }, draw: (pdf: Pdf
   };
   draw(pdf);
   // The footer goes on every page once the number of pages is known.
-  const pages = doc.bufferedPageRange();
-  for (let i = 0; i < pages.count; i++) {
-    doc.switchToPage(pages.start + i);
+  const range = doc.bufferedPageRange();
+  pages?.(range.count);
+  for (let i = 0; i < range.count; i++) {
+    doc.switchToPage(range.start + i);
     const y = doc.page.height - 44;
     doc.page.margins.bottom = 0;
     doc
@@ -136,7 +140,7 @@ export function makePdf(info: { title: string; footer: string }, draw: (pdf: Pdf
       .fontSize(8.5)
       .fillColor(INK_2)
       .text(printable(info.footer), MARGIN, y, { width: width - 80, lineBreak: false });
-    doc.fillColor(ACCENT).text(`Page ${i + 1} of ${pages.count}`, MARGIN + width - 80, y, { width: 80, align: "right", lineBreak: false });
+    doc.fillColor(ACCENT).text(`Page ${i + 1} of ${range.count}`, MARGIN + width - 80, y, { width: 80, align: "right", lineBreak: false });
   }
   doc.end();
   return done;

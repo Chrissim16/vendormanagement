@@ -59,12 +59,84 @@ function monthlyProposal(ask: MonthlyProposalAsk): string {
   return JSON.stringify({ scores: ask.criteria.map((c) => ({ criterionId: c.id, ...scoreOf(c.figures) })), themes });
 }
 
+interface ReportSummaryAsk {
+  task: "report_summary";
+  month: string;
+  invoicedInTheMonth: { togetherInEuros: string; byVendor: { vendor: string; togetherInEuros: string }[] };
+  sowBudgets: { vendor: string; sow: string; used: string; state: string }[];
+  agreementsEndingSoon: { vendor: string; agreement: string; ends: string }[];
+  vendorScores: { vendor: string; score: string; trend: string; before: string | null }[];
+  missedHelpdeskTargets: { vendor: string; measure: string; figure: string; target: string }[];
+  helpdeskVendorsMeasured: number;
+}
+
+/** A paragraph put together from the report's own lines, quoting them as given. */
+function reportSummary(ask: ReportSummaryAsk): string {
+  const out: string[] = [];
+  const top = ask.invoicedInTheMonth.byVendor[0];
+  out.push(
+    top
+      ? `In ${ask.month}, ${ask.invoicedInTheMonth.togetherInEuros} was invoiced, the largest part by ${top.vendor} (${top.togetherInEuros}).`
+      : `Nothing was invoiced in ${ask.month}.`,
+  );
+  const tight = ask.sowBudgets.filter((s) => s.state !== "within budget").slice(0, 2);
+  if (tight.length) out.push(`Budgets need attention: ${tight.map((s) => `${s.vendor} ${s.sow} is ${s.state} with ${s.used} used`).join(", and ")}.`);
+  else if (ask.sowBudgets.length) out.push("Every SOW is within its budget.");
+  const next = ask.agreementsEndingSoon[0];
+  if (next) out.push(`The first agreement to end is ${next.agreement} with ${next.vendor}, on ${next.ends}.`);
+  const fell = ask.vendorScores.filter((s) => s.trend === "down").slice(0, 2);
+  if (fell.length) out.push(`${fell.map((s) => `${s.vendor}'s score fell to ${s.score}${s.before ? ` from ${s.before}` : ""}`).join(", and ")}.`);
+  const missed = ask.missedHelpdeskTargets.slice(0, 2);
+  if (missed.length) out.push(`Helpdesk targets were missed: ${missed.map((m) => `${m.vendor} on ${m.measure} (${m.figure} against ${m.target})`).join(", and ")}.`);
+  else if (ask.helpdeskVendorsMeasured > 0) out.push("Every helpdesk target was met.");
+  return JSON.stringify({ summary: out.join(" ") });
+}
+
+interface BriefingAsk {
+  task: "briefing";
+  vendor: { name: string; status: string };
+  upcomingDates: { date: string; what: string; when: string }[];
+  budgets: { sow: string; used: string; state: string }[];
+  missedTargets: { month: string; measure: string; figure: string; target: string }[];
+  openMilestones: { sow: string; milestone: string; due: string; late: string }[];
+  changeRequestsWaiting: { sow: string; change: string }[];
+  warningsAndRiskFlags: { about: string; what: string; facts: string }[];
+}
+
+/** A summary and talking points picked from the briefing's own facts, in the order a meeting would take them. */
+function briefing(ask: BriefingAsk): string {
+  const name = ask.vendor.name;
+  const flags = ask.warningsAndRiskFlags;
+  const summary: string[] = [];
+  if (flags.length) summary.push(`What most needs attention with ${name}: ${flags[0]!.about} (${flags[0]!.what.toLowerCase()}). ${flags[0]!.facts}`);
+  else summary.push(`Nothing about ${name} needs attention at the moment.`);
+  const tight = ask.budgets.filter((b) => b.state !== "within budget");
+  if (tight.length) summary.push(`${tight[0]!.sow} is ${tight[0]!.state} with ${tight[0]!.used} used.`);
+  else if (ask.budgets.length) summary.push("Its SOWs are within budget.");
+  if (ask.missedTargets.length) summary.push(`Helpdesk targets were missed in the last months, most recently ${ask.missedTargets.at(-1)!.measure} in ${ask.missedTargets.at(-1)!.month}.`);
+
+  const points: string[] = [];
+  for (const f of flags.slice(0, 3)) points.push(`${f.about}: ${f.what.toLowerCase()}. Ask what the vendor will do about it and by when.`);
+  const missed = ask.missedTargets.at(-1);
+  if (missed) points.push(`Ask what is being done about ${missed.measure}, which was ${missed.figure} in ${missed.month} against a target of ${missed.target}.`);
+  const late = ask.openMilestones.find((m) => m.late !== "not late");
+  if (late) points.push(`Ask for a firm date for "${late.milestone}" on ${late.sow}, which was due ${late.due} and is ${late.late}.`);
+  const change = ask.changeRequestsWaiting[0];
+  if (change) points.push(`Decide on the change request "${change.change}" for ${change.sow}, which is still waiting.`);
+  const date = ask.upcomingDates.find((d) => d.when !== "passed");
+  if (date) points.push(`Agree what has to happen before ${date.date}: ${date.what}.`);
+  if (!points.length) points.push("Nothing needs raising from the records; confirm that the vendor sees it the same way.");
+  return JSON.stringify({ summary: summary.join(" "), talkingPoints: points.slice(0, 6) });
+}
+
 /** Answers the prompts it knows; anything else gets the plain stand-in answer. */
 export function standInAnswer(req: AiRequest): string | undefined {
   if (!req.json) return undefined;
   try {
     const ask = JSON.parse(req.user) as { task?: string };
     if (ask.task === "monthly_proposal") return monthlyProposal(ask as MonthlyProposalAsk);
+    if (ask.task === "report_summary") return reportSummary(ask as ReportSummaryAsk);
+    if (ask.task === "briefing") return briefing(ask as BriefingAsk);
   } catch {
     // Not one of the app's prompts.
   }

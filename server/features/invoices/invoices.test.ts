@@ -171,7 +171,8 @@ describe("M-5 budget view", () => {
     const budget = async () => (await other.as(MEMBER).get(`/api/agreements/${s.id}/delivery`)).body.budget;
     const mine = async () =>
       (await other.as(MEMBER).get("/api/warnings")).body
-        .filter((w: { agreementId: string }) => w.agreementId === s.id)
+        // The budget warnings; that this SOW is also invoiced faster than its budget allows is a risk flag, tested with R-1.
+        .filter((w: { agreementId: string; type: string }) => w.agreementId === s.id && w.type.startsWith("budget_"))
         .map((w: { type: string; label: string }) => [w.type, w.label]);
     await book(79_999_99);
     expect(await budget()).toMatchObject({ budgetMinor: 100_000_00, invoicedMinor: 79_999_99, remainingMinor: 20_000_01, usedPct: 79, state: "ok", currency: "EUR" });

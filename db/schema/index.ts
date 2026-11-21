@@ -527,3 +527,39 @@ export const scorecardLines = pgTable(
     check("scorecard_lines_score_check", sql`${t.score} is null or ${t.score} between 1 and 5`),
   ],
 );
+
+/**
+ * A vendor briefing (B-1): the facts about a vendor as the app held them on one day,
+ * frozen in `facts`, plus the summary and talking points as a person left them. The AI's
+ * own text stays in the suggestion and counts for nothing until a person takes it over.
+ */
+export const briefings = pgTable(
+  "briefings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    vendorId: uuid("vendor_id")
+      .notNull()
+      .references(() => vendors.id),
+    asAt: date("as_at", { mode: "string" }).notNull(),
+    facts: jsonb("facts").notNull(),
+    summary: text("summary"),
+    /** One talking point per line. */
+    talkingPoints: text("talking_points"),
+    suggestionId: uuid("suggestion_id").references(() => aiSuggestions.id),
+    ...stamps,
+  },
+  (t) => [index("briefings_vendor_idx").on(t.vendorId, t.createdAt)],
+);
+
+/** The summary paragraph of a month's management report (D-2), as a person left it. The figures are worked out when the report is made. */
+export const managementReports = pgTable(
+  "management_reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    month: text("month").notNull(),
+    summary: text("summary"),
+    suggestionId: uuid("suggestion_id").references(() => aiSuggestions.id),
+    ...stamps,
+  },
+  (t) => [uniqueIndex("management_reports_month_unique").on(t.month), check("management_reports_month_check", sql`${t.month} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`)],
+);

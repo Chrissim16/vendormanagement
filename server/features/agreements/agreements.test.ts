@@ -300,7 +300,15 @@ describe("A-6 renewals", () => {
 describe("A-7 warnings", () => {
   it("lists notice deadlines, SOWs ending soon and paperwork gaps, each linked to its record", async () => {
     const other = await testApp();
-    const list = (await other.as(MEMBER).get("/api/warnings")).body as { type: string; title: string; tone: string; agreementId: string | null; vendorId: string; label: string }[];
+    type Row = { type: string; title: string; tone: string; agreementId: string | null; vendorId: string; label: string };
+    const everything = (await other.as(MEMBER).get("/api/warnings")).body as Row[];
+    // The same list also carries the risk flags (R-1), sorted in among the warnings.
+    expect(everything.filter((w) => w.type.startsWith("risk_")).map((w) => [w.type, w.title])).toEqual([
+      ["risk_open_milestones", "Quillon Consulting · SOW 02 Close process review"],
+      ["risk_budget_trend", "Quillon Consulting · SOW 04 Payment controls"],
+      ["risk_metric_worsening", "Mossgate IT · SLA breaches"],
+    ]);
+    const list = everything.filter((w) => !w.type.startsWith("risk_"));
     expect(list.map((w) => [w.type, w.title])).toEqual([
       ["dpa_expired", "Mossgate IT"],
       ["renewal_overdue", "Tarnwick Software · Reporting suite"],

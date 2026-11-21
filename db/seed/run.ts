@@ -142,6 +142,18 @@ function sampleVendors(today: Day): SeedVendor[] {
           budgetMinor: 64_000_00,
         },
         {
+          // Invoiced faster than its budget allows: the example of a "heading over budget" risk flag.
+          kind: "sow",
+          title: "SOW 04 Payment controls",
+          under: "Framework agreement",
+          status: "active",
+          signedOn: d(-65),
+          startDate: d(-60),
+          endDate: d(60),
+          pricing: "time_and_materials",
+          budgetMinor: 40_000_00,
+        },
+        {
           kind: "sow",
           title: "SOW 03 Treasury roadmap",
           under: "Framework agreement",
@@ -242,6 +254,13 @@ const sampleDelivery: Record<string, Delivery> = {
       ["QC-1101", 14_000_00, -80],
       ["QC-1117", 14_000_00, -50],
       ["QC-1130", 14_000_00, -20],
+    ],
+  },
+  "SOW 04 Payment controls": {
+    consultants: [["Kim Template", "Analyst"]],
+    invoices: [
+      ["QC-1124", 13_500_00, -40],
+      ["QC-1136", 13_500_00, -10],
     ],
   },
   "Reporting suite": { invoices: [["TW-88213", 48_000_00, -284]] },
