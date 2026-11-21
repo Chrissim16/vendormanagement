@@ -25,6 +25,15 @@ wrong. Answered questions move to the bottom.
 | Q17 | Must every milestone on a fixed-price SOW have an amount? | No, the amount is optional. A milestone invoiced above its amount is marked rather than refused. | M2 |
 | Q18 | May a consultant's day rate be in pounds on a euro SOW? | Yes; the rate is shown in its own currency. Say if it should be refused instead. | M2 |
 | Q15 | The pound to euro rate starts at 1.17 until an admin sets it. | Fine as a starting value; set the real one on the Settings page. | M2 |
+| Q19 | How often should tickets be fetched from Jira? | Every hour while the app is running, plus "Sync now". One setting to change. | M3 |
+| Q20 | A ticket that never had any of the listed level 2 or level 3 statuses or labels: which level is it? | Level 1, solved by the first line. Level 1 values are therefore optional on the board link. | M3 |
+| Q21 | What exactly is the "backlog age" target, and the "SLA breaches" target? | Backlog: the oldest open ticket may be at most so many days old. SLA breaches: at most so many percent of the month's resolved tickets were late. | M3 |
+| Q22 | When a target changes, should earlier months keep being judged by the old target? | No. Today's targets are applied to every month shown; the vendor's history shows when a target changed. | M3 |
+| Q23 | Is a figure of 94.96% against a 95% target met or missed? | Met. Figures are shown with one decimal, and the figure as shown is the one judged, so the screen never contradicts itself. | M3 |
+| Q24 | Which tickets count for "first response"? | Tickets created in the month for which Jira has an outcome. A ticket not yet answered but still in time is left out until it has one. | M3 |
+| Q25 | Who may press "Sync now", and who may link a board? | Any team member may sync. Only an admin links a board or changes how it is read. | M3 |
+| Q26 | Which month does the performance overview open on? | The running month, marked "so far". Earlier months are one choice away. | M3 |
+| Q27 | How long are tickets kept? | 24 months after they were resolved, as the data model says. Open tickets are kept however old. | M3 |
 
 ## To check at work before M9
 
@@ -38,6 +47,8 @@ These cannot be answered from outside the company. None block the build.
 | W3 | Does the Jira account allow an API token, and can it read every vendor board including SLA and satisfaction fields? | The sync needs it. |
 | W4 | Which model serving endpoint should the app use, and may an app call it? | The AI features need one endpoint name. |
 | W5 | Is there a Unity Catalog volume the app may write to? | Stores uploaded documents. |
+| W8 | Do the Jira calls match the real Jira? Atlassian's documentation site could not be opened from the build environment, so the Jira connection is written from general knowledge and tested only against the stand-in. Check with one "Test link" and one "Sync now": the search call (`/rest/api/3/search/jql`), the names of the SLA and satisfaction fields ("Time to first response", "Time to resolution", "Satisfaction", "Satisfaction date"), and the ticket history call. | If a name differs, figures stay empty instead of wrong; the fix is small but must be made. |
+| W9 | Is the app kept running outside office hours? | The hourly Jira sync runs inside the app. If Databricks stops an idle app, the sync runs on the first visit instead, or the `jira-sync` command is scheduled as a Databricks job. |
 | W6 | Who can grant the app's permissions to the five team members only? | Controls who can open the app. |
 
 ## Answered

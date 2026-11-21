@@ -19,15 +19,28 @@ beforeAll(async () => {
 afterAll(() => t.close());
 
 const newVendor = async (name: string, fields: Record<string, unknown> = {}) =>
-  (await t.as(MEMBER).post("/api/vendors").send({ name, type: "software", ownerUserId: me, ndaRequired: false, dpaRequired: false, ...fields })).body.id as string;
+  (
+    await t
+      .as(MEMBER)
+      .post("/api/vendors")
+      .send({ name, type: "software", ownerUserId: me, ndaRequired: false, dpaRequired: false, ...fields })
+  ).body.id as string;
 const statusLink = { escalationMethod: "status", l1Values: ["Waiting for support"], l2Values: ["Escalated to second line"], l3Values: ["With vendor engineering"] };
 const labelLink = { escalationMethod: "label", l2Values: ["tier-2"], l3Values: ["tier-3"] };
 const link = (vendorId: string, body: Record<string, unknown>, as = ADMIN) => t.as(as).put(`/api/admin/vendors/${vendorId}/jira-link`).send(body);
-const perf = async (vendorId: string, month?: string) => (await t.as(MEMBER).get(`/api/performance/vendors/${vendorId}`).query(month ? { month } : {})).body as VendorPerformance;
+const perf = async (vendorId: string, month?: string) =>
+  (
+    await t
+      .as(MEMBER)
+      .get(`/api/performance/vendors/${vendorId}`)
+      .query(month ? { month } : {})
+  ).body as VendorPerformance;
 const history = async (vendorId: string) =>
-  ((await t.as(MEMBER).get("/api/audit/history").query({ entityType: "vendor", entityId: vendorId })).body.items as { changes: Record<string, { from: unknown; to: unknown }> | null }[]).flatMap((e) =>
-    Object.entries(e.changes ?? {}),
-  );
+  (
+    (await t.as(MEMBER).get("/api/audit/history").query({ entityType: "vendor", entityId: vendorId })).body.items as {
+      changes: Record<string, { from: unknown; to: unknown }> | null;
+    }[]
+  ).flatMap((e) => Object.entries(e.changes ?? {}));
 
 /** Stand-in for the stand-in: a board whose tickets the test writes by hand, so every figure can be checked against a known answer. */
 function handBoard(key: string, list: () => JiraTicket[]) {
@@ -35,7 +48,14 @@ function handBoard(key: string, list: () => JiraTicket[]) {
   const { describeBoard, fetchTickets } = jira;
   jira.describeBoard = async (k): Promise<JiraBoard> =>
     k.toUpperCase() === key
-      ? { key, name: `${key} hand-made board (invented)`, serviceDesk: true, statuses: ["Open", "Second line", "Third line", "Done"], labels: [], measures: { firstResponse: true, resolution: true, satisfaction: true } }
+      ? {
+          key,
+          name: `${key} hand-made board (invented)`,
+          serviceDesk: true,
+          statuses: ["Open", "Second line", "Third line", "Done"],
+          labels: [],
+          measures: { firstResponse: true, resolution: true, satisfaction: true },
+        }
       : describeBoard(k);
   jira.fetchTickets = async (k, since, now) => (k.toUpperCase() === key ? list() : fetchTickets(k, since, now));
 }
@@ -62,7 +82,14 @@ describe("J-1 board link", () => {
   it("lets only an admin see the boards, test a link and save one", async () => {
     const v = await newVendor("Link Roles Vendor");
     expect((await t.as(MEMBER).get("/api/admin/jira/boards")).status).toBe(403);
-    expect((await t.as(MEMBER).post("/api/admin/jira/test").send({ projectKey: "SED", ...labelLink })).status).toBe(403);
+    expect(
+      (
+        await t
+          .as(MEMBER)
+          .post("/api/admin/jira/test")
+          .send({ projectKey: "SED", ...labelLink })
+      ).status,
+    ).toBe(403);
     expect((await link(v, { projectKey: "SED", ...labelLink }, MEMBER)).status).toBe(403);
     expect((await perf(v)).link).toBeNull();
   });
@@ -74,18 +101,38 @@ describe("J-1 board link", () => {
   });
 
   it("tests a link without saving: what the board has, and values that are not on it", async () => {
-    const ok = (await t.as(ADMIN).post("/api/admin/jira/test").send({ projectKey: "blu", ...statusLink })).body;
+    const ok = (
+      await t
+        .as(ADMIN)
+        .post("/api/admin/jira/test")
+        .send({ projectKey: "blu", ...statusLink })
+    ).body;
     expect(ok).toMatchObject({ ok: true, message: "Connected to Bluefinch Systems service desk (invented).", warnings: [] });
     expect(ok.statuses).toContain("Escalated to second line");
 
-    const typo = (await t.as(ADMIN).post("/api/admin/jira/test").send({ projectKey: "BLU", ...statusLink, l2Values: ["Escalated to 2nd line"] })).body;
+    const typo = (
+      await t
+        .as(ADMIN)
+        .post("/api/admin/jira/test")
+        .send({ projectKey: "BLU", ...statusLink, l2Values: ["Escalated to 2nd line"] })
+    ).body;
     expect(typo.ok).toBe(true);
     expect(typo.warnings).toEqual(["Not a status on this board: Escalated to 2nd line. Check the spelling."]);
 
-    const notDesk = (await t.as(ADMIN).post("/api/admin/jira/test").send({ projectKey: "FIN", ...statusLink })).body;
+    const notDesk = (
+      await t
+        .as(ADMIN)
+        .post("/api/admin/jira/test")
+        .send({ projectKey: "FIN", ...statusLink })
+    ).body;
     expect(notDesk.warnings[0]).toMatch(/not a service desk board/);
 
-    const missing = (await t.as(ADMIN).post("/api/admin/jira/test").send({ projectKey: "NOPE", ...statusLink })).body;
+    const missing = (
+      await t
+        .as(ADMIN)
+        .post("/api/admin/jira/test")
+        .send({ projectKey: "NOPE", ...statusLink })
+    ).body;
     expect(missing).toMatchObject({ ok: false, message: "Jira has no board with the key NOPE, or the Jira account is not allowed to see it." });
   });
 
@@ -111,7 +158,14 @@ describe("J-1 board link", () => {
     const v = await newVendor("Sedgewater Link Vendor");
     const res = await link(v, { projectKey: "sed", ...labelLink });
     expect(res.status).toBe(200);
-    expect(res.body.link).toMatchObject({ projectKey: "SED", projectName: "Sedgewater Cloud support (invented)", escalationMethod: "label", l2Values: ["tier-2"], active: true, lastSyncOk: true });
+    expect(res.body.link).toMatchObject({
+      projectKey: "SED",
+      projectName: "Sedgewater Cloud support (invented)",
+      escalationMethod: "label",
+      l2Values: ["tier-2"],
+      active: true,
+      lastSyncOk: true,
+    });
     expect(res.body.sync).toMatchObject({ ok: true, projectKey: "SED" });
     expect(res.body.link.tickets).toBeGreaterThan(200);
     expect(res.body.link.tickets).toBe(res.body.sync.updated);
@@ -129,7 +183,13 @@ describe("J-1 board link", () => {
     expect(before.firstLine).toBeLessThan(before.resolved);
     const syncedAt = (await perf(v)).link!.lastSyncedAt;
     // Second line no longer counts as an escalation: only the third line does.
-    const res = await link(v, { projectKey: "TAR", escalationMethod: "status", l1Values: ["Waiting for support", "Escalated to second line"], l2Values: [], l3Values: ["With vendor engineering"] });
+    const res = await link(v, {
+      projectKey: "TAR",
+      escalationMethod: "status",
+      l1Values: ["Waiting for support", "Escalated to second line"],
+      l2Values: [],
+      l3Values: ["With vendor engineering"],
+    });
     expect(res.status).toBe(200);
     expect(res.body.sync).toBeNull();
     const after = (await perf(v, "2026-10")).months.at(-1)!.counts;
@@ -327,7 +387,14 @@ describe("J-3 monthly metrics", () => {
     const met = { firstResponseBreached: false };
     handBoard("HAND", () => [
       // A: answered in 30 minutes, solved by the first line next day, rated 5 in October.
-      ticket("HAND-1", "2026-10-05T09:00:00Z", { ...met, firstResponseAt: at("2026-10-05T09:30:00Z"), resolvedAt: at("2026-10-06T09:00:00Z"), resolutionBreached: false, csat: 5, csatAt: at("2026-10-07T09:00:00Z") }),
+      ticket("HAND-1", "2026-10-05T09:00:00Z", {
+        ...met,
+        firstResponseAt: at("2026-10-05T09:30:00Z"),
+        resolvedAt: at("2026-10-06T09:00:00Z"),
+        resolutionBreached: false,
+        csat: 5,
+        csatAt: at("2026-10-07T09:00:00Z"),
+      }),
       // B: answered late, went to the second line, resolved late, rated 2 in November.
       ticket("HAND-2", "2026-10-10T09:00:00Z", {
         firstResponseBreached: true,
@@ -341,7 +408,13 @@ describe("J-3 monthly metrics", () => {
       // C: answered in 20 minutes, still open.
       ticket("HAND-3", "2026-10-12T08:00:00Z", { ...met, firstResponseAt: at("2026-10-12T08:20:00Z") }),
       // D: created in September, resolved in October by the third line.
-      ticket("HAND-4", "2026-09-20T09:00:00Z", { ...met, firstResponseAt: at("2026-09-20T09:10:00Z"), resolvedAt: at("2026-10-03T09:00:00Z"), resolutionBreached: false, statusesSeen: ["Open", "THIRD LINE", "Done"] }),
+      ticket("HAND-4", "2026-09-20T09:00:00Z", {
+        ...met,
+        firstResponseAt: at("2026-09-20T09:10:00Z"),
+        resolvedAt: at("2026-10-03T09:00:00Z"),
+        resolutionBreached: false,
+        statusesSeen: ["Open", "THIRD LINE", "Done"],
+      }),
       // E: created half an hour into November, Amsterdam time. Not answered yet, still in time.
       ticket("HAND-5", "2026-10-31T23:30:00Z"),
       // F: created half an hour into October, Amsterdam time. Answered in an hour, resolved in November.
@@ -372,7 +445,13 @@ describe("J-3 monthly metrics", () => {
       ratings: 1,
       ratingSum: 5,
     });
-    expect(Object.fromEntries(metricKeys.map((k) => [k, october.cells[k].valueTenths]))).toEqual({ first_response: 750, first_line: 500, sla_breaches: 250, backlog_age: 310, csat: 50 });
+    expect(Object.fromEntries(metricKeys.map((k) => [k, october.cells[k].valueTenths]))).toEqual({
+      first_response: 750,
+      first_line: 500,
+      sla_breaches: 250,
+      backlog_age: 310,
+      csat: 50,
+    });
   });
 
   it("measures the running month's backlog as of now", async () => {
@@ -398,7 +477,20 @@ describe("J-3 monthly metrics", () => {
 
   it("shows twelve months ending with the chosen one, and never a month that has not started", async () => {
     const p = await perf(v, "2026-06");
-    expect(p.months.map((m) => m.month)).toEqual(["2025-07", "2025-08", "2025-09", "2025-10", "2025-11", "2025-12", "2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06"]);
+    expect(p.months.map((m) => m.month)).toEqual([
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06",
+    ]);
     expect(p.currentMonth).toBe("2026-11");
     expect((await perf(v, "2027-03")).months.at(-1)!.month).toBe("2026-11");
     expect((await perf(v, "nonsense")).months.at(-1)!.month).toBe("2026-11");
@@ -507,7 +599,13 @@ describe("J-4 targets", () => {
     expect(res.body).toEqual({ first_response: 750, first_line: 650, sla_breaches: 250, backlog_age: 300, csat: 42 });
     const october = (await perf(v, "2026-10")).months.at(-1)!;
     // 75% against at least 75%: met. 50% against at least 65%: missed. 25% against at most 25%: met. 31 days against at most 30: missed. 5.0 against 4.2: met.
-    expect(Object.fromEntries(metricKeys.map((k) => [k, october.cells[k].verdict]))).toEqual({ first_response: "met", first_line: "missed", sla_breaches: "met", backlog_age: "missed", csat: "met" });
+    expect(Object.fromEntries(metricKeys.map((k) => [k, october.cells[k].verdict]))).toEqual({
+      first_response: "met",
+      first_line: "missed",
+      sla_breaches: "met",
+      backlog_age: "missed",
+      csat: "met",
+    });
     expect(october.missed).toBe(2);
     expect(october.cells.backlog_age).toEqual({ valueTenths: 310, targetTenths: 300, verdict: "missed" });
     // November has no first-response figure: no verdict, not a miss.

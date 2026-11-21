@@ -104,7 +104,8 @@ export async function syncBoard(ctx: PerformanceContext, linkId: string): Promis
   return ctx.db.transaction(async (tx) => {
     const current = await repo.lockLink(tx, link.id);
     // The board or its sync was changed while Jira was being read: what was fetched no longer belongs here.
-    if (!current || !current.active || current.projectKey !== link.projectKey) return outcome(false, 0, "The board link was changed while its tickets were being fetched. Sync again.");
+    if (!current || !current.active || current.projectKey !== link.projectKey)
+      return outcome(false, 0, "The board link was changed while its tickets were being fetched. Sync again.");
     const rows = fetched.filter((t) => !(t.resolvedAt && t.resolvedAt < cutoff)).map((t) => ({ ...t, highestLevel: levelOf(current, t) }));
     await repo.upsertTickets(tx, link.id, rows, startedAt);
     await repo.deleteResolvedBefore(tx, link.id, cutoff);
@@ -214,7 +215,10 @@ export async function saveLink(ctx: PerformanceContext, vendorId: string, input:
       if (!existing) {
         fetchNow = next.active;
         const row = await repo.insertLink(tx, vendorId, next, by.email);
-        await audit(tx, { ...entry, changes: { "Jira board": { from: null, to: `${board.key} · ${board.name}` }, "escalation recognised by": { from: null, to: next.escalationMethod } } });
+        await audit(tx, {
+          ...entry,
+          changes: { "Jira board": { from: null, to: `${board.key} · ${board.name}` }, "escalation recognised by": { from: null, to: next.escalationMethod } },
+        });
         return row;
       }
       const changes: Changes = {};

@@ -60,7 +60,6 @@ const sections = {
     "No agreements yet",
     "MSAs, SOWs, subscriptions, NDAs and data processing agreements will be listed here, with their dates, values and renewal deadlines.",
   ],
-  performance: ["Performance", "No scores yet", "Monthly helpdesk figures from Jira and the quarterly scorecards for each vendor will show here."],
   rfps: ["RFPs", "No RFPs yet", "Each RFP will be followed here from the approved demand through drafting, candidates, scoring and the decision."],
   ask: ["Ask", "Nothing to ask about yet", "You will be able to ask questions in plain language here, such as which SOWs end this quarter."],
 } as const;

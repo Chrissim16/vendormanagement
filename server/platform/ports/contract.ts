@@ -136,7 +136,10 @@ export function jiraContract(jira: JiraPort, now: Date = new Date()): ContractCa
           assert.ok(t.status, `${t.key} has no status`);
           assert.ok(t.createdAt instanceof Date && !Number.isNaN(t.createdAt.getTime()), `${t.key} has no creation time`);
           assert.ok(t.updatedAt.getTime() >= t.createdAt.getTime(), `${t.key} changed before it was created`);
-          assert.ok(t.statusesSeen.some((s) => s.toLowerCase() === t.status.toLowerCase()), `${t.key}: the current status is missing from its history`);
+          assert.ok(
+            t.statusesSeen.some((s) => s.toLowerCase() === t.status.toLowerCase()),
+            `${t.key}: the current status is missing from its history`,
+          );
           assert.ok(t.csat === null || (t.csat >= 1 && t.csat <= 5), `${t.key} has a rating outside 1 to 5`);
           assert.ok([true, false, null].includes(t.firstResponseBreached) && [true, false, null].includes(t.resolutionBreached));
         }

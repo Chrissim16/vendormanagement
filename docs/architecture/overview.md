@@ -29,7 +29,7 @@ two implementations chosen by configuration.
 | Identity | `DEV_USER_EMAIL`, or the `dev_user` cookie or `x-dev-user` header to act as someone else; `/api/dev/*` lists and switches people. Only on this machine | `X-Forwarded-Email` from the Databricks Apps proxy, and nothing else |
 | Database | Built-in Postgres in `.data/pg` (in memory for tests), or `DATABASE_URL` | Lakebase app resource |
 | File storage | Folder on disk | Unity Catalog volume |
-| Jira | Fake Jira serving invented tickets in the real API's shape | Jira Cloud REST API with a service account |
+| Jira | A pretend Jira site with invented boards and tickets, answering the REST paths the app uses in Jira Cloud's own JSON shapes | Jira Cloud REST API with a service account |
 | AI model | Scripted fake for tests; optionally a real model through an API key for judging output quality | Databricks model serving endpoint |
 
 Rules:
@@ -37,6 +37,7 @@ Rules:
 - Each port has a contract test suite that both implementations must pass. The deployed implementations' contract tests can be run from the system check page (F-4).
 - No Databricks, `pg` or PGlite import outside `server/platform`. ESLint enforces this.
 - Deployed implementations are written from documentation and marked UNPROVEN in the code until the first deployment.
+- The Jira port is one client on top of a small "transport" (one request to Jira). The deployed transport goes over the network; the stand-in answers the same paths from invented tickets. Reading SLAs, ratings and ticket history is therefore the same code in both, and is covered by the tests.
 - Which set is used is decided by `PLATFORM` (`local` or `databricks`). The app refuses to start with stand-ins inside Databricks.
 
 ## Shape of the code
@@ -56,7 +57,7 @@ e2e/                      Playwright tests, one file per requirement group
 ```
 
 Features built so far: `admin`, `vendors`, `agreements`, `warnings`, `import`, `settings`, `sow` (milestones, change requests,
-consultants, rate cards), `invoices` (invoices and spend). Still to come: `performance`, `scorecards`, `briefings`, `rfp`, `chat`, `dashboard`. A feature imports from `platform`, `ai`
+consultants, rate cards), `invoices` (invoices and spend), `performance` (board links, Jira sync, monthly metrics, targets). Still to come: `scorecards`, `briefings`, `rfp`, `chat`, `dashboard`. A feature imports from `platform`, `ai`
 and `shared`, and from another feature only through that feature's `service.ts`.
 
 ## Request flow
@@ -78,14 +79,21 @@ and `shared`, and from another feature only through that feature's `service.ts`.
 
 ## Scheduled work
 
-Jira sync and monthly metric and proposal runs are plain functions in
-`server/platform/jobs/`. Each can be started three ways: a button in the app, a command
-(`npm run job -- <name>`), and a scheduled Databricks job that runs that command. Jobs are
-safe to run twice.
+Scheduled work is a plain function in a feature's service, safe to run twice. It is started
+three ways: by the app itself on a timer for as long as it runs (`server/platform/jobs/schedule.ts`,
+wired in `server/main.ts`), by a button in the app, and by a command (`npm run job -- <name>`,
+in `server/platform/jobs/run.ts`) for running it by hand or from a scheduler outside the app.
+
+The Jira sync (`jira-sync`) runs every `JIRA_SYNC_EVERY_MINUTES` (60 by default, 0 for off):
+each tick syncs the boards not tried within that interval. Monthly proposal runs join in M4.
+The timer lives inside the app because a Databricks App is one long-running process with
+its own database sign-in; whether the app is kept running at night is a check for work (W9).
 
 ## Conventions
 
-- Business rules live in `service.ts` or as pure functions in `shared/` with unit tests, never in routes or components. `shared/agreements.ts`, `shared/vendors.ts`, `shared/dates.ts`, `shared/money.ts` and `shared/sow.ts` hold the rules for agreements, paperwork, warnings, days, amounts, budgets, milestones, change requests, rates and spend.
+- Business rules live in `service.ts` or as pure functions in `shared/` with unit tests, never in routes or components. `shared/agreements.ts`, `shared/vendors.ts`, `shared/dates.ts`, `shared/money.ts` and `shared/sow.ts` and `shared/performance.ts` hold the rules for agreements, paperwork, warnings, days, amounts, budgets, milestones, change requests, rates, spend, and helpdesk metrics, targets and support levels.
+- "Now" comes from `clock(config)`: the real time, or noon on the pinned `TODAY`. The stand-in Jira uses the same clock, so its invented helpdesk has always "got as far as" now.
+- Figures worked out from many rows (monthly metrics) are counted in SQL, and the same SQL condition lists the rows behind each count (`inSet` in the performance repo), so a number and its drill-down cannot disagree.
 - "Today" is the date in the team's time zone, supplied by the server (`/api/config`) so screen and server agree. `TODAY=YYYY-MM-DD` pins it for tests and demos, with stand-ins only.
 - Request helpers shared by all routes are in `server/platform/http.ts`: `text`, `day`, `paging`, `like`, `failFields`, `toCsv`.
 - Screens are built from the patterns in `client/src/platform`: `DataTable`, `SplitView` and `Panel`, `Tabs`, `Dialog`, `form` (`useForm` and the field components), `History`.

@@ -81,13 +81,13 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 
 **J-1 Board link.** An admin can link a vendor to its Jira board, choose how escalation is recognised (status or label) and which values mean level 1, 2 and 3, and test the link.
 
-**J-2 Sync.** Tickets are fetched for each linked board on a schedule and on demand with "Sync now". The page shows when the last sync ran, how many tickets were updated, and any failure in plain language. A failed sync leaves existing data intact.
+**J-2 Sync.** Tickets are fetched for each linked board on a schedule (every hour while the app runs) and on demand with "Sync now", which any member may press. The page shows when the last sync ran, how many tickets were updated, and any failure in plain language. A failed sync leaves existing data intact.
 
 **J-3 Monthly metrics.** For each linked vendor and month the app shows the five metrics as defined in the domain model, with a 12-month trend. Each number opens the list of tickets behind it.
 
-**J-4 Targets.** A member can set a target per vendor and metric. Each month shows met or missed, and a missed target shows that a service credit may apply.
+**J-4 Targets.** A member can set a target per vendor and metric; whether the figure must be at least or at most the target follows from the metric. Each month shows met or missed, and a missed target shows that a service credit may apply.
 
-**J-5 Performance overview.** All scored vendors with this month's metrics against target, sortable, with missed targets highlighted.
+**J-5 Performance overview.** All scored vendors that have a Jira board with this month's metrics against target, sortable, with missed targets highlighted. Another month can be chosen, and scored vendors without a board are named.
 
 ## Scorecards and AI scoring (M4)
 

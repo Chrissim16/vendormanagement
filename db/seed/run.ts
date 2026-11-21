@@ -252,15 +252,27 @@ const sampleDelivery: Record<string, Delivery> = {
  */
 const sampleBoards: Record<string, { link: Omit<BoardLinkInput, "active">; targets: Partial<Targets> }> = {
   "Bluefinch Systems": {
-    link: { projectKey: "BLU", escalationMethod: "status", l1Values: ["Waiting for support", "In progress"], l2Values: ["Escalated to second line"], l3Values: ["With vendor engineering"] },
-    targets: { first_response: 950, first_line: 650, sla_breaches: 50, backlog_age: 300, csat: 40 },
+    link: {
+      projectKey: "BLU",
+      escalationMethod: "status",
+      l1Values: ["Waiting for support", "In progress"],
+      l2Values: ["Escalated to second line"],
+      l3Values: ["With vendor engineering"],
+    },
+    targets: { first_response: 950, first_line: 650, sla_breaches: 100, backlog_age: 300, csat: 40 },
   },
   "Mossgate IT": {
     link: { projectKey: "MOS", escalationMethod: "label", l1Values: [], l2Values: ["tier-2"], l3Values: ["tier-3"] },
     targets: { first_response: 950, first_line: 750, sla_breaches: 50, backlog_age: 300, csat: 42 },
   },
   "Tarnwick Software": {
-    link: { projectKey: "TAR", escalationMethod: "status", l1Values: ["Waiting for support", "In progress"], l2Values: ["Escalated to second line"], l3Values: ["With vendor engineering"] },
+    link: {
+      projectKey: "TAR",
+      escalationMethod: "status",
+      l1Values: ["Waiting for support", "In progress"],
+      l2Values: ["Escalated to second line"],
+      l3Values: ["With vendor engineering"],
+    },
     targets: { first_response: 900, first_line: 600 },
   },
 };

@@ -53,7 +53,7 @@ const boards: Board[] = [
     firstLineShare: 0.71,
     secondLineShare: 0.21,
     // Answering has slipped since September 2026, so there is a missed target to look at.
-    lateResponse: (m) => (m >= "2026-09" ? 0.12 : 0.04),
+    lateResponse: (m) => (m >= "2026-09" ? 0.12 : 0.02),
     ratings: [3, 4, 10, 30, 53],
   },
   {
@@ -210,7 +210,10 @@ const FIELDS = { firstResponse: "customfield_10030", resolution: "customfield_10
 /** A cycle that has stopped, or one still running, in the shape of a Jira Service Management SLA field. */
 function sla(started: number, stopped: number, goal: number, now: number) {
   if (stopped <= now) return { completedCycles: [{ startTime: slaTime(started), stopTime: slaTime(stopped), breached: stopped - started > goal, goalDuration: { millis: goal } }] };
-  return { completedCycles: [], ongoingCycle: { startTime: slaTime(started), breachTime: slaTime(started + goal), breached: now - started > goal, goalDuration: { millis: goal } } };
+  return {
+    completedCycles: [],
+    ongoingCycle: { startTime: slaTime(started), breachTime: slaTime(started + goal), breached: now - started > goal, goalDuration: { millis: goal } },
+  };
 }
 
 /** The ticket as Jira would show it at `now`, and the changes that led there. */

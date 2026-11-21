@@ -23,7 +23,12 @@ describe("reading what Jira sends", () => {
     });
   });
   it("uses the first cycle for the first response and the last for the resolution of a reopened ticket", () => {
-    const value = { completedCycles: [{ stopTime: { epochMillis: 1000 }, breached: false }, { stopTime: { epochMillis: 2000 }, breached: true }] };
+    const value = {
+      completedCycles: [
+        { stopTime: { epochMillis: 1000 }, breached: false },
+        { stopTime: { epochMillis: 2000 }, breached: true },
+      ],
+    };
     expect(slaOutcome(value, "first").breached).toBe(false);
     expect(slaOutcome(value, "last")).toEqual({ at: new Date(2000), breached: true });
   });
@@ -40,7 +45,13 @@ describe("reading what Jira sends", () => {
     const doc = {
       type: "doc",
       content: [
-        { type: "paragraph", content: [{ type: "text", text: "First line " }, { type: "text", text: "continues." }] },
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "First line " },
+            { type: "text", text: "continues." },
+          ],
+        },
         { type: "bulletList", content: [{ type: "listItem", content: [{ type: "paragraph", content: [{ type: "text", text: "A point" }] }] }] },
       ],
     };
@@ -61,14 +72,30 @@ describe("reading what Jira sends", () => {
       if (path === "/rest/api/3/search/jql") {
         const issue = (key: string) => ({
           key,
-          fields: { summary: "S", status: { name: "Done" }, created: "2026-11-01T10:00:00.000+0100", updated: "2026-11-02T10:00:00.000+0100", resolutiondate: "2026-11-02T10:00:00.000+0100", labels: ["now"], customfield_3: 4 },
+          fields: {
+            summary: "S",
+            status: { name: "Done" },
+            created: "2026-11-01T10:00:00.000+0100",
+            updated: "2026-11-02T10:00:00.000+0100",
+            resolutiondate: "2026-11-02T10:00:00.000+0100",
+            labels: ["now"],
+            customfield_3: 4,
+          },
         });
         return (body as { nextPageToken?: string }).nextPageToken ? { issues: [issue("X-2")], isLast: true } : { issues: [issue("X-1")], nextPageToken: "p2", isLast: false };
       }
       if (path.includes("/changelog"))
         return {
           isLast: true,
-          values: [{ items: [{ field: "status", fromString: "Open", toString: "Escalated" }] }, { items: [{ field: "labels", fromString: "old one", toString: "now" }, { field: "assignee", fromString: "a", toString: "b" }] }],
+          values: [
+            { items: [{ field: "status", fromString: "Open", toString: "Escalated" }] },
+            {
+              items: [
+                { field: "labels", fromString: "old one", toString: "now" },
+                { field: "assignee", fromString: "a", toString: "b" },
+              ],
+            },
+          ],
         };
       throw new Error(`unexpected ${path}`);
     };
@@ -146,7 +173,9 @@ describe("the stand-in Jira", () => {
     expect(recent.length).toBeGreaterThan(0);
     expect(recent.length).toBeLessThan(all.length / 10);
     for (const t of recent) expect(t.updatedAt.getTime()).toBeGreaterThanOrEqual(dayAgo.getTime() - 10 * 60_000);
-    expect(all.filter((t) => t.updatedAt.getTime() >= dayAgo.getTime()).map((t) => t.key)).toEqual(recent.filter((t) => t.updatedAt.getTime() >= dayAgo.getTime()).map((t) => t.key));
+    expect(all.filter((t) => t.updatedAt.getTime() >= dayAgo.getTime()).map((t) => t.key)).toEqual(
+      recent.filter((t) => t.updatedAt.getTime() >= dayAgo.getTime()).map((t) => t.key),
+    );
   });
 
   it("shows escalation as a status on one board and as a label on the other", async () => {

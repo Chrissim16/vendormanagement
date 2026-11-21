@@ -58,4 +58,10 @@ Data stays in Lakebase and the volume.
 
 ## Still to write (at milestone M9)
 
-Rolling back to a previous version, backups, and scheduling the nightly Jira sync.
+Rolling back to a previous version, and backups.
+
+## After the first deployment: Jira
+
+1. Open System check; the Jira row should say how many boards the account can see.
+2. On Performance, press Link a board, choose a vendor and its board, and press Test link. It lists the board's statuses and labels and says if this Jira lacks the response-time, resolution-time or satisfaction measurements (open question W8).
+3. Save. The tickets are fetched at once; after that the app fetches changes every hour by itself (`JIRA_SYNC_EVERY_MINUTES`). If figures stay empty although the board has tickets, note what Test link said and pass it on: a field in this Jira is probably named differently.

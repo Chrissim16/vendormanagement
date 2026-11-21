@@ -131,7 +131,8 @@ export type BoardLinkInput = z.infer<typeof boardLinkSchema>;
 export function checkLevels(link: Pick<BoardLinkInput, "escalationMethod" | "l1Values" | "l2Values" | "l3Values">): Record<string, string> {
   const errors: Record<string, string> = {};
   const what = link.escalationMethod === "status" ? "status" : "label";
-  if (!link.l2Values.length && !link.l3Values.length) errors.l2Values = `Give at least one ${what} that means level 2 or level 3. Without one, every ticket would count as solved by the first line.`;
+  if (!link.l2Values.length && !link.l3Values.length)
+    errors.l2Values = `Give at least one ${what} that means level 2 or level 3. Without one, every ticket would count as solved by the first line.`;
   const taken = new Map<string, string>();
   for (const [field, level] of [
     ["l1Values", "level 1"],
@@ -258,9 +259,10 @@ export interface MonthMetrics {
 }
 export function monthMetrics(month: Month, counts: MonthCounts, targets: Targets): MonthMetrics {
   const values = headline(counts);
-  const cells = Object.fromEntries(
-    metricKeys.map((k) => [k, { valueTenths: values[k], targetTenths: targets[k], verdict: judge(k, values[k], targets[k]) }]),
-  ) as Record<MetricKey, MetricCell>;
+  const cells = Object.fromEntries(metricKeys.map((k) => [k, { valueTenths: values[k], targetTenths: targets[k], verdict: judge(k, values[k], targets[k]) }])) as Record<
+    MetricKey,
+    MetricCell
+  >;
   return { month, counts, cells, missed: metricKeys.filter((k) => cells[k].verdict === "missed").length };
 }
 

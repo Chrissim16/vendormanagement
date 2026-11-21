@@ -75,5 +75,6 @@ Read `progress.md` first in every session. Read the other files when the task to
 - `npm run dev` starts the app locally (server on 3000, screens on http://localhost:5173) with a built-in database in `.data/`; no install beyond `npm install`
 - `npm run check` runs typecheck, lint, server tests, build and browser tests; must pass before any commit
 - `npm run db:seed` loads the invented sample data; `npm run db:generate` creates a migration after a schema change (migrations apply themselves at start)
+- `npm run job -- jira-sync` fetches every linked board's tickets from Jira once; the running app also does this by itself every hour
 - `npx vitest run <path>` and `npx playwright test -g "<requirement ID>" --trace off` run part of the tests
 - Sign in locally as someone else with the "Viewing as" menu, or the `dev_user` cookie in tests

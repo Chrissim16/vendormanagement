@@ -9,7 +9,12 @@ export type LinkRow = typeof jiraBoardLinks.$inferSelect;
 // ---------- Board links
 
 const linkColumns = { link: jiraBoardLinks, vendorName: vendors.name, scoringEnabled: vendors.scoringEnabled };
-export const listLinks = (db: Queryable) => db.select(linkColumns).from(jiraBoardLinks).innerJoin(vendors, eq(vendors.id, jiraBoardLinks.vendorId)).orderBy(sql`lower(${vendors.name})`);
+export const listLinks = (db: Queryable) =>
+  db
+    .select(linkColumns)
+    .from(jiraBoardLinks)
+    .innerJoin(vendors, eq(vendors.id, jiraBoardLinks.vendorId))
+    .orderBy(sql`lower(${vendors.name})`);
 export const getLink = async (db: Queryable, id: string) =>
   (await db.select(linkColumns).from(jiraBoardLinks).innerJoin(vendors, eq(vendors.id, jiraBoardLinks.vendorId)).where(eq(jiraBoardLinks.id, id)))[0];
 export const linkOfVendor = async (db: Queryable, vendorId: string) => (await db.select().from(jiraBoardLinks).where(eq(jiraBoardLinks.vendorId, vendorId)))[0];
@@ -122,7 +127,10 @@ export const deleteTicketsOf = (tx: Queryable, linkId: string) => tx.delete(tick
 /** Tickets are kept for 24 months after they were resolved. */
 export const deleteResolvedBefore = (tx: Queryable, linkId: string, cutoff: Date) => tx.delete(tickets).where(and(eq(tickets.boardLinkId, linkId), lt(tickets.resolvedAt, cutoff)));
 export const seenValues = (tx: Queryable, linkId: string) =>
-  tx.select({ id: tickets.id, highestLevel: tickets.highestLevel, statusesSeen: tickets.statusesSeen, labelsSeen: tickets.labelsSeen }).from(tickets).where(eq(tickets.boardLinkId, linkId));
+  tx
+    .select({ id: tickets.id, highestLevel: tickets.highestLevel, statusesSeen: tickets.statusesSeen, labelsSeen: tickets.labelsSeen })
+    .from(tickets)
+    .where(eq(tickets.boardLinkId, linkId));
 export async function setLevels(tx: Queryable, ids: string[], level: number) {
   for (let i = 0; i < ids.length; i += 1000)
     await tx
@@ -186,7 +194,9 @@ export async function monthCounts(db: Queryable, linkIds: string[], month: Month
       linkId: tickets.boardLinkId,
       frMeasured: count("fr_measured"),
       frMet: count("fr_met"),
-      frMedianMinutes: sql<number | null>`(percentile_cont(0.5) within group (order by (extract(epoch from (${tickets.firstResponseAt} - ${tickets.createdAt})) / 60)::float8) filter (where ${inSet("fr_measured", b)} and ${tickets.firstResponseAt} is not null))::float8`,
+      frMedianMinutes: sql<
+        number | null
+      >`(percentile_cont(0.5) within group (order by (extract(epoch from (${tickets.firstResponseAt} - ${tickets.createdAt})) / 60)::float8) filter (where ${inSet("fr_measured", b)} and ${tickets.firstResponseAt} is not null))::float8`,
       resolved: count("resolved"),
       firstLine: count("first_line"),
       breached: count("breached"),
@@ -202,7 +212,11 @@ export async function monthCounts(db: Queryable, linkIds: string[], month: Month
   return new Map(
     rows.map(({ linkId, ...c }) => [
       linkId,
-      { ...c, frMedianMinutes: c.frMedianMinutes == null ? null : Number(c.frMedianMinutes), backlogMedianDays: c.backlogMedianDays == null ? null : Math.floor(Number(c.backlogMedianDays)) },
+      {
+        ...c,
+        frMedianMinutes: c.frMedianMinutes == null ? null : Number(c.frMedianMinutes),
+        backlogMedianDays: c.backlogMedianDays == null ? null : Math.floor(Number(c.backlogMedianDays)),
+      },
     ]),
   );
 }

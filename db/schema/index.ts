@@ -308,9 +308,18 @@ export const jiraBoardLinks = pgTable(
     serviceDeskId: text("service_desk_id"),
     escalationMethod: text("escalation_method", { enum: ["status", "label"] }).notNull(),
     /** Statuses or labels that mean each support level. Stored trimmed; compared ignoring case. */
-    l1Values: text("l1_values").array().notNull().default(sql`'{}'`),
-    l2Values: text("l2_values").array().notNull().default(sql`'{}'`),
-    l3Values: text("l3_values").array().notNull().default(sql`'{}'`),
+    l1Values: text("l1_values")
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
+    l2Values: text("l2_values")
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
+    l3Values: text("l3_values")
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
     active: boolean("active").notNull().default(true),
     /** When tickets were last fetched successfully: the next sync asks Jira for changes since then. */
     lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
@@ -350,8 +359,14 @@ export const tickets = pgTable(
     csat: integer("csat"),
     csatAt: timestamp("csat_at", { withTimezone: true }),
     /** Every status and label the ticket has carried, lower case, so the level can be worked out again when the link's values change. */
-    statusesSeen: text("statuses_seen").array().notNull().default(sql`'{}'`),
-    labelsSeen: text("labels_seen").array().notNull().default(sql`'{}'`),
+    statusesSeen: text("statuses_seen")
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
+    labelsSeen: text("labels_seen")
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
     syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

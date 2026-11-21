@@ -13,6 +13,9 @@ import { InvoicesPage, SpendPage } from "./features/invoices/MoneyPage";
 import { AgreementPage } from "./features/agreements/AgreementPage";
 import { AgreementsPage } from "./features/agreements/AgreementsPage";
 import { RenewalsPage } from "./features/agreements/RenewalsPage";
+import { PerformancePage } from "./features/performance/PerformancePage";
+import { TicketsPage } from "./features/performance/TicketsPage";
+import { VendorPerformancePage } from "./features/performance/VendorPerformancePage";
 import { ComingSection, DashboardPage, NotFoundPage } from "./features/placeholders";
 import { VendorsPage } from "./features/vendors/VendorsPage";
 import { WarningsPage } from "./features/warnings/WarningsPage";
@@ -46,7 +49,9 @@ const router = createBrowserRouter([
           </AdminOnly>
         ),
       },
-      { path: "/performance", element: <ComingSection name="performance" /> },
+      { path: "/performance", element: <PerformancePage /> },
+      { path: "/performance/:vendorId", element: <VendorPerformancePage /> },
+      { path: "/performance/:vendorId/tickets", element: <TicketsPage /> },
       { path: "/rfps", element: <ComingSection name="rfps" /> },
       { path: "/ask", element: <ComingSection name="ask" /> },
       {

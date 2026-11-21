@@ -124,26 +124,49 @@ Warnings are sorted with what is already wrong first, then the soonest date. The
 
 ## Performance
 
-**Jira board link**: `vendor_id*` (one per vendor), `project_key*`, `service_desk_id`,
-`escalation_method*` (status | label), `l1_values*`, `l2_values`, `l3_values`, `active*`, `last_synced_at`, `last_sync_result`.
+**Jira board link** (admin): `vendor_id*` (one per vendor), `project_key*` (one vendor per board), `project_name`, `service_desk_id`,
+`escalation_method*` (status | label), `l1_values`, `l2_values`, `l3_values`, `active*`,
+and from the sync: `last_synced_at`, `last_attempt_at`, `last_sync_ok`, `last_sync_message`, `last_sync_updated`.
+- The level values are the statuses or labels that mean each support level. At least one value for level 2 or level 3 is required; level 1 values are optional. A value can mean only one level. Values are compared ignoring case.
+- The board must exist in Jira when the link is saved. "Test link" checks the board and the values without saving, and points out values the board does not have.
+- Saving a new link, or moving a vendor to another board, fetches the tickets straight away. Moving to another board removes the old board's tickets.
+- Changing the level values works every held ticket's level out again; nothing is fetched.
+- `active` off stops the sync and keeps the tickets and figures. Links are switched off, not deleted.
+- Creating and changing a link is recorded in the vendor's history.
 
 **Ticket** (copied from Jira): `board_link_id*`, `key*`, `summary`, `description`, `status`, `created_at*`, `resolved_at`,
-`first_response_at`, `first_response_breached`, `resolution_breached`, `highest_level` (1 | 2 | 3), `csat` (1 to 5).
-Overwritten on each sync. Removed 24 months after resolution.
+`first_response_at`, `first_response_breached`, `resolution_breached`, `highest_level*` (1 | 2 | 3), `csat` (1 to 5), `csat_at`,
+`statuses_seen`, `labels_seen`, `synced_at`.
+- Overwritten on each sync. Removed 24 months after resolution; a ticket resolved longer ago is never taken in. An open ticket is kept however old.
+- `first_response_breached` and `resolution_breached` are empty while Jira has no outcome: no SLA on the ticket, or still running in time. A running SLA that is already late counts as breached.
+- **Highest level** = 3 if the ticket ever carried a level 3 value, else 2 if it ever carried a level 2 value, else 1. A ticket that never carried a listed value was never escalated: level 1. "Ever" includes earlier statuses and labels, which is why they are kept in `statuses_seen` and `labels_seen`.
+- Tickets are copies, not business records: a sync writes no audit entries. Its outcome is kept on the board link.
 
-**Target**: `vendor_id*`, `metric*`, `target_value*`, `direction*` (at_least | at_most). One per vendor and metric.
+**Sync** (J-2): fetches, per board, the tickets changed since the last successful sync (everything the first time), every hour while the app runs (`JIRA_SYNC_EVERY_MINUTES`), on "Sync now" by any member, and by the command `npm run job -- jira-sync`.
+- Everything is fetched before anything is written, and written in one transaction, so a failure leaves the tickets as they were.
+- A failure is kept on the link in plain language and shown until the next successful sync. One failing board does not stop the others.
+- Running it twice changes nothing.
 
-**Monthly metrics**: `vendor_id*`, `month*`, and per metric the value and whether the target was met.
+**Target**: `vendor_id*`, `metric*`, `target_tenths*`. One per vendor and metric. Any member sets them; changes are recorded in the vendor's history. A vendor can have targets before it has a board.
+- Whether a figure must be at least or at most its target follows from the metric and is not a choice.
+- The targets as they stand today are applied to every month shown; no history of earlier targets is kept.
 
-| Metric | Definition |
-|---|---|
-| First response | Share of tickets created in the month whose first response met its SLA; median first response time alongside. |
-| First-line closure rate | Share of tickets resolved in the month that never went above level 1. |
-| SLA breaches | Count and share of tickets resolved in the month that breached the resolution SLA. |
-| Backlog age | Open tickets at month end: count, and median and oldest age in days. |
-| Customer satisfaction | Average rating of tickets rated in the month, and number of ratings. |
+**Monthly metrics** (worked out from the tickets when shown, not stored): per vendor and month, per metric the figure and whether the target was met. A month runs from midnight to midnight in the team's time zone.
 
-A month with a missed target shows "target missed, a service credit may apply". No amount is calculated.
+| Metric | Definition | Headline figure | Target |
+|---|---|---|---|
+| First response | Tickets created in the month that have a first-response outcome: the share answered within the SLA; median first response time alongside. | % answered in time | at least |
+| First-line closure rate | Share of tickets resolved in the month that never went above level 1. | % | at least |
+| SLA breaches | Count and share of tickets resolved in the month that breached the resolution SLA. | % resolved late | at most |
+| Backlog age | Tickets open at the end of the month (now, for the running month): count, and median and oldest age in whole days. | age of the oldest open ticket, in days; zero when none is open | at most |
+| Customer satisfaction | Average rating of tickets rated in the month, and number of ratings. | average out of 5 | at least |
+
+- Every figure is held as a whole number of tenths and shown with at most one decimal. The figure as shown is what is compared with the target.
+- A month with nothing to measure has no figure and no verdict. A metric without a target has a figure and no verdict.
+- Each count behind a figure opens exactly the tickets it counts: one definition serves both.
+- A month with a missed target shows "target missed, a service credit may apply". No amount is calculated.
+
+**Performance overview** (J-5): vendors with `scoring_enabled` and a board, for a chosen month (the running month by default), sorted by targets missed, by name or by any metric. Scored vendors in use without a board are named below the list.
 
 **Scorecard criterion** (admin): `name*`, `description`, `weight*`, `source*` (measured | manual), `active*`. Starting set:
 

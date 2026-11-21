@@ -257,8 +257,9 @@ test.describe("throughout", () => {
 
   test("X-2 sections not built yet say what will live there", async ({ page, context }) => {
     await signInAs(context, MEMBER);
-    await page.goto("/performance");
-    await expect(page.getByRole("heading", { name: "No scores yet" })).toBeVisible();
+    // Performance was built in M3; Ask and RFPs are still to come.
+    await page.goto("/ask");
+    await expect(page.getByRole("heading", { name: "Nothing to ask about yet" })).toBeVisible();
     await page.getByRole("link", { name: "RFPs" }).click();
     await expect(page.getByRole("heading", { name: "No RFPs yet" })).toBeVisible();
   });

@@ -52,6 +52,10 @@ Kind labels that belong to a record (SOW, Approved) may use the brand tint. The 
 always says what the colour means, so nothing relies on colour alone. Dashboard summary
 tiles are neutral so they do not compete with the pills below them.
 
+A figure judged against a target says so in words next to it: a small dot, then "Met · target 95% or more"
+or, in red text, "Missed · target 95% or more". "No target" is faint text with no dot. In a table of
+months a missed figure is red and semibold, with a line under the table saying what red means.
+
 ## Type
 
 Inter only, in sentence case. No monospace, no all-capitals labels, no small label above a
@@ -118,6 +122,15 @@ Rules: nothing wiggles or shakes. Hover effects are a lift or a small shift, not
 loops. Standard easing `cubic-bezier(.2,.8,.2,1)`; spring `cubic-bezier(.34,1.5,.5,1)`;
 180ms for small changes, 300 to 480ms for larger ones. Everything respects the reduced
 motion setting.
+
+## Figures over time
+
+A record measured month by month (a vendor's helpdesk) is a full page with a month chooser.
+Each metric is one row between hairlines: its name and what it measures on the left, the
+figure (26px) with its verdict and the counts behind it in the middle, and twelve small
+bars on the right with the chosen month in the accent. The figure and every count are
+links to the list of records behind them. The bars are decoration; a table of the same
+twelve months sits below, newest first, where a month's name chooses that month.
 
 ## AI in the interface
 
