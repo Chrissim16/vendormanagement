@@ -1,17 +1,61 @@
 import { useQuery } from "@tanstack/react-query";
 import type { AuditEntry, Page } from "../../../shared/types";
 import { api, messageOf } from "../lib/api";
+import { formatDay, isDay } from "../../../shared/dates";
 import { formatDateTime } from "../lib/format";
 
 const verbs: Record<string, string> = { create: "Added", update: "Changed", delete: "Removed", import: "Imported", revert: "Reverted" };
-const show = (v: unknown) => (v === null || v === undefined || v === "" ? "nothing" : v === true ? "yes" : v === false ? "no" : String(v));
-const names: Record<string, string> = { active: "access", displayName: "name" };
+const names: Record<string, string> = {
+  active: "access",
+  displayName: "name",
+  legalName: "legal name",
+  ownerUserId: "owner",
+  scoringEnabled: "scored",
+  ndaRequired: "NDA required",
+  dpaRequired: "data processing agreement required",
+  signedOn: "signed on",
+  startDate: "start date",
+  endDate: "end date",
+  endReason: "reason it ended",
+  parentMsaId: "MSA it sits under",
+  budgetMinor: "budget",
+  annualValueMinor: "annual value",
+  noticePeriodDays: "notice period in days",
+  autoRenews: "renews automatically",
+  renewalTermMonths: "renewal term in months",
+  isPrimary: "primary",
+  jobTitle: "job title",
+};
+/** A field name as people would say it: "signedOn" becomes "signed on". Names that already contain spaces are kept. */
+const fieldName = (key: string) =>
+  key
+    .split(" ")
+    .map((part) => names[part] ?? part)
+    .join(" ");
+const money = new Set(["budgetMinor", "annualValueMinor"]);
+const hidden = new Set(["ownerUserId", "parentMsaId"]);
 
+function show(key: string, v: unknown): string {
+  if (v === null || v === undefined || v === "") return "nothing";
+  if (v === true) return "yes";
+  if (v === false) return "no";
+  if (money.has(key) && typeof v === "number") return (v / 100).toLocaleString("en-GB", { minimumFractionDigits: 2 });
+  if (isDay(v)) return formatDay(v);
+  return String(v).replace(/_/g, " ");
+}
+
+/** What changed, in words: "status from draft to active, signed on set to 1 Nov 2026". */
 export function describeChanges(e: AuditEntry): string {
-  const parts = Object.entries(e.changes ?? {}).map(([k, c]) =>
-    c.from === null ? `${names[k] ?? k} set to ${show(c.to)}` : `${names[k] ?? k} from ${show(c.from)} to ${show(c.to)}`,
-  );
-  return parts.join(", ");
+  return Object.entries(e.changes ?? {})
+    .map(([k, c]) => {
+      const last = k.split(" ").pop()!;
+      // Internal ids mean nothing to a reader; say that it changed, not to what.
+      if (hidden.has(last)) return `${fieldName(k)} changed`;
+      return c.from === null || c.from === undefined || c.from === ""
+        ? `${fieldName(k)} set to ${show(last, c.to)}`
+        : `${fieldName(k)} from ${show(last, c.from)} to ${show(last, c.to)}`;
+    })
+    .join(", ");
 }
 
 /** The history of one record, newest first. Shown on every record's page. */

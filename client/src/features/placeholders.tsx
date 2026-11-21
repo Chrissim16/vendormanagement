@@ -1,21 +1,43 @@
+import { motion } from "motion/react";
 import { Link } from "react-router-dom";
+import { useWarnings } from "../lib/data";
+import { list } from "../lib/motion";
 import { hourNow, longDate } from "../lib/format";
 import { useMe } from "../platform/session";
 import { EmptyState, PageHeader } from "../platform/ui";
+import { WarningRow } from "./warnings/WarningsPage";
 
 export function DashboardPage() {
   const me = useMe();
+  const warnings = useWarnings();
   const hour = hourNow();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const n = warnings.data?.length ?? 0;
+  const headline = !warnings.data ? "" : n === 0 ? " Nothing needs a decision." : n === 1 ? " One thing could use a decision." : ` ${n} things could use a decision.`;
   return (
     <>
-      <PageHeader context={longDate(new Date())} title={`${greeting}. Nothing needs a decision yet.`} />
-      <EmptyState title="This is where your day starts">
-        Once vendors and agreements are in, this page shows renewals coming up, SOWs close to their budget, missing paperwork and how each vendor is scoring.
+      <PageHeader context={longDate(new Date())} title={`${greeting}.${headline}`} />
+      {n > 0 && (
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            <h2 className="flex-1 text-base font-semibold">Needs attention</h2>
+            <Link to="/warnings" className="text-[13.5px] font-semibold text-accent-ink underline-offset-2 hover:underline">
+              See all
+            </Link>
+          </div>
+          <motion.ul variants={list} initial="initial" animate="animate" className="flex flex-col">
+            {warnings.data!.slice(0, 6).map((w, i) => (
+              <WarningRow key={`${w.type}-${w.agreementId ?? w.vendorId}-${i}`} w={w} />
+            ))}
+          </motion.ul>
+        </section>
+      )}
+      <EmptyState title="More arrives here as the app grows">
+        Spend against budgets, vendor scores and open RFPs will join this page as those parts are built.
         {me.role === "admin" && (
           <>
             {" "}
-            For now, you can check that everything is connected on the{" "}
+            You can check that everything is connected on the{" "}
             <Link to="/admin/system-check" className="font-semibold text-accent-ink underline-offset-2 hover:underline">
               system check
             </Link>{" "}

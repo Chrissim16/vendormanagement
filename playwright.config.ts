@@ -24,6 +24,6 @@ export default defineConfig({
     reuseExistingServer: false,
     timeout: 60_000,
     // A fresh in-memory database with the sample people, serving the built screens.
-    env: { PLATFORM: "local", PORT: String(PORT), DATABASE_MEMORY: "1", SEED_ON_START: "1", CLIENT_DIR: "dist/client", FILES_DIR: ".data/e2e-files" },
+    env: { PLATFORM: "local", PORT: String(PORT), DATABASE_MEMORY: "1", SEED_ON_START: "1", TODAY: "2026-11-21", CLIENT_DIR: "dist/client", FILES_DIR: ".data/e2e-files" },
   },
 });

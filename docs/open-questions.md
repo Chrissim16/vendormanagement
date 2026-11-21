@@ -12,7 +12,9 @@ wrong. Answered questions move to the bottom.
 | Q3 | Should the app be deployed once at work straight after M0, as an early rehearsal? | Recommended, but the owner decides, since it uses work time. | M9 |
 | Q4 | Can a personal Databricks trial workspace be used to rehearse deployment? | Not assumed. Without it, deployment is first tried at work. | M9 |
 | Q5 | Which time zone does the team work in? Times on screen and "today" in filters use it. | Europe/Amsterdam. One setting to change. | All |
-| Q6 | Sample vendor names in the mockup (Halden, Kestrel, Northgate and others) were meant as invented, but some resemble real firms. | They will be replaced by plainly invented names when sample vendors are added in M1. | M1 |
+| Q6 | When a subscription is renewed, should the start date move to the new term or stay as the original start? | It stays; only the renewal date moves. | M1 |
+| Q7 | A SOW that is still marked active after its end date: is a red warning right? | Yes, it is shown as "Past end date" until someone ends or extends it. | M1 |
+| Q8 | In the import, who owns a row with no owner email? | The person doing the import. | M1 |
 
 ## To check at work before M9
 

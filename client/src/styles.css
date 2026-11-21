@@ -88,3 +88,23 @@ body {
     transition-delay: 0ms !important;
   }
 }
+
+@keyframes dialog-in {
+  from {
+    transform: translateY(18px) scale(0.98);
+    opacity: 0;
+  }
+}
+
+/* White text on red needs a darker red than the status dot. */
+:root {
+  --crit-strong: #c4283d;
+}
+
+/* Red text needs more contrast than the status dot: darker on light, lighter on dark. */
+:root {
+  --crit-text: #c4283d;
+}
+:root[data-mode="dark"] {
+  --crit-text: #ff8d95;
+}

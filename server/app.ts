@@ -64,11 +64,11 @@ export function createApp(config: Config, ports: Ports) {
     });
   }
 
-  api.get("/config", (_req, res) => res.json({ standInSignIn: ports.identity.kind === "stand-in", timeZone: config.timeZone }));
-  api.use(authenticate(ports.database.db, ports.identity, config.bootstrapAdminEmail));
-  api.use(adminRoutes(ports, config.timeZone));
   // "Today" is the date in the team's time zone. Tests may pin it with TODAY.
   const today = () => config.today ?? todayIn(config.timeZone);
+  api.get("/config", (_req, res) => res.json({ standInSignIn: ports.identity.kind === "stand-in", timeZone: config.timeZone, today: today() }));
+  api.use(authenticate(ports.database.db, ports.identity, config.bootstrapAdminEmail));
+  api.use(adminRoutes(ports, config.timeZone));
   const db = ports.database.db;
   api.use(vendorRoutes(db, today));
   api.use(agreementRoutes(db, ports.storage, today));

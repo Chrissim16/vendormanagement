@@ -54,7 +54,7 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 - A renewals page lists subscriptions whose notice deadline has passed or falls within the warning window, soonest first, overdue ones distinct.
 - A member can record renew, renegotiate or terminate. Renew offers to roll the dates forward. A decided subscription leaves the list.
 
-**A-7 Warnings.** A warnings page, and a count in the header, list: notice deadlines due or overdue, SOWs ending within 30 days, and active vendors with a required NDA or DPA missing or expired. Each warning links to its record.
+**A-7 Warnings.** A warnings page, and a count in the header, list: notice deadlines due or overdue, SOWs ending within 30 days or already past their end date while still active, and active vendors with a required NDA or DPA missing or expired. Each warning links to its record.
 
 **A-8 Import.** An admin can download an Excel template, fill in vendors and agreements, and upload it. A preview shows valid rows and the reason for each invalid one before anything is saved. Importing the same file twice creates no duplicates.
 

@@ -100,7 +100,7 @@ export function Field({ label, error, htmlFor, children }: { label: string; erro
       </label>
       {children}
       {error && (
-        <p id={`${htmlFor}-error`} className="text-[12.5px] font-medium text-crit">
+        <p id={`${htmlFor}-error`} className="text-[12.5px] font-medium text-[var(--crit-text)]">
           {error}
         </p>
       )}

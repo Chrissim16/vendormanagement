@@ -29,3 +29,10 @@ export const daysBetween = (from: Day, to: Day) => Math.round((utc(to).getTime()
 export function todayIn(timeZone: string, now: Date = new Date()): Day {
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
 }
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** 21 Nov 2026: how a day is shown to people everywhere in the app. */
+export function formatDay(day: Day): string {
+  const [y, m, d] = day.split("-").map(Number) as [number, number, number];
+  return `${d} ${MONTHS[m - 1]} ${y}`;
+}

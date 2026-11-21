@@ -7,7 +7,13 @@ import { Toaster } from "sonner";
 import { AuditPage } from "./features/admin/AuditPage";
 import { PeoplePage } from "./features/admin/PeoplePage";
 import { SystemCheckPage } from "./features/admin/SystemCheckPage";
+import { ImportPage } from "./features/admin/ImportPage";
+import { AgreementPage } from "./features/agreements/AgreementPage";
+import { AgreementsPage } from "./features/agreements/AgreementsPage";
+import { RenewalsPage } from "./features/agreements/RenewalsPage";
 import { ComingSection, DashboardPage, NotFoundPage } from "./features/placeholders";
+import { VendorsPage } from "./features/vendors/VendorsPage";
+import { WarningsPage } from "./features/warnings/WarningsPage";
 import { Layout } from "./platform/Layout";
 import { Session, useMe } from "./platform/session";
 import "@fontsource-variable/inter";
@@ -23,12 +29,23 @@ const router = createBrowserRouter([
     element: <Layout />,
     children: [
       { path: "/", element: <DashboardPage /> },
-      { path: "/vendors", element: <ComingSection name="vendors" /> },
-      { path: "/agreements", element: <ComingSection name="agreements" /> },
+      { path: "/vendors", element: <VendorsPage /> },
+      { path: "/agreements", element: <AgreementsPage /> },
+      { path: "/agreements/renewals", element: <RenewalsPage /> },
+      { path: "/agreements/:id", element: <AgreementPage /> },
+      { path: "/warnings", element: <WarningsPage /> },
       { path: "/money", element: <ComingSection name="money" /> },
       { path: "/performance", element: <ComingSection name="performance" /> },
       { path: "/rfps", element: <ComingSection name="rfps" /> },
       { path: "/ask", element: <ComingSection name="ask" /> },
+      {
+        path: "/admin/import",
+        element: (
+          <AdminOnly>
+            <ImportPage />
+          </AdminOnly>
+        ),
+      },
       {
         path: "/admin/people",
         element: (

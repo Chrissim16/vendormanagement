@@ -196,6 +196,6 @@ describe("warnings", () => {
       today,
     );
     expect(list.map((w) => w.agreementId)).toEqual(["late", "sow", "due"]);
-    expect(list[0]!.detail).toContain("2026-11-12");
+    expect(list[0]!.detail).toBe("The notice deadline passed on 12 Nov 2026. It renews on 10 Feb 2027.");
   });
 });

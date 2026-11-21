@@ -35,7 +35,7 @@ X-1 to X-6 apply to every milestone. M2 and M3 touch different features and may 
 - `npm run check`, CI on every push, seed script with invented data, `.env.example`.
 
 ## M1 Vendors and agreements
-Starts with the patterns moved from M0: the form pattern with field errors and kept input, the file upload component, and the PDF helper. Adds TanStack Table if the vendor list needs more than the M0 table offers.
+Starts with the patterns moved from M0: the form pattern with field errors and kept input, the dialog, tabs and file upload. The PDF helper moves on to M4, the first milestone that produces a PDF.
 Vendors, contacts, the five agreement kinds with status, MSA to SOW structure, documents, subscriptions with renewals and decisions, warnings page and header count, Excel import.
 
 ## M2 SOW delivery and money
@@ -46,7 +46,7 @@ Fake Jira that mimics the Jira Cloud and Jira Service Management API shape, with
 Before building, the `databricks-researcher` agent confirms the current Jira Service Management API fields for SLA results and satisfaction ratings.
 
 ## M4 Scorecards and AI scoring
-The `server/ai` layer with suggestion records, prompt versioning and evaluation sets. Monthly proposals, ticket themes, quarterly scorecards, manual scorecards, vendor PDF, criteria admin.
+The PDF helper (`pdfkit`). The `server/ai` layer with suggestion records, prompt versioning and evaluation sets. Monthly proposals, ticket themes, quarterly scorecards, manual scorecards, vendor PDF, criteria admin.
 
 ## M5 Briefings, risk flags, dashboard, report
 Vendor briefing with PDF, risk flag rules as tested pure functions, dashboard, monthly management report PDF.

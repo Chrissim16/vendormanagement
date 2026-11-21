@@ -1,8 +1,9 @@
 import clsx from "clsx";
-import { Activity, Bell, Building2, Coins, FileText, House, type LucideIcon, MessageSquare, Moon, ScrollText, Search, TrendingUp, Users } from "lucide-react";
+import { Activity, Bell, Building2, Coins, FileText, FileUp, House, type LucideIcon, MessageSquare, Moon, ScrollText, Search, TrendingUp, Users } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
-import { NavLink, useLocation, useOutlet } from "react-router-dom";
+import { Link, NavLink, useLocation, useOutlet } from "react-router-dom";
+import { useWarnings } from "../lib/data";
 import { bouncy, page, spring } from "../lib/motion";
 import { toggleTheme } from "../lib/theme";
 import { DevSwitcher, useMe } from "./session";
@@ -24,6 +25,7 @@ const main: Item[] = [
 ];
 const admin: Item[] = [
   { to: "/admin/people", label: "People", icon: Users },
+  { to: "/admin/import", label: "Import", icon: FileUp },
   { to: "/admin/audit", label: "Audit log", icon: ScrollText },
   { to: "/admin/system-check", label: "System check", icon: Activity },
 ];
@@ -77,6 +79,7 @@ export function Layout() {
   const me = useMe();
   const location = useLocation();
   const outlet = useOutlet();
+  const warnings = useWarnings().data?.length ?? 0;
   const [hops, setHops] = useState(0);
   useEffect(() => setHops((n) => n + 1), [location.pathname]);
   const initials = (me.displayName ?? me.email)
@@ -135,9 +138,23 @@ export function Layout() {
           <IconButton label="Switch between light and dark" onClick={toggleTheme}>
             <Moon size={17} aria-hidden />
           </IconButton>
-          <IconButton label="Warnings: none" disabled className="disabled:opacity-60">
+          <Link
+            to="/warnings"
+            aria-label={warnings ? `${warnings} ${warnings === 1 ? "warning" : "warnings"}` : "No warnings"}
+            title="Warnings"
+            className="relative grid h-[38px] w-[38px] place-items-center rounded-full text-ink-2 transition duration-200 hover:bg-sunk hover:text-ink active:scale-90"
+          >
             <Bell size={17} aria-hidden />
-          </IconButton>
+            {warnings > 0 && (
+              <span
+                data-testid="warning-count"
+                aria-hidden
+                className="num absolute right-0.5 top-1 grid h-4 min-w-4 place-items-center rounded-full bg-[var(--crit-strong)] px-1 text-[10px] font-semibold text-white"
+              >
+                {warnings}
+              </span>
+            )}
+          </Link>
         </header>
         <div className="relative min-h-0 flex-1 overflow-hidden">
           <AnimatePresence mode="wait" initial={false}>

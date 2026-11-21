@@ -206,7 +206,7 @@ test.describe("throughout", () => {
     await signInAs(context, ADMIN);
     for (const mode of ["light", "dark"]) {
       await page.addInitScript((m) => localStorage.setItem("mode", m), mode);
-      for (const path of ["/", "/vendors", "/admin/people", "/admin/audit", "/admin/system-check"]) {
+      for (const path of ["/", "/money", "/admin/people", "/admin/audit", "/admin/system-check"]) {
         await page.goto(path);
         await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
         if (path === "/admin/people") await page.getByRole("button", { name: "Open Mira Okafor" }).click();
@@ -255,12 +255,12 @@ test.describe("throughout", () => {
     await expect(panel.getByRole("button", { name: "Member" })).toHaveAttribute("aria-pressed", "true");
   });
 
-  test("X-2 empty sections say what belongs there", async ({ page, context }) => {
+  test("X-2 sections not built yet say what will live there", async ({ page, context }) => {
     await signInAs(context, MEMBER);
-    await page.goto("/vendors");
-    await expect(page.getByRole("heading", { name: "No vendors yet" })).toBeVisible();
-    await page.getByRole("link", { name: "Agreements" }).click();
-    await expect(page.getByRole("heading", { name: "No agreements yet" })).toBeVisible();
+    await page.goto("/money");
+    await expect(page.getByRole("heading", { name: "No invoices yet" })).toBeVisible();
+    await page.getByRole("link", { name: "Performance" }).click();
+    await expect(page.getByRole("heading", { name: "No scores yet" })).toBeVisible();
   });
 
   test("the theme switch changes to dark and is remembered", async ({ page, context }) => {

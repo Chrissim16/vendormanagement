@@ -55,8 +55,8 @@ db/schema, db/migrations, db/seed
 e2e/                      Playwright tests, one file per requirement group
 ```
 
-Features: `vendors`, `agreements`, `sow`, `invoices`, `performance`, `scorecards`,
-`briefings`, `rfp`, `chat`, `dashboard`, `admin`. A feature imports from `platform`, `ai`
+Features built so far: `admin`, `vendors`, `agreements`, `warnings`, `import`. Still to come: `sow`, `invoices`,
+`performance`, `scorecards`, `briefings`, `rfp`, `chat`, `dashboard`. A feature imports from `platform`, `ai`
 and `shared`, and from another feature only through that feature's `service.ts`.
 
 ## Request flow
@@ -85,7 +85,10 @@ safe to run twice.
 
 ## Conventions
 
-- Business rules live in `service.ts` or as pure functions in `shared/` with unit tests, never in routes or components.
+- Business rules live in `service.ts` or as pure functions in `shared/` with unit tests, never in routes or components. `shared/agreements.ts`, `shared/vendors.ts`, `shared/dates.ts` and `shared/money.ts` hold the rules for agreements, paperwork, warnings, days and amounts.
+- "Today" is the date in the team's time zone, supplied by the server (`/api/config`) so screen and server agree. `TODAY=YYYY-MM-DD` pins it for tests and demos, with stand-ins only.
+- Request helpers shared by all routes are in `server/platform/http.ts`: `text`, `day`, `paging`, `like`, `failFields`, `toCsv`.
+- Screens are built from the patterns in `client/src/platform`: `DataTable`, `SplitView` and `Panel`, `Tabs`, `Dialog`, `form` (`useForm` and the field components), `History`.
 - List endpoints take `q`, filters, `sort`, `page`, `pageSize` and return `{ items, total }`. Filtering and sorting happen in SQL. The client keeps filters in the URL.
 - Exports are produced on the server from the same query as the screen they belong to.
 - Timestamps are stored in UTC and shown in the team's time zone (`APP_TIME_ZONE`, default Europe/Amsterdam). "A day" in a filter means a day in that zone.

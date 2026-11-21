@@ -16,12 +16,20 @@ export const useMe = () => {
 interface AppConfig {
   standInSignIn: boolean;
   timeZone: string;
+  /** Today's date in the team's time zone, as the server sees it. */
+  today: string;
+}
+
+/** Today's date as the server sees it, so "27 days left" on screen agrees with the server's rules. */
+export function useToday(): string {
+  const config = useQuery({ queryKey: ["config"], queryFn: () => api<AppConfig>("/config"), staleTime: 5 * 60_000 });
+  return config.data?.today ?? new Date().toISOString().slice(0, 10);
 }
 
 /** Local only: look at the app as someone else to try out roles. Never present when deployed. */
 export function DevSwitcher({ current }: { current?: string }) {
   const qc = useQueryClient();
-  const config = useQuery({ queryKey: ["config"], queryFn: () => api<AppConfig>("/config"), staleTime: Infinity });
+  const config = useQuery({ queryKey: ["config"], queryFn: () => api<AppConfig>("/config"), staleTime: 5 * 60_000 });
   const people = useQuery({ queryKey: ["dev-users"], queryFn: () => api<{ email: string; role: string; active: boolean }[]>("/dev/users"), enabled: !!config.data?.standInSignIn });
   if (!config.data?.standInSignIn || !people.data) return null;
   return (
@@ -54,7 +62,7 @@ export function DevSwitcher({ current }: { current?: string }) {
 
 /** Loads who is signed in. People without access see an explanation instead of the app. */
 export function Session({ children }: { children: ReactNode }) {
-  const config = useQuery({ queryKey: ["config"], queryFn: () => api<AppConfig>("/config"), staleTime: Infinity });
+  const config = useQuery({ queryKey: ["config"], queryFn: () => api<AppConfig>("/config"), staleTime: 5 * 60_000 });
   const q = useQuery({ queryKey: ["me"], queryFn: () => api<User>("/me"), retry: false });
   if (config.data) setTimeZone(config.data.timeZone);
   if (q.isPending || config.isPending) return null;

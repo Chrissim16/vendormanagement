@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { inPlace, noticeDeadline, renewalState, WINDOWS, type AgreementStatus, type Kind } from "./agreements";
-import { daysBetween, type Day } from "./dates";
+import { daysBetween, formatDay, type Day } from "./dates";
 
 export const vendorTypes = ["software", "consultancy", "advisory"] as const;
 export type VendorType = (typeof vendorTypes)[number];
@@ -146,7 +146,7 @@ export function buildWarnings(vendors: WarningVendor[], agreements: WarningAgree
           type: "renewal_overdue",
           tone: "bad",
           label: "Overdue",
-          detail: `The notice deadline passed on ${deadline}. It renews on ${a.endDate}.`,
+          detail: `The notice deadline passed on ${formatDay(deadline)}. It renews on ${formatDay(a.endDate!)}.`,
           date: deadline,
         });
       if (state === "due_soon") {
@@ -156,7 +156,7 @@ export function buildWarnings(vendors: WarningVendor[], agreements: WarningAgree
           type: "renewal_due",
           tone: "warn",
           label: left === 0 ? "Today" : plural(left, "day"),
-          detail: `The notice deadline is ${deadline}. It renews on ${a.endDate}.`,
+          detail: `The notice deadline is ${formatDay(deadline)}. It renews on ${formatDay(a.endDate!)}.`,
           date: deadline,
         });
       }
@@ -164,14 +164,21 @@ export function buildWarnings(vendors: WarningVendor[], agreements: WarningAgree
     if (a.kind === "sow" && a.endDate) {
       const left = daysBetween(today, a.endDate);
       if (left < 0)
-        out.push({ ...base, type: "sow_past_end", tone: "bad", label: "Past end date", detail: `It ended on ${a.endDate} but is still marked active.`, date: a.endDate });
+        out.push({
+          ...base,
+          type: "sow_past_end",
+          tone: "bad",
+          label: "Past end date",
+          detail: `It ended on ${formatDay(a.endDate)} but is still marked active.`,
+          date: a.endDate,
+        });
       else if (left <= windows.sowEndDays)
         out.push({
           ...base,
           type: "sow_ending",
           tone: "warn",
           label: left === 0 ? "Ends today" : `Ends in ${plural(left, "day")}`,
-          detail: `It ends on ${a.endDate}.`,
+          detail: `It ends on ${formatDay(a.endDate)}.`,
           date: a.endDate,
         });
     }
@@ -190,7 +197,10 @@ export function buildWarnings(vendors: WarningVendor[], agreements: WarningAgree
         tone: state === "expired" ? "bad" : "warn",
         label: `${short} ${state}`,
         title: v.name,
-        detail: state === "expired" ? `${name} expired on ${expired?.endDate}.` : `No ${kind === "nda" ? "NDA" : "data processing agreement"} is in place.`,
+        detail:
+          state === "expired"
+            ? `${name} expired on ${expired?.endDate ? formatDay(expired.endDate) : "an unknown date"}.`
+            : `No ${kind === "nda" ? "NDA" : "data processing agreement"} is in place.`,
         vendorId: v.id,
         vendorName: v.name,
         agreementId: expired?.id ?? null,

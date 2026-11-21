@@ -18,7 +18,11 @@ Fields marked `*` are required. Every table also has `id`, `created_at`, `create
 `status*` (prospect | active | on_hold | offboarded), `owner_user_id*`, `website`, `country`, `description`, `notes`,
 `scoring_enabled*` (default yes), `nda_required*` (default yes), `dpa_required*` (default yes).
 - A vendor with an active agreement cannot be offboarded.
+- An offboarded vendor cannot receive new agreements. Every other status can, so a prospect can sign an NDA.
+- Names are stored with extra spaces removed and compared ignoring case.
+- The owner must be a person who has access to the app.
 - RFP candidates are vendors with status `prospect`.
+- Changes to a vendor's contacts are recorded in the vendor's history.
 
 **Contact**: `vendor_id*`, `name*`, `job_title`, `email`, `phone`, `is_primary*`. At most one primary per vendor.
 
@@ -39,9 +43,12 @@ One table, with a `kind`.
 | subscription | `annual_value_minor*`, `end_date*` (renewal date), `notice_period_days*` (default 90), `auto_renews*`, `renewal_term_months` | Has a notice deadline. |
 | nda, dpa | `signed_on*`, `end_date` (valid until, optional) | Counts as in place when active and not past `end_date`. |
 
-- `start_date*` and `signed_on*` are required once status is `active`.
+- `signed_on*` is required once status is `active`, for every kind. A subscription also needs its `start_date*` then. An NDA or data processing agreement being negotiated has no signing date yet.
 - `end_date` is on or after `start_date`.
-- `ended` needs an end reason: completed, expired, terminated or replaced.
+- `ended` needs an end reason: completed, expired, terminated or replaced. The reason is cleared when the agreement is no longer ended.
+- The vendor and the kind of an agreement cannot be changed after it is created.
+- Fields that do not belong to the kind are always empty: an MSA never holds a budget or a notice period.
+- A subscription without a stated notice period gets 90 days, and without a stated renewal term gets 12 months.
 
 Derived, not stored:
 - **Notice deadline** (subscription) = `end_date` minus `notice_period_days`.
@@ -49,9 +56,28 @@ Derived, not stored:
 - **SOW budget** = original `budget_minor` plus approved change requests. **Invoiced** = sum of its invoices. **Used %** = invoiced / budget.
 - **Compliance gap** (vendor): active vendor with `nda_required` and no NDA in place, or `dpa_required` and no DPA in place.
 
-**Renewal decision**: `agreement_id*` (subscription), `decision*` (renew | renegotiate | terminate), `decided_on*`, `decided_by*`, `notes`. Clears the warning for that term. `renew` can roll the dates forward by the renewal term.
+**Renewal decision**: `agreement_id*` (subscription), `decision*` (renew | renegotiate | terminate), `decided_on*`, `decided_by*`, `notes`, `term_end_date*` (the end date of the term it was made for).
+- Only for an active subscription, at most one per term, and not dated in the future.
+- It clears the warning for that term.
+- `renew` can roll forward: the renewal date moves on by the renewal term and the start date stays as it was, which opens the next term for its own decision later.
+- `terminate` does not end the agreement by itself; someone sets it to ended when it stops.
 
-**Document**: attached to an agreement or an RFP. `title*`, `file_name*`, `content_type*`, `size_bytes*`, `storage_key*`, `kind` (signed | draft | response | other), `extracted_text`. PDF, Word and Excel only, 25 MB at most.
+**Document**: attached to an agreement (and from M6 to an RFP). `title*`, `file_name*`, `content_type*`, `size_bytes*`, `storage_key*`, `extracted_text`. PDF, Word and Excel only, 25 MB at most, judged by the file's content as well as its name. The stored file's name is generated, so nothing a person typed becomes part of a file path. Attaching and removing are recorded in the agreement's history.
+
+**Warning** (worked out, not stored), for A-7:
+
+| Warning | When | Shown as |
+|---|---|---|
+| Renewal overdue | Active subscription, notice deadline passed, no decision for the term | Red |
+| Renewal due | Active subscription, notice deadline within 90 days, no decision | Amber |
+| SOW ending | Active SOW ending within 30 days | Amber |
+| SOW past its end date | Active SOW whose end date has passed | Red |
+| NDA or data processing agreement missing | Active vendor that requires one and has none in place | Amber |
+| NDA or data processing agreement expired | Active vendor whose only one is past its valid-until date | Red |
+
+Warnings are sorted with what is already wrong first, then the soonest date. The windows (90 and 30 days) are fixed for now and become admin settings in M2.
+
+**Import** (A-8): a vendor row whose name is already in the app, and an agreement row whose vendor, kind and title are already in the app, are left alone. A row that appears twice in the file is a problem. An empty owner means the person importing.
 
 ## SOW delivery and money
 
