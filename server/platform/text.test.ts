@@ -95,7 +95,7 @@ describe("C-1 reading a Word file cannot stall the app, and reads only what a re
   it("text deleted with tracked changes and field codes are left out; tabs, breaks and odd character codes are handled", () => {
     const xml =
       '<w:p><w:r><w:t xml:space="preserve">Liability is limited </w:t></w:r><w:del><w:r><w:delText>and unlimited for data loss</w:delText></w:r></w:del>' +
-      '<w:r><w:instrText> PAGEREF _Toc1 </w:instrText></w:r><w:r><w:t>to the fees.</w:t><w:tab/><w:t>A&amp;B &#8364; &#99999999; &#xD800;</w:t><w:br/><w:t/><w:t>Next</w:t></w:r></w:p><w:tbl><w:t>cell</w:t></w:tbl>';
+      "<w:r><w:instrText> PAGEREF _Toc1 </w:instrText></w:r><w:r><w:t>to the fees.</w:t><w:tab/><w:t>A&amp;B &#8364; &#99999999; &#xD800;</w:t><w:br/><w:t/><w:t>Next</w:t></w:r></w:p><w:tbl><w:t>cell</w:t></w:tbl>";
     expect(wordText(xml)).toBe("Liability is limited to the fees.\tA&B €    \nNext\ncell");
   });
 });

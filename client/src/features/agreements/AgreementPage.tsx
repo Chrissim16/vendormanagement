@@ -132,7 +132,7 @@ function Documents({ a }: { a: AgreementDetail }) {
                   className={`h-8 px-3.5 text-[12.5px] ${read.isPending && read.variables === d.id ? "cursor-progress" : ""}`}
                   onClick={() => !read.isPending && read.mutate(d.id)}
                   aria-disabled={read.isPending || undefined}
-                  aria-label={`Ask the AI to read ${d.fileName}`}
+                  aria-label={`Read with AI: ${d.fileName}`}
                 >
                   {read.isPending && read.variables === d.id ? "Reading" : "Read with AI"}
                 </Button>

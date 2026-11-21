@@ -143,7 +143,13 @@ export const documentsOf = (db: Queryable, agreementId: string) =>
 export const getDocument = async (db: Queryable, id: string) =>
   (
     await db
-      .select({ ...documentColumns, agreementId: documents.agreementId, rfpCandidateId: documents.rfpCandidateId, storageKey: documents.storageKey })
+      .select({
+        ...documentColumns,
+        agreementId: documents.agreementId,
+        rfpCandidateId: documents.rfpCandidateId,
+        storageKey: documents.storageKey,
+        readingSuggestionId: documents.readingSuggestionId,
+      })
       .from(documents)
       .where(eq(documents.id, id))
   )[0];

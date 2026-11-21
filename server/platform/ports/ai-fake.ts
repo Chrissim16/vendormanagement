@@ -575,8 +575,9 @@ function contractFieldsAnswer(ask: ContractFieldsAsk): string {
     [/master services agreement|framework agreement|\bmsa\b/i, "msa"],
     [/data processing agreement/i, "dpa"],
     [/non-disclosure|confidentiality agreement|\bnda\b/i, "nda"],
-    [/subscription|licen[cs]e|order form/i, "subscription"],
+    [/subscription|licen[cs]e/i, "subscription"],
   ];
+  // The kind is said near the top, in the document's own words.
   const head = sentences.slice(0, 4);
   const kind = kindOf.map(([p, value]) => ({ value, passage: head.find((s) => p.test(s)) })).find((k) => k.passage) ?? null;
   const named = find(/^(?:title|subject|subscription|statement of work|agreement|order form for)\s*[:-]\s*\S/i);

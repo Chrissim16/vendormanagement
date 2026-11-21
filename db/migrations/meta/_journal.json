@@ -85,6 +85,13 @@
       "when": 1795299833802,
       "tag": "0011_ambiguous_nightmare",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1795300982917,
+      "tag": "0012_wealthy_pixie",
+      "breakpoints": true
     }
   ]
 }

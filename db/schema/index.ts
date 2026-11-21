@@ -165,7 +165,7 @@ export const documents = pgTable(
     storageKey: text("storage_key").notNull(),
     extractedText: text("extracted_text"),
     /** E-1: the AI's current reading of this document's fields, when it has been asked for one. Earlier readings stay as suggestion rows. */
-    readingSuggestionId: uuid("reading_suggestion_id"),
+    readingSuggestionId: uuid("reading_suggestion_id").references((): AnyPgColumn => aiSuggestions.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     createdBy: text("created_by"),
   },

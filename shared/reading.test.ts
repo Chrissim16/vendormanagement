@@ -1,60 +1,120 @@
 import { describe, expect, it } from "vitest";
-import { contractReadingSchema, passageHasAmount, passageHasDate, readingProblem, targetOf, type ContractReading } from "./reading";
+import { contractReadingSchema, datesIn, moneyIn, noticeDaysIn, standsIn, targetOf, verifyReading, type ContractReading } from "./reading";
 
 const none: ContractReading = { kind: null, title: null, signedOn: null, startDate: null, endDate: null, noticePeriodDays: null, amount: null, currency: null };
 const text = [
-  "Statement of work: Ledger clean-up",
-  "This statement of work was signed on 3 March 2027.",
-  "The work starts on 01/04/2027 and ends on 2027-09-30.",
-  "The budget is EUR 120,000.00, invoiced per milestone.",
-  "Either party may end it by giving 3 months' notice.",
+  "Subscription: Planning suite, from a European company",
+  "This order form was signed on 4 January 2027.",
+  "The subscription starts on 01/02/2027 and ends on 31 January 2028.",
+  "The annual fee is € 26,500.00, payable within 30 days.",
+  "Fees for 2027 are fixed for 12 months.",
+  "Either party may cancel by giving 45 days' written notice before 5 June 2027.",
+  "Longer terms need 3 months' notice.",
 ].join("\n");
+const verify = (r: Partial<ContractReading>) => verifyReading(text, { ...none, ...r });
+const kept = (r: Partial<ContractReading>) => {
+  const v = verify(r);
+  return Object.fromEntries(
+    Object.entries(v.reading)
+      .filter(([, f]) => f)
+      .map(([k, f]) => [k, f!.value]),
+  );
+};
 
-describe("E-1 a passage must hold the value it is given for", () => {
-  it("a date is found however it is written, and not when only part of it is there", () => {
-    expect(passageHasDate("signed on 3 March 2027.", "2027-03-03")).toBe(true);
-    expect(passageHasDate("signed on 3 Mar 2027", "2027-03-03")).toBe(true);
-    expect(passageHasDate("starts on 01/04/2027", "2027-04-01")).toBe(true);
-    expect(passageHasDate("ends on 2027-09-30", "2027-09-30")).toBe(true);
-    expect(passageHasDate("on 3.3.27", "2027-03-03")).toBe(true);
-    expect(passageHasDate("signed on 3 March 2027.", "2027-03-04")).toBe(false);
-    expect(passageHasDate("signed on 3 March 2027.", "2027-04-03")).toBe(false);
-    expect(passageHasDate("signed on 3 March 2027.", "2028-03-03")).toBe(false);
-    // Day and month the same number: it must stand there twice when written in figures.
-    expect(passageHasDate("on 5/2027 for 5 days", "2027-05-05")).toBe(true);
-    expect(passageHasDate("on 5 June 2027", "2027-05-05")).toBe(false);
-    // "may" inside another word is not the month.
-    expect(passageHasDate("payment is due 7 days after 2027 dismay", "2027-05-07")).toBe(false);
+describe("E-1 what a passage states", () => {
+  it("dates are whole expressions, read day first", () => {
+    expect(datesIn("signed on 4 January 2027.")).toEqual(["2027-01-04"]);
+    expect(datesIn("on the 9th of March 2027 and March 10, 2027")).toEqual(["2027-03-09", "2027-03-10"]);
+    expect(datesIn("the fifteenth day of March 2027 (15/03/2027)")).toEqual(["2027-03-15"]);
+    expect(datesIn("starts on 01/02/2027")).toEqual(["2027-02-01"]);
+    expect(datesIn("2027-09-30, 3.3.27 and 3 Sept 2027")).toEqual(["2027-09-03", "2027-09-30", "2027-03-03"]);
+    // Not dates: a loose year, a month and year, a day that does not exist, the verb "may".
+    expect(datesIn("Fees for 2027; in March 2027; on 31/02/2027; either party may cancel before 5 June 2027")).toEqual(["2027-06-05"]);
+    expect(datesIn("on 5/2027 for 5 days")).toEqual([]);
   });
-  it("an amount is found with any separators, and not a different one", () => {
-    expect(passageHasAmount("The budget is EUR 120,000.00, invoiced", "120000")).toBe(true);
-    expect(passageHasAmount("fee of € 48.000,50 a year", "48000.50")).toBe(true);
-    expect(passageHasAmount("fee of 48000.", "48000")).toBe(true);
-    expect(passageHasAmount("The budget is EUR 120,000.00", "12000")).toBe(false);
-    expect(passageHasAmount("within 30 days", "120000")).toBe(false);
+  it("an amount is a number with its currency next to it", () => {
+    expect(moneyIn("The annual fee is € 26,500.00, payable within 30 days.")).toEqual([{ minor: 26_500_00, currency: "EUR" }]);
+    expect(moneyIn("EUR 118,000 excl. VAT; a day rate of £1,150; 48.000,50 euros; 9,000 pounds sterling")).toEqual([
+      { minor: 118_000_00, currency: "EUR" },
+      { minor: 1_150_00, currency: "GBP" },
+      { minor: 48_000_50, currency: "EUR" },
+      { minor: 9_000_00, currency: "GBP" },
+    ]);
+    expect(moneyIn("USD 9,000 within 30 days, in 2027, for a European company")).toEqual([]);
   });
-  it("a reading that quotes the document and holds its values passes", () => {
-    const good: ContractReading = {
-      kind: { value: "sow", passage: "Statement of work: Ledger clean-up" },
-      title: { value: "Ledger clean-up", passage: "Statement of work: Ledger clean-up" },
-      signedOn: { value: "2027-03-03", passage: "This statement of work was signed on 3 March 2027." },
-      startDate: { value: "2027-04-01", passage: "The work starts on 01/04/2027 and ends on 2027-09-30." },
-      endDate: { value: "2027-09-30", passage: "The work starts on  01/04/2027 and ends on 2027-09-30." },
-      noticePeriodDays: { value: 90, passage: "Either party may end it by giving 3 months' notice." },
-      amount: { value: "120000", passage: "The budget is EUR 120,000.00, invoiced per milestone." },
-      currency: { value: "EUR", passage: "The budget is EUR 120,000.00, invoiced per milestone." },
+  it("a notice period is a number of days in a sentence about notice; months are not converted", () => {
+    expect(noticeDaysIn("giving 45 days' written notice before 5 June 2027")).toEqual([45]);
+    expect(noticeDaysIn("cancel with 30 calendar days notice")).toEqual([30]);
+    expect(noticeDaysIn("payable within 30 days")).toEqual([]);
+    expect(noticeDaysIn("3 months' notice")).toEqual([]);
+    expect(noticeDaysIn("10 business days' notice")).toEqual([]);
+  });
+  it("a passage stands in the document only as whole words and whole numbers", () => {
+    expect(standsIn(text, "The annual fee is € 26,500.00, payable within 30 days.")).toBe(true);
+    expect(standsIn(text, "The annual fee is  € 26,500.00")).toBe(true);
+    expect(standsIn(text, "6,500.00, payable within 30 days.")).toBe(false);
+    expect(standsIn(text, "1 January 2028.")).toBe(false);
+    expect(standsIn(text, "The annual fee is € 26")).toBe(false);
+    expect(standsIn(text, "5 days' written notice")).toBe(false);
+    expect(standsIn(text, "The annual fee is € 99,000.00")).toBe(false);
+  });
+});
+
+describe("E-1 only values their passage bears out are kept", () => {
+  it("a careful reading is kept whole, and an amount takes its currency from its own passage", () => {
+    const v = verify({
+      kind: { value: "subscription", passage: "Subscription: Planning suite, from a European company" },
+      title: { value: "Planning suite", passage: "Subscription: Planning suite, from a European company" },
+      signedOn: { value: "2027-01-04", passage: "This order form was signed on 4 January 2027." },
+      startDate: { value: "2027-02-01", passage: "The subscription starts on 01/02/2027 and ends on 31 January 2028." },
+      endDate: { value: "2028-01-31", passage: "The subscription starts on 01/02/2027 and ends on 31 January 2028." },
+      noticePeriodDays: { value: 45, passage: "Either party may cancel by giving 45 days' written notice before 5 June 2027." },
+      amount: { value: "26500", passage: "The annual fee is € 26,500.00, payable within 30 days." },
+    });
+    expect(v.unverified).toEqual([]);
+    expect(Object.values(v.reading).every(Boolean)).toBe(true);
+    expect(v.reading.currency).toEqual({ value: "EUR", passage: "The annual fee is € 26,500.00, payable within 30 days." });
+  });
+  it.each<[string, Partial<ContractReading>, string]>([
+    ["a passage cut inside a number", { amount: { value: "6500", passage: "6,500.00, payable within 30 days." } }, "amount"],
+    ["a passage cut inside a date", { endDate: { value: "2028-01-01", passage: "1 January 2028." } }, "endDate"],
+    ["a notice period cut out of a longer number", { noticePeriodDays: { value: 5, passage: "5 days' written notice before 5 June 2027." } }, "noticePeriodDays"],
+    ["a payment term taken for the amount", { amount: { value: "30", passage: "The annual fee is € 26,500.00, payable within 30 days." } }, "amount"],
+    ["a year taken for the amount", { amount: { value: "2027", passage: "Fees for 2027 are fixed for 12 months." } }, "amount"],
+    ["a payment term taken for the notice period", { noticePeriodDays: { value: 30, passage: "The annual fee is € 26,500.00, payable within 30 days." } }, "noticePeriodDays"],
+    ["months turned into days", { noticePeriodDays: { value: 90, passage: "Longer terms need 3 months' notice." } }, "noticePeriodDays"],
+    ["twelve months taken for 360 days' notice", { noticePeriodDays: { value: 360, passage: "Fees for 2027 are fixed for 12 months." } }, "noticePeriodDays"],
+    ["day and month swapped", { startDate: { value: "2027-01-02", passage: "The subscription starts on 01/02/2027 and ends on 31 January 2028." } }, "startDate"],
+    ["two dates in a passage mixed into a third", { endDate: { value: "2027-01-31", passage: "The subscription starts on 01/02/2027 and ends on 31 January 2028." } }, "endDate"],
+    ["the verb may read as the month", { endDate: { value: "2027-05-05", passage: "Either party may cancel by giving 45 days' written notice before 5 June 2027." } }, "endDate"],
+    ["European read as euro", { currency: { value: "EUR", passage: "Subscription: Planning suite, from a European company" } }, "currency"],
+    ["a title that is not in its passage", { title: { value: "The annual fee", passage: "This order form was signed on 4 January 2027." } }, "title"],
+    ["a title of one letter", { title: { value: "a", passage: "Subscription: Planning suite, from a European company" } }, "title"],
+    ["a kind the passage has no word for", { kind: { value: "sow", passage: "This order form was signed on 4 January 2027." } }, "kind"],
+    ["a made-up passage", { signedOn: { value: "2027-01-04", passage: "It was signed by both parties on 4 January 2027." } }, "signedOn"],
+  ])("%s is left out and named", (_what, reading, field) => {
+    const v = verify(reading);
+    expect(v.unverified).toEqual([field]);
+    expect(kept(reading)).toEqual({});
+  });
+  it("one doubtful value does not cost the others", () => {
+    const r = {
+      signedOn: { value: "2027-01-04", passage: "This order form was signed on 4 January 2027." },
+      endDate: { value: "2030-12-31", passage: "The subscription starts on 01/02/2027 and ends on 31 January 2028." },
     };
-    expect(readingProblem(text, good)).toBeNull();
-    expect(readingProblem(text, none)).toBeNull();
+    expect(verify(r).unverified).toEqual(["endDate"]);
+    expect(kept(r)).toEqual({ signedOn: "2027-01-04" });
   });
-  it("a passage that is not in the document, or does not hold its value, is refused", () => {
-    const p = (r: Partial<ContractReading>) => readingProblem(text, { ...none, ...r });
-    expect(p({ signedOn: { value: "2027-03-03", passage: "It was signed on 3 March 2027 by both parties." } })).toContain("not in the document");
-    expect(p({ endDate: { value: "2027-12-31", passage: "The work starts on 01/04/2027 and ends on 2027-09-30." } })).toContain("does not hold that date");
-    expect(p({ amount: { value: "999999", passage: "The budget is EUR 120,000.00, invoiced per milestone." } })).toContain("does not hold that amount");
-    expect(p({ noticePeriodDays: { value: 60, passage: "Either party may end it by giving 3 months' notice." } })).toContain("notice period");
-    expect(p({ currency: { value: "GBP", passage: "The budget is EUR 120,000.00, invoiced per milestone." } })).toContain("currency");
-    expect(p({ title: { value: "Something else entirely", passage: "Statement of work: Ledger clean-up" } })).toContain("title");
+  it("a currency that contradicts the amount's own passage is dropped for the passage's; an amount without a currency next to it is dropped", () => {
+    const pounds = verify({
+      amount: { value: "26500", passage: "The annual fee is € 26,500.00, payable within 30 days." },
+      currency: { value: "GBP", passage: "The annual fee is € 26,500.00, payable within 30 days." },
+    });
+    expect(pounds.reading.currency?.value).toBe("EUR");
+    expect(pounds.unverified).toEqual(["currency"]);
+    const dollars = verifyReading("The annual fee is USD 9,000 a year.", { ...none, amount: { value: "9000", passage: "The annual fee is USD 9,000 a year." } });
+    expect(dollars.reading.amount).toBeNull();
+    expect(dollars.unverified).toEqual(["amount"]);
   });
   it("the answer's shape: values as the app stores them, a field left out counts as not found", () => {
     expect(contractReadingSchema.parse({ kind: { value: "sow", passage: "Statement of work" } })).toEqual({ ...none, kind: { value: "sow", passage: "Statement of work" } });

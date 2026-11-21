@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { kinds, type Kind } from "./agreements";
 import { isDay } from "./dates";
-import { currencies, parseAmount } from "./money";
+import { currencies, parseAmount, type Currency } from "./money";
 import type { TextSuggestion } from "./overview";
 
 /**
@@ -37,52 +37,132 @@ export const contractReadingSchema = z.object({
 export type ContractReading = z.infer<typeof contractReadingSchema>;
 
 const squash = (s: string) => s.replace(/\s+/g, " ").trim();
-const monthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
-const numbersIn = (text: string) => text.match(/\d+/g) ?? [];
+const two = (n: number | string) => String(n).padStart(2, "0");
+const MONTH_NAMES = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+const MONTH = "(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sept|sep|oct|nov|dec)";
+const monthNumber = (word: string) => MONTH_NAMES.findIndex((m) => m.startsWith(word.toLowerCase().slice(0, 3))) + 1;
+const DAY_FIRST = new RegExp(String.raw`(?<![\p{L}\p{N}])(\d{1,2})(?:st|nd|rd|th)?(?: day)?(?: of)? ${MONTH}\.?,? (\d{4})(?![\p{L}\p{N}])`, "giu");
+const MONTH_FIRST = new RegExp(String.raw`(?<![\p{L}\p{N}])${MONTH}\.? (\d{1,2})(?:st|nd|rd|th)?,? (\d{4})(?![\p{L}\p{N}])`, "giu");
+const ISO = /(?<![\p{L}\p{N}])(\d{4})-(\d{2})-(\d{2})(?![\p{L}\p{N}])/gu;
+const FIGURES = /(?<![\p{L}\p{N}./-])(\d{1,2})[/.-](\d{1,2})[/.-](\d{4}|\d{2})(?![\p{L}\p{N}])/gu;
 
-/** Whether a passage can be where this date was read: it holds the year, the day, and the month by name or number. */
-export function passageHasDate(passage: string, date: string): boolean {
-  const [y, m, d] = date.split("-").map(Number) as [number, number, number];
-  const nums = numbersIn(passage).map(Number);
-  const lower = passage.toLowerCase();
-  // The month as a whole word, in full or shortened: "may" inside "dismay" is not a month.
-  const named = new RegExp(`\\b(${monthNames[m - 1]}|${monthNames[m - 1]!.slice(0, 3)}${m === 9 ? "|sept" : ""})\\b`).test(lower);
-  // Written in figures, the day and the month are both among the numbers (the same number twice when they are equal).
-  const inFigures = d === m ? nums.filter((n) => n === d).length >= 2 : nums.includes(m);
-  return (nums.includes(y) || nums.includes(y % 100)) && nums.includes(d) && (named || inFigures);
+/**
+ * Every date a piece of text states, as YYYY-MM-DD: "4 January 2027", "the 9th of March
+ * 2027", "March 9, 2027", "2027-03-09" and "09/03/2027", which is read day first. A date
+ * is a whole expression: a loose day, month or year is not one.
+ */
+export function datesIn(text: string): string[] {
+  const out: string[] = [];
+  const add = (y: string | number, m: number, d: string | number) => {
+    const day = `${String(y).length === 2 ? `20${y}` : y}-${two(m)}-${two(d)}`;
+    if (isDay(day)) out.push(day);
+  };
+  for (const m of text.matchAll(DAY_FIRST)) add(m[3]!, monthNumber(m[2]!), m[1]!);
+  for (const m of text.matchAll(MONTH_FIRST)) add(m[3]!, monthNumber(m[1]!), m[2]!);
+  for (const m of text.matchAll(ISO)) add(m[1]!, Number(m[2]), m[3]!);
+  for (const m of text.matchAll(FIGURES)) add(m[3]!, Number(m[2]), m[1]!);
+  return [...new Set(out)];
 }
 
-/** Whether a passage holds this amount, however its thousands and decimals are written. */
-export function passageHasAmount(passage: string, amount: string): boolean {
-  const cents = parseAmount(amount);
-  return cents != null && (passage.match(/\d[\d.,]*\d|\d/g) ?? []).some((token) => parseAmount(token.replace(/[.,]$/, "")) === cents);
+const CURRENCY_WORD = String.raw`€|£|\bEUR\b|\bGBP\b|\beuros?\b|\bpounds?(?: sterling)?\b`;
+const NUMBER = String.raw`\d[\d.,]*\d|\d`;
+const MONEY = new RegExp(String.raw`(?:(${CURRENCY_WORD})\s?(${NUMBER})|(?<![\p{L}\p{N}.,])(${NUMBER})\s?(${CURRENCY_WORD}))`, "giu");
+const currencyOf = (word: string): Currency => (/€|eur/i.test(word) ? "EUR" : "GBP");
+/** No agreement is worth more than this; the same ceiling the edit form has. */
+const MAX_MINOR = 9_000_000_000_00;
+
+/** Every amount of money a piece of text states: a number with its currency right next to it. A bare number is not an amount. */
+export function moneyIn(text: string): { minor: number; currency: Currency }[] {
+  const out: { minor: number; currency: Currency }[] = [];
+  for (const m of text.matchAll(MONEY)) {
+    const minor = parseAmount((m[2] ?? m[3])!.replace(/[.,]$/, ""));
+    if (minor != null && minor <= MAX_MINOR) out.push({ minor, currency: currencyOf((m[1] ?? m[4])!) });
+  }
+  return out;
+}
+
+/** The notice periods a piece of text states in days. Months are not turned into days: three months is not always ninety days. */
+export function noticeDaysIn(text: string): number[] {
+  if (!/notice|cancel|terminat/i.test(text)) return [];
+  return [...text.matchAll(/(?<![\p{L}\p{N}.,])(\d{1,3}) (?:calendar )?days?\b/giu)].map((m) => Number(m[1]));
+}
+
+/** Whether a passage stands in the document as whole words: it does not begin or end inside a word or a number. */
+export function standsIn(text: string, passage: string): boolean {
+  const [whole, part] = [squash(text), squash(passage)];
+  const inside = (c: string | undefined) => c !== undefined && /[\p{L}\p{N}]/u.test(c);
+  for (let at = whole.indexOf(part); at >= 0; at = whole.indexOf(part, at + 1)) {
+    const [before, first, last, after] = [whole[at - 1], part[0], part.at(-1), whole[at + part.length]];
+    // Cut after "31" in "31 January" or before the 6 of "26,500": the passage would say something the document does not.
+    const cutAtStart = inside(before) && inside(first);
+    const cutAtEnd = (inside(last) && inside(after)) || (/\d/.test(last ?? "") && /[.,]/.test(after ?? "") && /\d/.test(whole[at + part.length + 1] ?? ""));
+    const cutInNumber = /\d/.test(first ?? "") && /[.,]/.test(before ?? "") && /\d/.test(whole[at - 2] ?? "");
+    if (!cutAtStart && !cutAtEnd && !cutInNumber) return true;
+  }
+  return false;
+}
+
+/** The words by which a document calls itself a kind of agreement. */
+const KIND_WORDS: Record<Kind, RegExp> = {
+  msa: /master (services? )?agreement|framework agreement|\bmsa\b/i,
+  sow: /statement of work|\bsow\b/i,
+  subscription: /subscription|licen[cs]e/i,
+  nda: /non-?disclosure|confidentiality agreement|\bnda\b/i,
+  dpa: /data processing|\bdpa\b/i,
+};
+
+/** A reading with only the values whose passage bears them out, and the fields that were given without that. */
+export interface Verified {
+  reading: ContractReading;
+  /** Fields the model gave a value for that its passage does not show; they are not offered. */
+  unverified: ReadingField[];
 }
 
 /**
- * What is wrong with a reading, or null. Every passage must stand word for word in the
- * document, and must hold the value it is given for: a value that cannot be seen in its
- * own passage is not evidence, it is a guess.
+ * Keeps of a reading only what can be seen in the document. A value stays when its
+ * passage stands in the document word for word, as whole words, and itself states that
+ * value: the date as a whole date, the amount with its currency next to it, the notice
+ * period as a number of days in a sentence about notice, the title in the passage, the
+ * kind by the words the document uses for it. An
+ * amount takes its currency from its own passage. Everything else is left out and named,
+ * so a person never sees a value next to a passage that does not say it.
  */
-export function readingProblem(text: string, r: ContractReading): string | null {
-  const whole = squash(text);
-  for (const field of readingFields) {
+export function verifyReading(text: string, r: ContractReading): Verified {
+  const reading: ContractReading = { kind: null, title: null, signedOn: null, startDate: null, endDate: null, noticePeriodDays: null, amount: null, currency: null };
+  const unverified: ReadingField[] = [];
+  const keep = <F extends ReadingField>(field: F, holds: (passage: string, value: NonNullable<ContractReading[F]>["value"]) => boolean) => {
     const f = r[field];
-    if (!f) continue;
+    if (!f) return;
     const passage = squash(f.passage);
-    if (!whole.includes(passage)) return `the passage given for ${field} is not in the document`;
-    if ((field === "signedOn" || field === "startDate" || field === "endDate") && !passageHasDate(passage, f.value as string))
-      return `the passage given for ${field} does not hold that date`;
-    if (field === "amount" && !passageHasAmount(passage, f.value as string)) return "the passage given for the amount does not hold that amount";
-    if (field === "noticePeriodDays") {
-      const n = f.value as number;
-      const nums = numbersIn(passage).map(Number);
-      // "Three months" written in figures as 3 months may be given as 90 days.
-      if (!nums.includes(n) && !(/month/i.test(passage) && n % 30 === 0 && nums.includes(n / 30))) return "the passage given for the notice period does not hold that number";
+    if (standsIn(text, passage) && holds(passage, f.value as NonNullable<ContractReading[F]>["value"])) reading[field] = { ...f, passage } as never;
+    else unverified.push(field);
+  };
+  keep("kind", (p, v) => KIND_WORDS[v].test(p));
+  keep("title", (p, v) => squash(v).length >= 3 && p.toLowerCase().includes(squash(v).toLowerCase()));
+  for (const field of ["signedOn", "startDate", "endDate"] as const) keep(field, (p, v) => datesIn(p).includes(v));
+  keep("noticePeriodDays", (p, v) => noticeDaysIn(p).includes(v));
+  keep("amount", (p, v) => moneyIn(p).some((m) => m.minor === parseAmount(v)));
+  if (reading.amount) {
+    // The amount's own passage says which currency it is in; that is the currency, whatever else was answered.
+    const cents = parseAmount(reading.amount.value);
+    const stated = [
+      ...new Set(
+        moneyIn(reading.amount.passage)
+          .filter((m) => m.minor === cents)
+          .map((m) => m.currency),
+      ),
+    ];
+    if (stated.length === 1) {
+      if (r.currency && r.currency.value !== stated[0]) unverified.push("currency");
+      reading.currency = { value: stated[0]!, passage: reading.amount.passage };
+    } else {
+      // The same number in two currencies in one passage: nothing to go on.
+      reading.amount = null;
+      unverified.push("amount");
+      if (r.currency) unverified.push("currency");
     }
-    if (field === "currency" && !(f.value === "EUR" ? /€|\beur\b|euro/i : /£|\bgbp\b|pound|sterling/i).test(passage)) return "the passage given for the currency does not name it";
-    if (field === "title" && !whole.toLowerCase().includes(squash(f.value as string).toLowerCase())) return "the title is not in the document";
-  }
-  return null;
+  } else keep("currency", (p, v) => new RegExp(v === "EUR" ? String.raw`€|\bEUR\b|\beuros?\b` : String.raw`£|\bGBP\b|\bpounds?\b|\bsterling\b`, "i").test(p));
+  return { reading, unverified: [...new Set(unverified)] };
 }
 
 // ---------- What the page shows
@@ -116,6 +196,8 @@ export interface DocumentReading {
   proposals: Proposal[];
   /** The fields the document says nothing about, by their labels. */
   notFound: string[];
+  /** Fields the AI gave a value for that its passage did not bear out; they are not shown as proposals. */
+  unverified: string[];
   /** The document was longer than the AI reads in one go; only its first part was read. */
   partly: boolean;
 }

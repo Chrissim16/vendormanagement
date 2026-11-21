@@ -27,7 +27,7 @@ test.describe("E-1 contract reading", () => {
     const { a, doc } = await setUp(request);
     await page.goto(`/agreements/${a.id}`);
     await expect(page.getByRole("region", { name: "Read from the documents" })).toHaveCount(0);
-    await page.getByRole("button", { name: `Ask the AI to read ${doc.fileName}` }).click();
+    await page.getByRole("button", { name: `Read with AI: ${doc.fileName}` }).click();
 
     const panel = page.getByRole("group", { name: `AI reading of ${doc.fileName}` });
     await expect(panel).toBeVisible();
@@ -75,7 +75,7 @@ test.describe("E-1 contract reading", () => {
   test("E-1 rejecting changes nothing, and the AI can be asked to read again", async ({ page, request }) => {
     const { a, doc } = await setUp(request);
     await page.goto(`/agreements/${a.id}`);
-    await page.getByRole("button", { name: `Ask the AI to read ${doc.fileName}` }).click();
+    await page.getByRole("button", { name: `Read with AI: ${doc.fileName}` }).click();
     const panel = page.getByRole("group", { name: `AI reading of ${doc.fileName}` });
     await panel.getByRole("button", { name: "Reject" }).click();
     await expect(page.getByText("The reading was rejected; nothing was changed")).toBeVisible();
@@ -109,7 +109,7 @@ test.describe("E-1 contract reading", () => {
       "Either party may cancel by giving 45 days' written notice.",
     ]);
     await page.goto(`/agreements/${a.id}`);
-    await page.getByRole("button", { name: `Ask the AI to read ${doc.fileName}` }).click();
+    await page.getByRole("button", { name: `Read with AI: ${doc.fileName}` }).click();
     const panel = page.getByRole("group", { name: `AI reading of ${doc.fileName}` });
     await panel.getByRole("button", { name: "Use the ticked values" }).click();
     await expect(panel.getByRole("alert")).toContainText("These values cannot be used as they are: The end date is before the start date. Nothing was changed.");
@@ -125,7 +125,7 @@ test.describe("E-1 contract reading", () => {
     await page.goto(`/agreements/${a.id}`);
     try {
       await aiMode(request, "unavailable");
-      await page.getByRole("button", { name: `Ask the AI to read ${doc.fileName}` }).click();
+      await page.getByRole("button", { name: `Read with AI: ${doc.fileName}` }).click();
       await expect(page.getByRole("alert")).toContainText(
         "The AI could not read this document just now. Nothing was changed, and everything on this page can still be done by hand.",
       );
@@ -134,7 +134,7 @@ test.describe("E-1 contract reading", () => {
       await expect(page.getByRole("dialog")).toBeVisible();
       await page.keyboard.press("Escape");
       await aiMode(request, "working");
-      await page.getByRole("button", { name: `Ask the AI to read ${doc.fileName}` }).click();
+      await page.getByRole("button", { name: `Read with AI: ${doc.fileName}` }).click();
       await expect(page.getByRole("group", { name: `AI reading of ${doc.fileName}` })).toBeVisible();
       await expect(page.getByRole("alert")).toHaveCount(0);
     } finally {
@@ -142,18 +142,44 @@ test.describe("E-1 contract reading", () => {
     }
   });
 
+  test("E-1 what the document does not say is named, and a field this kind of agreement does not have is shown as not applying", async ({ page, request }) => {
+    const vendor = await newVendor(request, "Reading vendor");
+    const msa = await newAgreement(request, vendor, { kind: "msa", status: "draft" });
+    const doc = await attachPdf(request, msa.id, "Framework terms (invented).pdf", [
+      "Master services agreement",
+      "It was signed on 4 January 2027.",
+      "Either party may end it by giving 60 days' written notice.",
+      "Longer engagements need 3 months' notice.",
+    ]);
+    await page.goto(`/agreements/${msa.id}`);
+    await page.getByRole("button", { name: `Read with AI: ${doc.fileName}` }).click();
+    const panel = page.getByRole("group", { name: `AI reading of ${doc.fileName}` });
+    const notice = panel.getByRole("row").filter({ has: page.getByRole("rowheader", { name: "Notice period", exact: true }) });
+    await expect(notice).toContainText("60 days");
+    await expect(notice).toContainText("A notice period does not apply to this kind of agreement.");
+    await expect(notice.getByRole("checkbox")).toHaveCount(0);
+    await expect(panel.getByRole("row").filter({ has: page.getByRole("rowheader", { name: "Kind", exact: true }) })).toContainText("The same");
+    await expect(panel).toContainText("The document does not say: title, start date, end or renewal date, value or budget, currency.");
+    // The one value that can be used is the signing date.
+    await expect(panel.getByRole("checkbox")).toHaveCount(1);
+    await panel.getByRole("button", { name: "Use the ticked values" }).click();
+    await expect(panel).toContainText("Accepted by mira@example.test");
+    await expect(page.getByText("4 Jan 2027").first()).toBeVisible();
+    await expect(page.getByText("accepted: signed on taken from the document").first()).toBeVisible();
+  });
+
   test("E-1 a document without readable text offers no reading and says why", async ({ page, request }) => {
     const { a } = await setUp(request, [""]);
     await page.goto(`/agreements/${a.id}`);
     await expect(page.getByText("no readable text, so it cannot be searched or read by the AI")).toBeVisible();
-    await expect(page.getByRole("button", { name: /Ask the AI to read/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Read with AI/ })).toHaveCount(0);
   });
 
   test("X-1 X-4 X-5 a reading works with the keyboard alone, passes the accessibility check in light and dark, and is ready within 2 seconds", async ({ page, request }) => {
     const { a, doc } = await setUp(request);
     const started = Date.now();
     await page.goto(`/agreements/${a.id}`);
-    const ask = page.getByRole("button", { name: `Ask the AI to read ${doc.fileName}` });
+    const ask = page.getByRole("button", { name: `Read with AI: ${doc.fileName}` });
     await expect(ask).toBeVisible();
     expect(Date.now() - started).toBeLessThan(2000);
     await ask.focus();

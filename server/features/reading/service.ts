@@ -9,6 +9,7 @@ import {
   readingLabels,
   readingReviewSchema,
   targetOf,
+  verifyReading,
   type ContractReading,
   type DocumentReading,
   type Proposal,
@@ -19,10 +20,11 @@ import type { User } from "../../../shared/types";
 import { ask, recordSuggestion, replaced, reviewSuggestion } from "../../ai";
 import { contractFields } from "../../ai/prompts/contract-fields";
 import { audit } from "../../platform/audit";
+import { ZodError } from "zod";
 import { AppError, notFound } from "../../platform/errors";
 import type { AiPort, Db, Queryable } from "../../platform/ports/types";
 import { PART_BREAK, partName } from "../../platform/text";
-import { changeAgreement, documentText, getAgreement, setReading } from "../agreements/service";
+import { changeAgreement, documentText, getAgreement, lockDocument, setReading } from "../agreements/service";
 
 /**
  * Contract reading (E-1): the AI proposes values for an agreement's fields from a document
@@ -41,6 +43,8 @@ const SUBJECT = "document";
 const words = (s: SuggestionStatus) => suggestionStatusLabels[s].toLowerCase();
 const currencyWords: Record<Currency, string> = { EUR: "Euro (EUR)", GBP: "Pound sterling (GBP)" };
 const squash = (s: string) => s.replace(/\s+/g, " ").trim();
+/** The part of a document's text that is read: its first stretch, with a blank line where a page or sheet ends. */
+const readText = (text: string) => text.slice(0, MAX_READING_CHARS).split(PART_BREAK).join("\n\n");
 
 async function document(db: Queryable, id: string) {
   const doc = await documentText(db, id);
@@ -82,11 +86,13 @@ function sides(field: ReadingField, a: AgreementDetail, r: ContractReading) {
     case "amount": {
       const now = a.kind === "sow" ? a.budgetMinor : a.kind === "subscription" ? a.annualValueMinor : null;
       const cents = parseAmount(r.amount!.value);
+      // An amount is the number and its currency together: the same number in another currency is another amount.
+      const stored = now == null ? null : `${now} ${a.currency}`;
       return {
         current: now == null ? "Not filled in" : formatMoney(now, a.currency),
         proposed: cents == null ? r.amount!.value : formatMoney(cents, currency),
-        stored: now,
-        value: cents as unknown,
+        stored,
+        value: `${cents} ${currency}` as unknown,
       };
     }
     case "currency":
@@ -98,19 +104,31 @@ function build(
   doc: { id: string; fileName: string; text: string | null },
   row: typeof aiSuggestions.$inferSelect,
   a: AgreementDetail,
-): DocumentReading & { values: Map<ReadingField, { key: string; value: unknown }> } {
-  const r = row.output as ContractReading;
+): DocumentReading & { values: Map<ReadingField, Record<string, unknown>> } {
+  const answered = row.output as ContractReading;
+  // The model's answer is kept as it was given; what is shown and can be used is only what the document bears out.
+  const { reading: r, unverified } = verifyReading(readText(doc.text ?? ""), answered);
   const proposals: Proposal[] = [];
-  const values = new Map<ReadingField, { key: string; value: unknown }>();
+  /** What using a field writes to the agreement, by the agreement's own field names. */
+  const values = new Map<ReadingField, Record<string, unknown>>();
+  const holdsAmount = (a.kind === "sow" ? a.budgetMinor : a.kind === "subscription" ? a.annualValueMinor : null) != null;
   for (const field of readingFields) {
     const read = r[field];
     if (!read) continue;
     const target = targetOf(field, a.kind);
     const s = sides(field, a, r);
     const same = s.stored === s.value;
+    let why = "why" in target ? target.why : null;
+    // The currency says what the amount is in. Changing it by itself would turn the amount the agreement holds into another amount.
+    if (field === "currency" && !same && holdsAmount && !(r.amount && "key" in targetOf("amount", a.kind)))
+      why = `The agreement's amount is in ${a.currency}. Changing only the currency would change what that amount means; change both in the edit form.`;
     // The kind is only compared: when it is the same there is nothing to say against it.
-    const state = same ? "same" : "why" in target ? "not_applicable" : "differs";
-    if (state === "differs" && "key" in target) values.set(field, { key: target.key, value: s.value });
+    const state = same ? "same" : why ? "not_applicable" : "differs";
+    if (state === "differs" && "key" in target) {
+      const cents = field === "amount" ? parseAmount(r.amount!.value) : null;
+      // An amount is saved with its currency, and a currency with its amount, so the two can never part.
+      values.set(field, field === "amount" ? { [target.key]: cents, currency: r.currency!.value } : { [target.key]: s.value });
+    }
     proposals.push({
       field,
       label: "key" in target ? target.label : readingLabels[field],
@@ -119,7 +137,7 @@ function build(
       passage: read.passage,
       where: whereIs(doc, read.passage),
       state,
-      why: state === "not_applicable" && "why" in target ? target.why : null,
+      why: state === "not_applicable" ? why : null,
     });
   }
   return {
@@ -134,7 +152,8 @@ function build(
       reviewedAt: row.reviewedAt?.toISOString() ?? null,
     },
     proposals,
-    notFound: readingFields.filter((f) => !r[f]).map((f) => readingLabels[f]),
+    notFound: readingFields.filter((f) => !answered[f] && !r[f]).map((f) => readingLabels[f]),
+    unverified: unverified.filter((f) => !r[f]).map((f) => readingLabels[f]),
     partly: (doc.text ?? "").length > MAX_READING_CHARS,
     values,
   };
@@ -159,10 +178,11 @@ export async function readDocument(ctx: ReadingContext, documentId: string, by: 
   if (doc.text == null) throw new AppError(409, "not_read_yet", "The app has not read this document's text yet. Try again in a moment.");
   if (!doc.text.trim())
     throw new AppError(409, "no_text", "This document has no text the app can read (a scan, for example), so the AI cannot read it either. Fill the fields in by hand.");
-  // Parts are named in the text itself, so the model sees where a page ends.
-  const text = doc.text.slice(0, MAX_READING_CHARS).split(PART_BREAK).join("\n\n");
+  const text = readText(doc.text);
   const { output, model } = await ask(ctx.ai, contractFields, { fileName: doc.fileName, text }, "read this document");
   return ctx.db.transaction(async (tx) => {
+    // One at a time per document: a second reading, or a review, waits here and then sees what this one did.
+    await lockDocument(tx, documentId);
     const now = await document(tx, documentId);
     const a = await getAgreement(tx, now.agreementId, ctx.today());
     const before = await current(tx, now);
@@ -176,7 +196,7 @@ export async function readDocument(ctx: ReadingContext, documentId: string, by: 
       entityType: "agreement",
       entityId: a.id,
       summary: `${a.vendorName} · ${a.title}`,
-      changes: { [`AI reading of ${doc.fileName}`]: { from: before ? words(before.status === "proposed" ? "rejected" : before.status) : null, to: "asked for" } },
+      changes: { [`AI reading of ${doc.fileName}`]: { from: null, to: before ? "asked for again" : "asked for" } },
     });
     return shown(build(now, row as typeof aiSuggestions.$inferSelect, a));
   });
@@ -190,6 +210,7 @@ export async function reviewReading(ctx: ReadingContext, documentId: string, inp
   const review = readingReviewSchema.parse(input);
   await document(ctx.db, documentId);
   return ctx.db.transaction(async (tx) => {
+    await lockDocument(tx, documentId);
     const doc = await document(tx, documentId);
     const a = await getAgreement(tx, doc.agreementId, ctx.today());
     const row = await current(tx, doc);
@@ -200,6 +221,8 @@ export async function reviewReading(ctx: ReadingContext, documentId: string, inp
       throw new AppError(409, "already_reviewed", "Someone has already used or rejected this reading. Ask the AI to read the document again to start over.");
     const reading = build(doc, row, a);
     let status: Exclude<SuggestionStatus, "proposed"> = "rejected";
+    /** The labels of the values that were taken over, for the history: afterwards the page can only compare with the agreement as it has become. */
+    let taken: string[] = [];
     if (review.action === "apply") {
       const fields = [...new Set(review.fields)];
       const unusable = fields.filter((f) => !reading.values.has(f));
@@ -209,21 +232,22 @@ export async function reviewReading(ctx: ReadingContext, documentId: string, inp
           "not_usable",
           `${unusable.map((f) => readingLabels[f]).join(", ")} cannot be used: the agreement already holds it, or this kind of agreement has no such field. Nothing was changed.`,
         );
-      if (fields.includes("amount") && reading.values.has("currency") && !fields.includes("currency"))
-        throw new AppError(
-          400,
-          "currency_needed",
-          "The amount in the document is in another currency than the agreement. Tick the currency as well, or leave the amount out. Nothing was changed.",
-        );
+      // The currency goes with the amount it was read with, whichever of the two was ticked.
+      const pair = reading.values.has("amount") && reading.values.has("currency");
+      if (pair && fields.includes("amount") !== fields.includes("currency"))
+        throw new AppError(400, "currency_needed", "The amount and its currency in the document belong together: tick both, or neither. Nothing was changed.");
       try {
-        await changeAgreement(tx, a.id, Object.fromEntries(fields.map((f) => [reading.values.get(f)!.key, reading.values.get(f)!.value])), by, ctx.today());
+        await changeAgreement(tx, a.id, Object.assign({}, ...fields.map((f) => reading.values.get(f)!)), by, ctx.today());
       } catch (e) {
         if (e instanceof AppError && e.fields)
           throw new AppError(400, "invalid", `These values cannot be used as they are: ${Object.values(e.fields).join(" ")} Nothing was changed.`);
+        if (e instanceof ZodError)
+          throw new AppError(400, "invalid", "These values cannot be used as they are: one of them is not a value this agreement can hold. Nothing was changed.");
         throw e;
       }
       // Accepted when everything the document says differently was taken over; edited when only part of it was.
       status = fields.length === reading.values.size ? "accepted" : "edited";
+      taken = reading.proposals.filter((p) => fields.includes(p.field)).map((p) => p.label);
     }
     await reviewSuggestion(tx, row.id, status, by.email, ctx.now());
     await audit(tx, {
@@ -232,7 +256,9 @@ export async function reviewReading(ctx: ReadingContext, documentId: string, inp
       entityType: "agreement",
       entityId: a.id,
       summary: `${a.vendorName} · ${a.title}`,
-      changes: { [`AI reading of ${doc.fileName}`]: { from: words("proposed"), to: words(status) } },
+      changes: {
+        [`AI reading of ${doc.fileName}`]: { from: words("proposed"), to: `${words(status)}${taken.length ? `: ${taken.join(", ").toLowerCase()} taken from the document` : ""}` },
+      },
     });
     const after = (await current(tx, doc))!;
     return shown(build(doc, after, await getAgreement(tx, a.id, ctx.today())));

@@ -168,7 +168,9 @@ of the agreement's page, under the heading "Read from the documents". It is a ta
 field, what the agreement holds, what the document says with "The same" or "Differs" under
 it, and the passage word for word with its page behind a thin rule. A value that differs
 has a tick box in front, ticked to begin with; the primary button "Use the ticked values"
-is the only thing that saves, and the line next to it says so. Once used or rejected, the
+is the only thing that saves, and the line next to it says so. Under the table one line
+names what the document does not say, and another what the AI gave but its passage did
+not bear out, which is left out. Once used or rejected, the
 panel shrinks to one quiet line on the sunken fill that says what was done, by whom and
 when, with the table behind "What it read" and a "Read again" button. The button that
 asks for a reading sits on the document's own row; when the reading arrives the page

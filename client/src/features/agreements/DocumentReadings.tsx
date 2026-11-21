@@ -25,7 +25,10 @@ function Reading({ r, onRead, reading }: { r: DocumentReading; onRead: () => voi
   const usable = r.proposals.filter((p) => p.state === "differs").map((p) => p.field);
   const [ticked, setTicked] = useState<ReadingField[]>(usable);
   // A new reading starts with everything that differs ticked.
-  useEffect(() => setTicked(usable), [r.suggestion.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    setTicked(usable);
+    review.reset();
+  }, [r.suggestion.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const open = r.suggestion.status === "proposed";
   const review = useMutation({
     mutationFn: (body: { action: "apply"; fields: ReadingField[] } | { action: "reject" }) =>
@@ -36,6 +39,8 @@ function Reading({ r, onRead, reading }: { r: DocumentReading; onRead: () => voi
     },
   });
   const busy = review.isPending;
+  // Only what can still be used: a value the agreement has come to hold in the meantime has no box any more, and is not sent.
+  const chosen = ticked.filter((f) => usable.includes(f));
   const s = r.suggestion;
   const table = (
     <table aria-label={`Values read from ${r.fileName}`} className="w-full border-collapse text-left">
@@ -96,6 +101,11 @@ function Reading({ r, onRead, reading }: { r: DocumentReading; onRead: () => voi
     <>
       {r.proposals.length === 0 && <p>The AI found none of the fields in this document.</p>}
       {r.notFound.length > 0 && r.proposals.length > 0 && <p className="text-[13px] text-ink-2">The document does not say: {r.notFound.join(", ").toLowerCase()}.</p>}
+      {r.unverified.length > 0 && (
+        <p className="text-[13px] text-ink-2">
+          Left out, because the passage the AI gave does not state the value: {r.unverified.join(", ").toLowerCase()}. Look these up in the document yourself.
+        </p>
+      )}
       {r.partly && <p className="text-[13px] text-ink-2">This is a long document; the AI read only its first part.</p>}
     </>
   );
@@ -127,6 +137,7 @@ function Reading({ r, onRead, reading }: { r: DocumentReading; onRead: () => voi
         <details>
           <summary className="cursor-pointer text-[13px] font-medium text-accent-ink">What it read</summary>
           <div className="mt-2 flex flex-col gap-2">
+            <p className="text-[13px] text-ink-2">The document compared with the agreement as it is now. Which values were taken over is in the history.</p>
             {table}
             {notes}
           </div>
@@ -145,8 +156,7 @@ function Reading({ r, onRead, reading }: { r: DocumentReading; onRead: () => voi
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <AiLabel>AI proposal</AiLabel>
         <p className="min-w-0 flex-1 text-[13px] text-ink-2">
-          Read by the AI on {formatDateTime(s.createdAt)} from <span className="font-medium text-ink">{r.fileName}</span>.{" "}
-          <span className="font-semibold text-ink">{suggestionStatusLabels[s.status]}.</span>
+          Read by the AI on {formatDateTime(s.createdAt)} from <span className="font-medium text-ink">{r.fileName}</span>.
         </p>
         <Pill>{suggestionStatusLabels[s.status]}</Pill>
       </div>
@@ -157,9 +167,9 @@ function Reading({ r, onRead, reading }: { r: DocumentReading; onRead: () => voi
         {usable.length > 0 && (
           <Button
             variant="primary"
-            onClick={() => !busy && ticked.length > 0 && review.mutate({ action: "apply", fields: ticked })}
-            aria-disabled={busy || ticked.length === 0 || undefined}
-            className={ticked.length === 0 ? "opacity-50" : undefined}
+            onClick={() => !busy && chosen.length > 0 && review.mutate({ action: "apply", fields: chosen })}
+            aria-disabled={busy || chosen.length === 0 || undefined}
+            className={chosen.length === 0 ? "opacity-50" : undefined}
           >
             Use the ticked values
           </Button>
@@ -171,7 +181,7 @@ function Reading({ r, onRead, reading }: { r: DocumentReading; onRead: () => voi
         <p className="min-w-0 flex-1 text-[13px] text-ink-2">
           {usable.length === 0
             ? "The document says nothing that differs from the agreement, so there is nothing to take over."
-            : ticked.length === 0
+            : chosen.length === 0
               ? "Tick at least one value to use."
               : "Nothing changes on the agreement until you press Use the ticked values. Check each value against its passage first."}
         </p>

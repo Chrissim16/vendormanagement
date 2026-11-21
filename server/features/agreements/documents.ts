@@ -64,10 +64,20 @@ export async function readMissingText(db: Queryable, storage: StoragePort): Prom
 export const documentText = async (db: Queryable, id: string) =>
   (
     await db
-      .select({ id: documents.id, fileName: documents.fileName, agreementId: documents.agreementId, text: documents.extractedText, readingSuggestionId: documents.readingSuggestionId })
+      .select({
+        id: documents.id,
+        fileName: documents.fileName,
+        agreementId: documents.agreementId,
+        text: documents.extractedText,
+        readingSuggestionId: documents.readingSuggestionId,
+      })
       .from(documents)
       .where(and(eq(documents.id, id), isNotNull(documents.agreementId)))
   )[0];
 
 /** Makes a suggestion the document's current reading (E-1). Recorded in the agreement's history by the caller. */
-export const setReading = (tx: Queryable, documentId: string, suggestionId: string) => tx.update(documents).set({ readingSuggestionId: suggestionId }).where(eq(documents.id, documentId));
+export const setReading = (tx: Queryable, documentId: string, suggestionId: string) =>
+  tx.update(documents).set({ readingSuggestionId: suggestionId }).where(eq(documents.id, documentId));
+
+/** Holds a document for the rest of the transaction, so that two things about it (two readings, a reading and its review) happen one after the other. */
+export const lockDocument = (tx: Queryable, id: string) => tx.execute(sql`select 1 from documents where id = ${id} for update`);

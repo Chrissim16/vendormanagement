@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import { aiSuggestions } from "../../../db/schema";
 import {
   agreementSchema,
   checkAgreement,
@@ -115,39 +116,37 @@ export const updateAgreement = (db: Db, id: string, input: unknown, by: User, to
 /** Changes an agreement inside a transaction that is already open, for a change that must stand or fall with something else. */
 export async function changeAgreement(tx: Tx, id: string, input: unknown, by: User, today: Day): Promise<AgreementDetail> {
   const body = (input ?? {}) as Record<string, unknown>;
-  {
-    await tx.execute(sql`select 1 from agreements where id = ${id} for update`);
-    const row = await repo.getAgreement(tx, id);
-    if (!row) throw notFound("That agreement");
-    const current = row.agreement;
-    for (const fixed of ["vendorId", "kind"] as const) {
-      if (fixed in body && body[fixed] !== current[fixed]) failFields({ [fixed]: "This cannot be changed once the agreement exists. Add a new agreement instead." });
-    }
-    const { errors, value } = checkAgreement(agreementSchema.parse({ ...current, ...body }));
-    if (value.status === "active" && current.status !== "active") {
-      // Same lock as offboarding takes, so the two cannot both go through.
-      await tx.execute(sql`select 1 from vendors where id = ${current.vendorId} for update`);
-      const vendor = await repo.getVendorBrief(tx, current.vendorId);
-      if (vendor?.status === "offboarded") failFields({ status: "This vendor is offboarded, so its agreements cannot be made active." });
-    }
-    if (Object.keys(errors).length) failFields(errors);
-    if (value.kind === "sow") {
-      const sowErrors = await checkSowEdit(tx, id, current, value);
-      if (Object.keys(sowErrors).length) failFields(sowErrors);
-    }
-    // Invoices are in the agreement's currency; changing it would silently relabel what was paid.
-    if (value.currency !== current.currency && (await invoicedByAgreement(tx, [id])).has(id))
-      failFields({ currency: `This agreement already has invoices in ${current.currency}. Remove them before changing the currency.` });
-    await checkLinks(tx, value, { owner: value.ownerUserId !== current.ownerUserId, parent: value.parentMsaId !== current.parentMsaId });
-    if (value.parentMsaId === id) failFields({ parentMsaId: "An agreement cannot sit under itself." });
-    const { vendorId: _v, ...fields } = value;
-    const changes = diff(current as unknown as Record<string, unknown>, fields);
-    if (Object.keys(changes).length) {
-      await repo.updateAgreement(tx, id, fields, by.email);
-      await audit(tx, { userEmail: by.email, action: "update", entityType: "agreement", entityId: id, summary: `${row.vendorName} · ${value.title}`, changes });
-    }
-    return getAgreement(tx, id, today);
+  await tx.execute(sql`select 1 from agreements where id = ${id} for update`);
+  const row = await repo.getAgreement(tx, id);
+  if (!row) throw notFound("That agreement");
+  const current = row.agreement;
+  for (const fixed of ["vendorId", "kind"] as const) {
+    if (fixed in body && body[fixed] !== current[fixed]) failFields({ [fixed]: "This cannot be changed once the agreement exists. Add a new agreement instead." });
   }
+  const { errors, value } = checkAgreement(agreementSchema.parse({ ...current, ...body }));
+  if (value.status === "active" && current.status !== "active") {
+    // Same lock as offboarding takes, so the two cannot both go through.
+    await tx.execute(sql`select 1 from vendors where id = ${current.vendorId} for update`);
+    const vendor = await repo.getVendorBrief(tx, current.vendorId);
+    if (vendor?.status === "offboarded") failFields({ status: "This vendor is offboarded, so its agreements cannot be made active." });
+  }
+  if (Object.keys(errors).length) failFields(errors);
+  if (value.kind === "sow") {
+    const sowErrors = await checkSowEdit(tx, id, current, value);
+    if (Object.keys(sowErrors).length) failFields(sowErrors);
+  }
+  // Invoices are in the agreement's currency; changing it would silently relabel what was paid.
+  if (value.currency !== current.currency && (await invoicedByAgreement(tx, [id])).has(id))
+    failFields({ currency: `This agreement already has invoices in ${current.currency}. Remove them before changing the currency.` });
+  await checkLinks(tx, value, { owner: value.ownerUserId !== current.ownerUserId, parent: value.parentMsaId !== current.parentMsaId });
+  if (value.parentMsaId === id) failFields({ parentMsaId: "An agreement cannot sit under itself." });
+  const { vendorId: _v, ...fields } = value;
+  const changes = diff(current as unknown as Record<string, unknown>, fields);
+  if (Object.keys(changes).length) {
+    await repo.updateAgreement(tx, id, fields, by.email);
+    await audit(tx, { userEmail: by.email, action: "update", entityType: "agreement", entityId: id, summary: `${row.vendorName} · ${value.title}`, changes });
+  }
+  return getAgreement(tx, id, today);
 }
 
 /** Records what was decided for the current term of a subscription (A-6). */
@@ -330,6 +329,12 @@ export async function removeDocument(db: Db, storage: StoragePort, id: string, b
     // A document of an RFP response is removed from the RFP, where its own history is kept.
     if (!doc?.agreementId) throw notFound("That document");
     const row = await repo.getAgreement(tx, doc.agreementId);
+    // A reading of this document that nobody had looked at is closed with it, so nothing stays waiting.
+    if (doc.readingSuggestionId)
+      await tx
+        .update(aiSuggestions)
+        .set({ status: "rejected", reviewedBy: "system", reviewedAt: new Date() })
+        .where(and(eq(aiSuggestions.id, doc.readingSuggestionId), eq(aiSuggestions.status, "proposed")));
     await repo.deleteDocument(tx, id);
     await audit(tx, {
       userEmail: by.email,
@@ -349,4 +354,4 @@ export async function removeDocument(db: Db, storage: StoragePort, id: string, b
 export const findSameAgreement = repo.findSame;
 
 export { documentsWithText, readMissingText } from "./documents";
-export { documentText, setReading } from "./documents";
+export { documentText, lockDocument, setReading } from "./documents";

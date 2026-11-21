@@ -160,7 +160,7 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 **E-1 Extraction.** After uploading a contract document, a member can ask the AI to propose field values (kind, title, dates, notice period, value or budget, currency). Each proposed value shows the passage it came from, and nothing is saved until the member confirms.
 - The proposal is shown on the agreement's page next to what the agreement holds now, field by field, with the passage word for word and the page it stands on.
 - The member ticks the values to use; only those are saved, through the same rules as the edit form. If any is refused, nothing is saved and the page says why.
-- A value is proposed only when the document states it and the passage shown contains it. What the document does not say is listed as not found.
+- A value is proposed only when the document states it and the passage shown contains it. What the document does not say is listed as not found; a value the AI gave without a passage that states it is left out and listed as left out.
 - The kind is compared but never changed. A field the agreement's kind does not have is shown as not applying.
 - The proposal can be rejected, and the AI can be asked to read again. What was done with a proposal, by whom and when, stays visible and is in the agreement's history.
 - A document without readable text cannot be read by the AI, and the page says so.
