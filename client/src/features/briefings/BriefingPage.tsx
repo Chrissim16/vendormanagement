@@ -29,8 +29,8 @@ function TextForm({ briefing: b, onSaved }: { briefing: Briefing; onSaved: (b: B
       onSaved(next);
     },
     check: (v) => ({
-      summary: v.summary.trim().length > 2000 ? "Keep the summary under 2000 characters." : "",
-      talkingPoints: v.talkingPoints.trim().length > 4000 ? "Keep the talking points under 4000 characters." : "",
+      summary: v.summary.trim().length > 2000 ? "The summary is at most 2,000 characters." : "",
+      talkingPoints: v.talkingPoints.trim().length > 4000 ? "The talking points are at most 4,000 characters." : "",
     }),
   });
   // When the saved text changes underneath (the AI's text was taken over), show that text.
@@ -38,7 +38,15 @@ function TextForm({ briefing: b, onSaved }: { briefing: Briefing; onSaved: (b: B
   useEffect(() => patch({ summary: b.summary ?? "", talkingPoints: b.talkingPoints ?? "" }), [b.summary, b.talkingPoints]); // eslint-disable-line react-hooks/exhaustive-deps
   const changed = form.values.summary.trim() !== (b.summary ?? "") || form.values.talkingPoints.trim() !== (b.talkingPoints ?? "");
   return (
-    <form onSubmit={form.submit} noValidate className="flex flex-col gap-4">
+    <form
+      onSubmit={(e) => {
+        // Nothing to save: the button is only dimmed, so it must not send an empty change either.
+        if (!changed) return e.preventDefault();
+        void form.submit(e);
+      }}
+      noValidate
+      className="flex flex-col gap-4"
+    >
       <div className="grid grid-cols-2 gap-4">
         <TextAreaField
           form={form}
@@ -319,13 +327,18 @@ export function BriefingPage() {
     onSuccess: set,
   });
   const review = useMutation({
-    mutationFn: (v: { action: "accept" | "reject"; at: DOMRect | null }) => api<Briefing>(`/briefings/${id}/suggestion/review`, { body: { action: v.action } }),
+    mutationFn: (v: { action: "accept" | "reject"; at: DOMRect | null }) =>
+      api<Briefing>(`/briefings/${id}/suggestion/review`, { body: { action: v.action, suggestionId: q.data!.suggestion!.id } }),
     onSuccess: async (b, v) => {
       if (v.action === "accept") burst(v.at, 9);
       toast.success(v.action === "accept" ? "The AI's text is now the briefing's text" : "AI text rejected");
       await set(b);
     },
-    onError: (e) => toast.error(messageOf(e)),
+    onError: async (e) => {
+      toast.error(messageOf(e));
+      // Someone else may have asked the AI again: show what is there now.
+      await q.refetch();
+    },
   });
   const remove = useMutation({
     mutationFn: () => api(`/briefings/${id}`, { method: "DELETE" }),

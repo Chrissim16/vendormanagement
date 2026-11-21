@@ -306,6 +306,7 @@ describe("A-7 warnings", () => {
     expect(everything.filter((w) => w.type.startsWith("risk_")).map((w) => [w.type, w.title])).toEqual([
       ["risk_open_milestones", "Quillon Consulting · SOW 02 Close process review"],
       ["risk_budget_trend", "Quillon Consulting · SOW 04 Payment controls"],
+      ["risk_budget_trend", "Bluefinch Systems · SOW 07 Ledger migration"],
       ["risk_metric_worsening", "Mossgate IT · SLA breaches"],
     ]);
     const list = everything.filter((w) => !w.type.startsWith("risk_"));

@@ -446,9 +446,14 @@ export async function figuresFor(ctx: PerformanceContext, vendorId: string, mont
   return { hasBoard: true, months: out };
 }
 
-/** The figures of every scored vendor with a board for the given months (oldest first), judged by today's targets. */
-export async function figuresOfAll(ctx: PerformanceContext, months: Month[]): Promise<{ vendorId: string; vendorName: string; months: MonthMetrics[] }[]> {
-  const links = (await repo.listLinks(ctx.db)).filter((l) => l.scoringEnabled);
+/**
+ * The figures of every scored vendor in use (active or on hold) with a board, or of just the given
+ * vendors, for the given months (oldest first), judged by today's targets.
+ */
+export async function figuresOfAll(ctx: PerformanceContext, months: Month[], vendorIds?: string[]): Promise<{ vendorId: string; vendorName: string; months: MonthMetrics[] }[]> {
+  const links = (await repo.listLinks(ctx.db)).filter(
+    (l) => l.scoringEnabled && (l.vendorStatus === "active" || l.vendorStatus === "on_hold") && (!vendorIds || vendorIds.includes(l.link.vendorId)),
+  );
   if (!links.length) return [];
   const ids = links.map((l) => l.link.id);
   const now = ctx.now();

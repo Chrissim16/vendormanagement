@@ -25,14 +25,24 @@ function SummaryForm({ report, month, onSaved }: { report: ManagementReport; mon
       toast.success("Summary saved");
       onSaved(r);
     },
-    check: (v) => ({ summary: v.summary.trim().length > 1500 ? "Keep the summary under 1500 characters." : "" }),
+    check: (v) => ({ summary: v.summary.trim().length > 1500 ? "The summary is at most 1,500 characters." : "" }),
   });
   // When the saved text changes underneath (the AI's text was taken over), show that text.
   const { patch } = form;
   useEffect(() => patch({ summary: report.summary ?? "" }), [report.summary]); // eslint-disable-line react-hooks/exhaustive-deps
   const changed = form.values.summary.trim() !== (report.summary ?? "");
+  const outdated = report.summaryOutdated;
+  const canSave = changed || outdated;
   return (
-    <form onSubmit={form.submit} noValidate className="flex flex-col gap-3">
+    <form
+      onSubmit={(e) => {
+        // Nothing to save: the button is only dimmed, so it must not send an empty change either.
+        if (!canSave) return e.preventDefault();
+        void form.submit(e);
+      }}
+      noValidate
+      className="flex flex-col gap-3"
+    >
       <TextAreaField
         form={form}
         name="summary"
@@ -43,9 +53,18 @@ function SummaryForm({ report, month, onSaved }: { report: ManagementReport; mon
         placeholder="A few sentences on what matters this month. Leave empty for a report without a summary."
       />
       {form.problem && <ErrorState message={form.problem} />}
+      {outdated && (
+        <p role="status" className="flex flex-wrap items-center gap-3 rounded-2xl bg-sunk px-5 py-3.5">
+          <Pill tone="warn">Figures changed</Pill>
+          <span className="min-w-0 flex-1">
+            This month's figures have changed since the summary was saved, so it may quote amounts that are no longer right. Read it against the figures below, correct it if
+            needed, and save it again. Until then the PDF says under the summary that the figures have changed.
+          </span>
+        </p>
+      )}
       <div className="flex items-center gap-3">
-        <Button type="submit" aria-disabled={form.busy || !changed || undefined} className={!changed ? "opacity-50" : undefined}>
-          {form.busy ? "Saving" : "Save summary"}
+        <Button type="submit" aria-disabled={form.busy || !canSave || undefined} className={!canSave ? "opacity-50" : undefined}>
+          {form.busy ? "Saving" : outdated && !changed ? "Summary still holds" : "Save summary"}
         </Button>
         <p className="text-[13px] text-ink-2">
           {changed
@@ -65,19 +84,24 @@ export function ReportPage() {
   const today = useToday();
   const current = monthOf(today);
   const [url, setUrl] = useUrlState({ month: "" });
-  const month = isMonth(url.month) && url.month <= current && url.month >= addMonth(current, -24) ? url.month : addMonth(current, -1);
+  const month = isMonth(url.month) && url.month <= current && url.month >= addMonth(current, -23) ? url.month : addMonth(current, -1);
   const key = ["report", month];
   const q = useQuery({ queryKey: key, queryFn: () => api<ManagementReport>("/report", { query: { month } }) });
   const set = (r: ManagementReport) => qc.setQueryData(key, r);
   const ask = useMutation({ mutationFn: () => api<ManagementReport>("/report/suggestion", { method: "POST", query: { month } }), onSuccess: set });
   const review = useMutation({
-    mutationFn: (v: { action: "accept" | "reject"; at: DOMRect | null }) => api<ManagementReport>("/report/suggestion/review", { query: { month }, body: { action: v.action } }),
+    mutationFn: (v: { action: "accept" | "reject"; at: DOMRect | null }) =>
+      api<ManagementReport>("/report/suggestion/review", { query: { month }, body: { action: v.action, suggestionId: q.data!.suggestion!.id } }),
     onSuccess: (r, v) => {
       if (v.action === "accept") burst(v.at, 9);
       toast.success(v.action === "accept" ? "The AI's summary is now the report's summary" : "AI summary rejected");
       set(r);
     },
-    onError: (e) => toast.error(messageOf(e)),
+    onError: async (e) => {
+      toast.error(messageOf(e));
+      // Someone else may have asked the AI again: show what is there now.
+      await q.refetch();
+    },
   });
   const r = q.data;
   const d = r?.data;
@@ -176,7 +200,7 @@ export function ReportPage() {
                   </Link>,
                   formatDay(e.endDate),
                   <span key="d" className="text-ink-2">
-                    {e.daysLeft === 0 ? "that day" : `${e.daysLeft} ${e.daysLeft === 1 ? "day" : "days"} later`}
+                    {e.daysLeft === 0 ? "on that day" : `${e.daysLeft} ${e.daysLeft === 1 ? "day" : "days"} after ${formatDay(d!.asAt)}`}
                   </span>,
                   e.noticeDeadline ? formatDay(e.noticeDeadline) : "–",
                 ])}

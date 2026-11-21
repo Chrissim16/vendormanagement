@@ -107,10 +107,20 @@ export interface TextSuggestion<T> {
   /** The AI's own text, never changed. */
   output: T;
 }
-export const suggestionReviewSchema = z.object({ action: z.enum(["accept", "reject"]) });
+/** A review names the suggestion the person was looking at, so a text that was replaced in the meantime is never accepted unread. */
+export const suggestionReviewSchema = z.object({ action: z.enum(["accept", "reject"]), suggestionId: z.string().uuid() });
 
 const longText = (max: number, what: string) =>
-  z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? null : v), z.string().trim().max(max, `Keep ${what} under ${max} characters.`).nullable()).default(null);
+  z
+    .preprocess(
+      (v) => (typeof v === "string" && v.trim() === "" ? null : v),
+      z
+        .string()
+        .trim()
+        .max(max, `${what} is at most ${max.toLocaleString("en-GB")} characters.`)
+        .nullable(),
+    )
+    .default(null);
 
 // ---------- Monthly management report (D-2)
 
@@ -156,10 +166,12 @@ export interface ManagementReport {
   /** The summary as a person left it; this is what the PDF prints. */
   summary: string | null;
   suggestion: TextSuggestion<{ summary: string }> | null;
+  /** The figures have changed since the summary was saved, so what it says may no longer match the tables under it. */
+  summaryOutdated: boolean;
   updatedAt: string | null;
   updatedBy: string | null;
 }
-export const reportSaveSchema = z.object({ summary: longText(1500, "the summary") });
+export const reportSaveSchema = z.object({ summary: longText(1500, "The summary") });
 
 // ---------- Vendor briefing (B-1)
 
@@ -233,7 +245,7 @@ export interface Briefing extends BriefingHeader {
   updatedAt: string;
   updatedBy: string | null;
 }
-export const briefingSaveSchema = z.object({ summary: longText(2000, "the summary"), talkingPoints: longText(4000, "the talking points") });
+export const briefingSaveSchema = z.object({ summary: longText(2000, "The summary"), talkingPoints: longText(4000, "The list of talking points") });
 
 /** Talking points are kept as text, one per line; a leading dash or bullet a person typed is dropped. */
 export const pointsOf = (text: string | null): string[] =>

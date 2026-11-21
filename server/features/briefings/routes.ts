@@ -23,7 +23,9 @@ export function briefingRoutes(ctx: OverviewContext) {
     const b = await service.getBriefing(ctx, id.parse(req.params.id));
     const name = `${b.vendorName} briefing ${b.asAt}`.replace(/[^A-Za-z0-9 ._-]/g, "").replace(/\s+/g, " ");
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${name}.pdf"`);
+    // The plain name for old software, and the full name, accents included, for everything else.
+    const full = encodeURIComponent(`${b.vendorName} briefing ${b.asAt}`.replace(/[\\/:*?"<>|]/g, " "));
+    res.setHeader("Content-Disposition", `attachment; filename="${name}.pdf"; filename*=UTF-8''${full}.pdf`);
     res.send(await briefingPdf(b));
   });
   return r;

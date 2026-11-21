@@ -215,34 +215,39 @@ per criterion a `score` 1 to 5, a `vendor_comment` and an `internal_note`, plus 
 
 | Flag | When | Facts stated |
 |---|---|---|
-| Heading over budget | Active time and materials SOW with a budget, a start and an end date, running at least 30 days and not yet ended, not already over budget, where what has been invoiced so far, carried on at the same pace per day since the start date, passes the budget before the end date | Invoiced, budget, days gone of the total, the day the budget would run out, the end date, the amount that would be invoiced by then |
+| Heading over budget | Active SOW (fixed price or time and materials) with a budget, a start and an end date, running at least 30 days and not yet ended, not already over budget, where what has been invoiced so far, carried on at the same pace per day since the start date, would come to more than the budget by the end date | Invoiced, budget, days gone of the total, the day the budget would run out, the end date, the amount that would be invoiced by then |
 | Ending with open milestones | Active SOW whose end date is today or within `sow_end_days`, with at least one milestone still open | End date, days left, the open milestones with their due dates (the first three by name) |
 | Helpdesk figure getting worse | Scored vendor with a board where, over the last four whole months, a metric's figure is worse each month than the month before (three steps down). A month with nothing measured breaks the run. The running month is left out | The metric, the four figures, the target |
 
 - "Worse" follows the metric: lower for first response, first-line closure and satisfaction; higher for SLA breaches and backlog age.
-- A fixed-price SOW gets no "heading over budget" flag: it is invoiced by milestone, not at a pace. Its budget warnings still apply.
+- Days are counted from the start date up to, not including, the end date. Exactly the budget by the end date is not an overrun.
+- Helpdesk flags are for scored vendors in use (active or on hold); an offboarded vendor's board raises none.
 - A SOW already over budget has the red warning, not this flag.
 
 **Dashboard** (D-1, worked out): warnings and risk flags counted per kind; active SOWs with a budget, the most used first; spend per month for the last twelve months; per scored vendor the latest final scorecard and how it compares with the final one before (up, down, unchanged, or first scorecard); the scorecards due; open RFPs (none until RFPs exist).
 - **Scorecards due** are for the last quarter that is over: every vendor with `scoring_enabled` and status active or on hold that has no final scorecard for that quarter. A draft counts as due and is linked.
 
 **Management report** (D-2): `month*` (one per month), `summary`, `suggestion_id`. Only the summary is stored; the figures are worked out when the report is opened or downloaded.
-- For the running month or any of the 24 before it. Figures are **as at** the last day of the month, or today while the month is running.
+- Figures are **as at** the last day of the month, or today while the month is running.
 - Spend: invoices dated in the month. Budgets: SOWs with a budget that ran in the month (active, or ended on or after its first day), with what was invoiced up to the as-at day against the budget as it stands today.
-- Agreements ending: active agreements whose end date is within 90 days after the as-at day.
+- Agreements ending: agreements that are active today whose end date, as it stands today, is within 90 days after the as-at day. One that has since been renewed or ended is not listed for an earlier month.
+- Budgets likewise use each SOW's status and budget as they stand today.
 - Scores: each scored vendor's latest final scorecard for a quarter that had ended by the as-at day, with its trend.
-- Missed targets: the month's helpdesk figures that missed today's target.
+- Missed targets: the month's helpdesk figures that missed today's target, for scored vendors in use.
+- For the running month and the 23 before it.
+- With the summary a fingerprint of the month's figures is kept (`summary_figures`). When the figures are no longer the ones the summary was saved against (an invoice keyed in later, the running month moving on), the page says so and the PDF prints a line under the summary; saving the summary again, changed or not, confirms it for the figures as they are now.
+- No record exists for a month until someone saves a summary or asks the AI; that first write is the record's "create" in the audit log.
 - The PDF is at most two pages: when there is more than fits, the tables are shortened and each says how many rows it leaves out.
 - The AI's summary is a suggestion. The report's `summary` is what a person saved (their own words, or the AI's text taken over and possibly changed) and is the only summary the PDF prints. At most 1,500 characters.
 
 **Briefing** (B-1): `vendor_id*`, `as_at*`, `facts*`, `summary`, `talking_points` (one per line), `suggestion_id`.
-- `facts` is everything the briefing shows, gathered when it is prepared and never changed afterwards: the vendor and its paperwork; agreements that have not ended; dates (notice deadlines without a decision, also when passed; end and renewal dates and open milestones' due dates in the next 180 days; a SOW past its end date); active SOWs' budgets; what was invoiced in the last twelve months; the last three whole months of helpdesk figures with, per metric, whether the latest month is better or worse than the one before; the targets missed in those months; the latest final scorecard and its trend; open milestones; change requests still proposed; and the vendor's warnings and risk flags.
+- `facts` is everything the briefing shows, gathered when it is prepared and never changed afterwards: the vendor and its paperwork; agreements that have not ended; dates (notice deadlines without a decision, also when passed; end and renewal dates in the next 180 days; open milestones due within 180 days, also when overdue; a SOW past its end date); active SOWs' budgets; what was invoiced in the last twelve months; the last three whole months of helpdesk figures with, per metric, whether the latest month is better or worse than the one before; the targets missed in those months; the latest final scorecard and its trend; open milestones; change requests still proposed; and the vendor's warnings and risk flags.
 - A vendor can have any number of briefings; a new one is prepared for a later day.
 - The AI's summary and talking points are a suggestion. The briefing's own `summary` and `talking_points` are what a person saved, and are the only text the PDF prints.
 - The AI can be asked again until someone has taken its text over. When it cannot answer, the briefing is made without its text.
 - A briefing can be removed. Preparing, saving, reviewing and removing are recorded in the briefing's own history.
 
-**AI text on a report or briefing**: accepted when taken over unchanged, edited when the saved text differs from the AI's, rejected when dismissed; rejecting leaves a person's own text alone. The AI is given the figures already worked out and written as the app shows them, and an answer that quotes any number that was not among them is refused as unusable (single digits aside).
+**AI text on a report or briefing**: accepted when taken over unchanged, edited when the saved text differs from the AI's, rejected when dismissed; rejecting leaves a person's own text alone. The AI is given the figures already worked out and written as the app shows them, and an answer that quotes any number that was not among them is refused as unusable (single digits aside; a number inside a name someone typed, such as a SOW title, counts only when the whole name is quoted). Accepting or rejecting names the text the person was looking at: if the AI has written another since, nothing changes and they are asked to read the new one.
 
 ## RFP
 

@@ -2,7 +2,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import { aiSuggestions, briefings, vendors } from "../../../db/schema";
 import { ask, AiUnavailable, readSuggestion, recordSuggestion, reviewSuggestion } from "../../ai";
 import { briefing as briefingPrompt } from "../../ai/prompts/briefing";
-import { agreementName } from "../../../shared/agreements";
+import { agreementName, type Agreement } from "../../../shared/agreements";
 import { addDays, daysBetween, formatDay } from "../../../shared/dates";
 import {
   BRIEFING_DATES_DAYS,
@@ -28,6 +28,7 @@ import type { Queryable } from "../../platform/ports/types";
 import { listAgreements } from "../agreements/service";
 import { sowBudgetRows, vendorScores, type OverviewContext } from "../dashboard/service";
 import { defaultPeriod, getSpend } from "../invoices/service";
+import { replaced } from "../reports/service";
 import { currentMonth, figuresFor } from "../performance/service";
 import { getDelivery } from "../sow/service";
 import { getVendor } from "../vendors/service";
@@ -46,14 +47,14 @@ export async function gatherFacts(ctx: OverviewContext, vendorId: string): Promi
   const period = defaultPeriod(today);
   const months = monthsUpTo(addMonth(currentMonth(ctx.perf), -1), BRIEFING_MONTHS);
   const [all, budgets, spend, figures, scores, flags] = await Promise.all([
-    listAgreements(ctx.db, { vendorId, sort: "title", dir: "asc", page: 1, pageSize: 200 }, today),
+    agreementsOf(ctx, vendorId),
     sowBudgetRows(ctx.db, { vendorId }),
     getSpend(ctx.db, period.from, period.to),
     figuresFor(ctx.perf, vendorId, months),
     vendor.scoringEnabled ? vendorScores(ctx, today, vendorId) : [],
     listAttention(ctx.perf, [vendorId]),
   ]);
-  const agreements = all.items.filter((a) => a.status !== "ended");
+  const agreements = all.filter((a) => a.status !== "ended");
   const until = addDays(today, BRIEFING_DATES_DAYS);
   const soon = (day: string) => day >= today && day <= until;
   const dates: Omit<BriefingDate, "daysLeft">[] = [];
@@ -130,6 +131,17 @@ export async function gatherFacts(ctx: OverviewContext, vendorId: string): Promi
     changeRequests,
     flags: flags.map(({ type, tone, label, title, detail }) => ({ type, tone, label, title, detail })),
   };
+}
+
+/** Every agreement of the vendor, however many there are. */
+async function agreementsOf(ctx: OverviewContext, vendorId: string): Promise<Agreement[]> {
+  const out: Agreement[] = [];
+  for (let page = 1; page < 50; page++) {
+    const { items, total } = await listAgreements(ctx.db, { vendorId, sort: "title", dir: "asc", page, pageSize: 200 }, ctx.today());
+    out.push(...items);
+    if (out.length >= total || !items.length) break;
+  }
+  return out;
 }
 
 const columns = {
@@ -296,13 +308,15 @@ export async function saveBriefing(ctx: OverviewContext, id: string, input: unkn
 
 /** A person takes the AI's summary and talking points over as they are, or rejects them (AI-1). */
 export async function reviewBriefing(ctx: OverviewContext, id: string, input: unknown, by: User): Promise<Briefing> {
-  const { action } = suggestionReviewSchema.parse(input);
+  const { action, suggestionId } = suggestionReviewSchema.parse(input);
   await find(ctx.db, id);
   await ctx.db.transaction(async (tx) => {
     await lock(tx, id);
     const row = await find(tx, id);
     const suggestion = await readSuggestion<BriefingText>(tx, row.briefing.suggestionId);
     if (!suggestion) throw new AppError(409, "no_suggestion", "There is no AI text for this briefing. Ask the AI for it first.");
+    // The person reviewed one text; if the AI has written another since, that one has not been read.
+    if (suggestion.id !== suggestionId) throw replaced();
     const status: SuggestionStatus = action === "accept" ? "accepted" : "rejected";
     const changes: Changes = {};
     if (status !== suggestion.status) changes["AI summary and talking points"] = { from: words(suggestion.status), to: words(status) };

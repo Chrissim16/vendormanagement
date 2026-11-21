@@ -90,15 +90,11 @@ export async function listRiskFlags(ctx: PerformanceContext, vendorIds?: string[
   const [settings, sows, figures, owners] = await Promise.all([
     getSettings(ctx.db),
     riskSows(ctx.db, vendorIds),
-    figuresOfAll(ctx, months),
+    figuresOfAll(ctx, months, vendorIds),
     ctx.db.select({ id: vendors.id, ownerUserId: vendors.ownerUserId }).from(vendors),
   ]);
   const ownerOf = new Map(owners.map((o) => [o.id, o.ownerUserId]));
-  const wanted = (id: string) => !vendorIds || vendorIds.includes(id);
-  return [
-    ...sowRiskFlags(sows, today, settings.sowEndDays),
-    ...metricRiskFlags(figures.filter((f) => wanted(f.vendorId)).map((f) => ({ ...f, ownerUserId: ownerOf.get(f.vendorId)! }))),
-  ];
+  return [...sowRiskFlags(sows, today, settings.sowEndDays), ...metricRiskFlags(figures.map((f) => ({ ...f, ownerUserId: ownerOf.get(f.vendorId)! })))];
 }
 
 /** Everything that needs attention: the warnings (A-7) and the risk flags (R-1), what is already wrong first. */

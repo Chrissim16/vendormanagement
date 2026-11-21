@@ -51,8 +51,8 @@ describe("R-1 a SOW whose invoicing points to an overrun before its end date", (
     expect(budgetTrend(sow({ invoicedMinor: 40_000_01 }), TODAY)).toBeNull();
   });
 
-  it("is for time and materials only: a fixed price is invoiced by milestone, not at a pace", () => {
-    expect(sowRiskFlags([sow({ pricing: "fixed" })], TODAY, 30)).toEqual([]);
+  it("applies to a fixed-price SOW as well", () => {
+    expect(sowRiskFlags([sow({ pricing: "fixed" })], TODAY, 30).map((f) => f.type)).toEqual(["risk_budget_trend"]);
   });
 
   it("works in pounds too", () => {
@@ -132,7 +132,7 @@ describe("R-1 a metric that got worse three months in a row", () => {
     expect(flags).toHaveLength(1);
     expect(flags[0]).toMatchObject({ type: "risk_metric_worsening", tone: "warn", label: "Getting worse", title: "Sample Vendor · First response", agreementId: null });
     expect(flags[0]!.detail).toBe(
-      "First response (answered within the agreed time) got worse three months in a row: 96.1% in Jul, 94% in Aug, 91.2% in Sep, 88% in October 2026. The target is 95% or more.",
+      "First response (answered within the agreed time) got worse three months in a row: 96.1% in Jul, 94% in Aug, 91.2% in Sep, 88% in Oct 2026. The target is 95% or more.",
     );
   });
 

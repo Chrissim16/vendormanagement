@@ -1,6 +1,6 @@
 import { addDays, daysBetween, formatDay, type Day } from "./dates";
 import { formatMoney, type Currency } from "./money";
-import { formatMetric, formatTarget, metricInfo, metricKeys, monthName, monthShort, type MetricKey, type MonthMetrics } from "./performance";
+import { formatMetric, formatTarget, metricInfo, metricKeys, monthShort, type MetricKey, type MonthMetrics } from "./performance";
 import type { Warning } from "./vendors";
 
 /**
@@ -43,7 +43,8 @@ export interface BudgetTrend {
  * Where a SOW's invoicing is heading. The pace is what has been invoiced so far, spread
  * over the days since the start date. Null when there is nothing to judge: no budget or
  * dates, not yet running for `TREND_MIN_DAYS`, already ended, or already over budget
- * (which is a warning of its own).
+ * (which is a warning of its own). Days are counted from the start date up to, not
+ * including, the end date. It is an overrun when more than the budget would be invoiced by the end date.
  */
 export function budgetTrend(s: Pick<RiskSow, "startDate" | "endDate" | "budgetMinor" | "invoicedMinor">, today: Day): BudgetTrend | null {
   if (s.budgetMinor == null || s.budgetMinor <= 0 || !s.startDate || !s.endDate) return null;
@@ -51,11 +52,13 @@ export function budgetTrend(s: Pick<RiskSow, "startDate" | "endDate" | "budgetMi
   const elapsedDays = daysBetween(s.startDate, today);
   const totalDays = daysBetween(s.startDate, s.endDate);
   if (elapsedDays < TREND_MIN_DAYS || today > s.endDate || totalDays <= elapsedDays) return null;
+  const projectedMinor = Math.round((s.invoicedMinor * totalDays) / elapsedDays);
   return {
     elapsedDays,
     totalDays,
-    projectedMinor: Math.round((s.invoicedMinor * totalDays) / elapsedDays),
-    runsOutOn: addDays(s.startDate, Math.ceil((s.budgetMinor * elapsedDays) / s.invoicedMinor)),
+    projectedMinor,
+    // Rounded up to a whole day, but never past the last day before the end date when the pace does overrun.
+    runsOutOn: addDays(s.startDate, Math.min(Math.ceil((s.budgetMinor * elapsedDays) / s.invoicedMinor), projectedMinor > s.budgetMinor ? totalDays - 1 : totalDays)),
   };
 }
 
@@ -63,16 +66,15 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const inDays = (n: number) => (n === 0 ? "today" : `in ${plural(n, "day")}`);
 
 /**
- * Flags for SOWs: invoicing that points to an overrun before the end date (time and
- * materials only: a fixed price is invoiced by milestone, not at a pace), and a SOW about
+ * Flags for SOWs: invoicing that points to an overrun before the end date, and a SOW about
  * to end while milestones are still open.
  */
 export function sowRiskFlags(sows: RiskSow[], today: Day, sowEndDays: number): Warning[] {
   const out: Warning[] = [];
   for (const s of sows) {
     const base = { vendorId: s.vendorId, vendorName: s.vendorName, agreementId: s.id, ownerUserId: s.ownerUserId, title: `${s.vendorName} · ${s.title}`, tone: "warn" as const };
-    const trend = s.pricing === "time_and_materials" ? budgetTrend(s, today) : null;
-    if (trend && trend.projectedMinor > s.budgetMinor! && trend.runsOutOn < s.endDate!) {
+    const trend = budgetTrend(s, today);
+    if (trend && trend.projectedMinor > s.budgetMinor!) {
       const money = (minor: number) => formatMoney(minor, s.currency);
       out.push({
         ...base,
@@ -141,7 +143,7 @@ export function metricRiskFlags(vendors: RiskVendorMonths[]): Warning[] {
       const info = metricInfo[key];
       const latest = months.at(-1)!;
       const target = latest.cells[key].targetTenths;
-      const run = months.map((m, i) => `${formatMetric(key, m.cells[key].valueTenths)} in ${i === months.length - 1 ? monthName(m.month) : monthShort(m.month)}`);
+      const run = months.map((m, i) => `${formatMetric(key, m.cells[key].valueTenths)} in ${monthShort(m.month)}${i === months.length - 1 ? ` ${m.month.slice(0, 4)}` : ""}`);
       out.push({
         type: "risk_metric_worsening",
         tone: "warn",

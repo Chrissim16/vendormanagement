@@ -1,0 +1,1 @@
+ALTER TABLE "management_reports" ADD COLUMN "summary_figures" text;

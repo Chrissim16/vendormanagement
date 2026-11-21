@@ -9,7 +9,7 @@ const getJson = async <T>(request: APIRequestContext, path: string) => (await (a
 const aiMode = (request: APIRequestContext, mode: "working" | "unavailable" | "nonsense") => asAdminApi(request, "post", "/dev/ai", { mode });
 const vendorId = async (request: APIRequestContext, name: string) =>
   (await getJson<{ items: { id: string; name: string }[] }>(request, "/vendors?status=all&pageSize=200")).items.find((v) => v.name === name)!.id;
-/** A time and materials SOW that started 60 days before the pinned today and runs for 120, with 27,000 of 40,000 invoiced: heading over budget. */
+/** A SOW that started 60 days before the pinned today and runs for 120, with 27,000 of 40,000 invoiced: heading over budget. */
 const fastSow = async (request: APIRequestContext, label: string) => {
   const vendor = await newVendor(request, label, { type: "consultancy" });
   const sow = await newAgreement(request, vendor, {
@@ -44,7 +44,7 @@ test.describe("R-1 risk flags", () => {
       "It ends on 9 Dec 2026, in 18 days, and one milestone is still open: Recommendations (due 1 Dec 2026).",
     );
     const worse = flags.getByRole("listitem").filter({ hasText: "Mossgate IT · SLA breaches" });
-    await expect(worse).toContainText(/got worse three months in a row: [\d.]+% in Jul, [\d.]+% in Aug, [\d.]+% in Sep, [\d.]+% in October 2026\. The target is 5% or less\./);
+    await expect(worse).toContainText(/got worse three months in a row: [\d.]+% in Jul, [\d.]+% in Aug, [\d.]+% in Sep, [\d.]+% in Oct 2026\. The target is 5% or less\./);
     // A flag is not a warning: it is not in the list of warnings.
     await expect(page.getByRole("list", { name: "Warnings" }).getByRole("listitem").filter({ hasText: vendor.name })).toHaveCount(0);
     // The header count includes the flags.
@@ -236,7 +236,7 @@ test.describe("D-2 monthly management report", () => {
     // X-3: a summary that is too long is refused and stays in the box.
     await box.fill("x".repeat(1501));
     await page.getByRole("button", { name: "Save summary" }).click();
-    await expect(page.getByText("Keep the summary under 1500 characters.")).toBeVisible();
+    await expect(page.getByText("The summary is at most 1,500 characters.")).toBeVisible();
     await expect(box).toHaveValue("x".repeat(1501));
 
     // The running month says so.

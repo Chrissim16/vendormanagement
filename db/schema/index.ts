@@ -558,6 +558,8 @@ export const managementReports = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     month: text("month").notNull(),
     summary: text("summary"),
+    /** A fingerprint of the month's figures as they were when the summary was saved, to tell when the summary has fallen behind them. */
+    summaryFigures: text("summary_figures"),
     suggestionId: uuid("suggestion_id").references(() => aiSuggestions.id),
     ...stamps,
   },

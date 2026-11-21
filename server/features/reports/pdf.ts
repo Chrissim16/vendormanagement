@@ -36,8 +36,10 @@ function draw(report: ManagementReport, generatedOn: string, rows: Rows, pages: 
   return makePdf(
     { title, footer: `${title} · figures as at ${formatDay(d.asAt)} · made ${generatedOn}` },
     (pdf) => {
-      pdf.title(`Monthly management report · figures as at ${formatDay(d.asAt)}${d.running ? " (month still running)" : ""}`, `Vendors, ${monthName(d.month)}`);
+      pdf.title(`Monthly management report · figures as at ${formatDay(d.asAt)}${d.running ? " (month still running)" : ""}`, `Monthly report, ${monthName(d.month)}`);
       if (report.summary) pdf.paragraph(report.summary);
+      if (report.summary && report.summaryOutdated)
+        pdf.paragraph("The figures below have changed since this summary was written; where they differ, the figures are right.", { muted: true });
 
       pdf.heading("Spend against budgets");
       const t = d.spend.total;

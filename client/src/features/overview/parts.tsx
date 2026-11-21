@@ -1,6 +1,6 @@
 import clsx from "clsx";
 import { motion } from "motion/react";
-import { useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { TextSuggestion, Trend } from "../../../../shared/overview";
 import { suggestionStatusLabels } from "../../../../shared/scorecards";
@@ -133,6 +133,14 @@ export function AiTextPanel({
   note: string;
 }) {
   const acceptRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  // Accepting or rejecting removes the button that was pressed; the panel takes the focus, so the keyboard keeps its place.
+  const status = suggestion?.status;
+  const before = useRef(status);
+  useEffect(() => {
+    if (before.current === "proposed" && status && status !== "proposed" && !panelRef.current?.contains(document.activeElement)) panelRef.current?.focus();
+    before.current = status;
+  }, [status]);
   const s = suggestion;
   const taken = s?.status === "accepted" || s?.status === "edited";
   const ask = (label: string, primary?: boolean) => (
@@ -141,7 +149,7 @@ export function AiTextPanel({
     </Button>
   );
   return (
-    <section aria-label={title} className="flex flex-col gap-3">
+    <section ref={panelRef} tabIndex={-1} aria-label={title} className="flex flex-col gap-3 rounded-2xl outline-none focus-visible:shadow-[0_0_0_2px_var(--accent)]">
       {!s ? (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl bg-sunk px-5 py-4">
           <p className="min-w-0 flex-1 text-ink-2">{intro}</p>

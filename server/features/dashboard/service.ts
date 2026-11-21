@@ -21,8 +21,9 @@ export async function sowBudgetRows(db: Queryable, o: { period?: { from: Day; as
     .map(({ budgetMinor, invoicedMinor, ...r }) => ({ ...r, budget: budgetView(budgetMinor, Number(invoicedMinor), settings.budgetWarningPct) }))
     .sort(
       (a, b) =>
-        // Compared exactly, as a share of the budget, so two SOWs at "67%" still come out in the right order.
-        b.budget.invoicedMinor * (a.budget.budgetMinor || 1) - a.budget.invoicedMinor * (b.budget.budgetMinor || 1) ||
+        // Compared exactly, as a share of the budget, so two SOWs at "67%" still come out in the right order. Whole numbers too large for ordinary arithmetic are safe here.
+        Number(BigInt(b.budget.invoicedMinor) * BigInt(a.budget.budgetMinor || 1) - BigInt(a.budget.invoicedMinor) * BigInt(b.budget.budgetMinor || 1) > 0n) -
+          Number(BigInt(b.budget.invoicedMinor) * BigInt(a.budget.budgetMinor || 1) - BigInt(a.budget.invoicedMinor) * BigInt(b.budget.budgetMinor || 1) < 0n) ||
         a.vendorName.localeCompare(b.vendorName) ||
         a.title.localeCompare(b.title),
     );
@@ -49,6 +50,9 @@ export async function vendorScores(ctx: OverviewContext, asAt: Day, vendorId?: s
 
 /** The quarter whose scorecards are due now: the last one that is over. */
 export const dueQuarter = (today: Day): Quarter => addQuarter(quarterOf(today), -1);
+
+/** Active agreements, as they stand today, whose end date falls between two days, soonest first. */
+export const agreementsEnding = repo.agreementsEnding;
 
 /** RFPs are built in a later milestone; until then none is open. */
 export const openRfps = async (): Promise<OpenRfp[]> => [];

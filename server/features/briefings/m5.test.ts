@@ -40,6 +40,22 @@ const history = async (entityType: string, entityId: string) =>
       changes: Record<string, { from: unknown; to: unknown }> | null;
     }[]
   ).map((e) => ({ ...e, changes: e.changes ?? {} }));
+/** Reviews the suggestion a report or briefing currently shows, as the page does. */
+const reviewReport = async (month: string, action: "accept" | "reject", as = MEMBER) => {
+  const current = (await t.as(as).get("/api/report").query({ month })).body as ManagementReport;
+  return t
+    .as(as)
+    .post("/api/report/suggestion/review")
+    .query({ month })
+    .send({ action, suggestionId: current.suggestion?.id ?? "00000000-0000-4000-8000-000000000000" });
+};
+const reviewBriefing = async (id: string, action: "accept" | "reject", as = MEMBER) => {
+  const current = (await t.as(as).get(`/api/briefings/${id}`)).body as Briefing;
+  return t
+    .as(as)
+    .post(`/api/briefings/${id}/suggestion/review`)
+    .send({ action, suggestionId: current.suggestion?.id ?? "00000000-0000-4000-8000-000000000000" });
+};
 const ai = (mode: "working" | "unavailable" | "nonsense") => t.as(MEMBER).post("/api/dev/ai").send({ mode });
 const newVendor = async (name: string) =>
   (
@@ -62,17 +78,19 @@ describe("R-1 risk flags", () => {
     expect(flags.map((w) => [w.type, w.label, w.title])).toEqual([
       ["risk_open_milestones", "1 open milestone", "Quillon Consulting · SOW 02 Close process review"],
       ["risk_budget_trend", "Heading over budget", "Quillon Consulting · SOW 04 Payment controls"],
+      // A fixed-price SOW is judged the same way.
+      ["risk_budget_trend", "Heading over budget", "Bluefinch Systems · SOW 07 Ledger migration"],
       ["risk_metric_worsening", "Getting worse", "Mossgate IT · SLA breaches"],
     ]);
     expect(flags[0]!.detail).toBe("It ends on 9 Dec 2026, in 18 days, and one milestone is still open: Recommendations (due 1 Dec 2026).");
     expect(flags[1]!.detail).toContain("€ 27,000.00 of the € 40,000.00 budget has been invoiced in 60 of 120 days.");
     expect(flags[1]!.detail).toContain("the budget runs out around 20 Dec 2026, before the end date of 20 Jan 2027");
-    expect(flags[2]!.detail).toMatch(
-      /^SLA breaches \(resolved later than agreed\) got worse three months in a row: [\d.]+% in Jul, [\d.]+% in Aug, [\d.]+% in Sep, [\d.]+% in October 2026\. The target is 5% or less\.$/,
+    expect(flags[3]!.detail).toMatch(
+      /^SLA breaches \(resolved later than agreed\) got worse three months in a row: [\d.]+% in Jul, [\d.]+% in Aug, [\d.]+% in Sep, [\d.]+% in Oct 2026\. The target is 5% or less\.$/,
     );
     expect(flags.every((w) => w.tone === "warn")).toBe(true);
     expect(flags[0]!.agreementId && flags[1]!.agreementId).toBeTruthy();
-    expect(flags[2]).toMatchObject({ agreementId: null, vendorId: ids["Mossgate IT"] });
+    expect(flags[3]).toMatchObject({ agreementId: null, vendorId: ids["Mossgate IT"] });
   });
 
   it("the figures in a worsening flag are the vendor's own monthly figures", async () => {
@@ -255,7 +273,7 @@ describe("D-2 monthly management report", () => {
     const before = await pdf("/api/report/pdf", { month: "2026-09" });
     expect(before.pages).toBeLessThanOrEqual(2);
     for (const heading of [
-      "Vendors, September 2026",
+      "Monthly report, September 2026",
       "Spend against budgets",
       "Agreements ending within 90 days",
       "Vendor scores",
@@ -330,7 +348,7 @@ describe("D-2 monthly management report", () => {
       expect(r.suggestion!.output.summary).toMatch(/^In August 2026, € [\d,]+\.\d\d was invoiced|^Nothing was invoiced in August 2026/);
       expect((await pdf("/api/report/pdf", q)).text).not.toContain(r.suggestion!.output.summary.slice(0, 40));
 
-      const accepted = (await t.as(MEMBER).post("/api/report/suggestion/review").query(q).send({ action: "accept" }).expect(200)).body as ManagementReport;
+      const accepted = (await reviewReport(month, "accept")).body as ManagementReport;
       expect(accepted.summary).toBe(r.suggestion!.output.summary);
       expect(accepted.suggestion).toMatchObject({ status: "accepted", reviewedBy: MEMBER });
       expect((await pdf("/api/report/pdf", q)).text).toContain(r.suggestion!.output.summary.slice(0, 40));
@@ -355,7 +373,7 @@ describe("D-2 monthly management report", () => {
     it("can be rejected, which leaves the person's own summary alone, and asked for again", async () => {
       await t.as(MEMBER).put("/api/report").query({ month: "2026-07" }).send({ summary: "My own words." }).expect(200);
       await t.as(MEMBER).post("/api/report/suggestion").query({ month: "2026-07" }).expect(201);
-      const rejected = (await t.as(MEMBER).post("/api/report/suggestion/review").query({ month: "2026-07" }).send({ action: "reject" }).expect(200)).body as ManagementReport;
+      const rejected = (await reviewReport("2026-07", "reject")).body as ManagementReport;
       expect(rejected).toMatchObject({ summary: "My own words.", suggestion: { status: "rejected" } });
       const again = (await t.as(MEMBER).post("/api/report/suggestion").query({ month: "2026-07" }).expect(201)).body as ManagementReport;
       expect(again).toMatchObject({ summary: "My own words.", suggestion: { status: "proposed" } });
@@ -373,7 +391,7 @@ describe("D-2 monthly management report", () => {
       const typed = (await t.as(MEMBER).put("/api/report").query({ month: "2026-06" }).send({ summary: "Typed without the AI." }).expect(200)).body as ManagementReport;
       expect(typed.summary).toBe("Typed without the AI.");
       await ai("working");
-      await t.as(MEMBER).post("/api/report/suggestion/review").query({ month: "2026-05" }).send({ action: "accept" }).expect(409);
+      expect((await reviewReport("2026-05", "accept")).status).toBe(409);
     });
     it("a summary that is too long is refused with the reason, and every change is in the audit log", async () => {
       const res = await t
@@ -382,7 +400,7 @@ describe("D-2 monthly management report", () => {
         .query(q)
         .send({ summary: "x".repeat(1501) });
       expect(res.status).toBe(400);
-      expect(res.body.error.fields.summary).toContain("under 1500 characters");
+      expect(res.body.error.fields.summary).toContain("at most 1,500 characters");
       const log = (await t.as(ADMIN).get("/api/admin/audit").query({ entityType: "report", pageSize: "100" })).body.items as {
         summary: string;
         changes: Record<string, unknown>;
@@ -485,7 +503,7 @@ describe("B-1 vendor briefing", () => {
     const before = await pdf(`/api/briefings/${b.id}/pdf`);
     expect(before.text).not.toContain("Talking points");
 
-    const accepted = (await t.as(MEMBER).post(`/api/briefings/${b.id}/suggestion/review`).send({ action: "accept" }).expect(200)).body as Briefing;
+    const accepted = (await reviewBriefing(b.id, "accept")).body as Briefing;
     expect(accepted.summary).toBe(b.suggestion!.output.summary);
     expect(pointsOf(accepted.talkingPoints)).toEqual(b.suggestion!.output.talkingPoints);
     expect(accepted.suggestion).toMatchObject({ status: "accepted", reviewedBy: MEMBER });
@@ -514,7 +532,7 @@ describe("B-1 vendor briefing", () => {
 
   it("can be rejected and written by hand, and asked for again while nobody has taken it over", async () => {
     const { briefing: b } = await prepare("Tarnwick Software");
-    const rejected = (await t.as(MEMBER).post(`/api/briefings/${b.id}/suggestion/review`).send({ action: "reject" }).expect(200)).body as Briefing;
+    const rejected = (await reviewBriefing(b.id, "reject")).body as Briefing;
     expect(rejected).toMatchObject({ summary: null, suggestion: { status: "rejected" } });
     const own = (await t.as(MEMBER).put(`/api/briefings/${b.id}`).send({ summary: "My own summary.", talkingPoints: "First\n\n  Second  " }).expect(200)).body as Briefing;
     expect(own).toMatchObject({ summary: "My own summary.", hasText: true, suggestion: { status: "rejected" } });
@@ -582,11 +600,148 @@ describe("B-1 vendor briefing", () => {
       .put(`/api/briefings/${b.id}`)
       .send({ summary: "x".repeat(2001), talkingPoints: "" });
     expect(long.status).toBe(400);
-    expect(long.body.error.fields.summary).toContain("under 2000 characters");
+    expect(long.body.error.fields.summary).toContain("at most 2,000 characters");
     await t.as(MEMBER).delete(`/api/briefings/${b.id}`).expect(200);
     await t.as(MEMBER).get(`/api/briefings/${b.id}`).expect(404);
     await t.as(MEMBER).get(`/api/briefings/${b.id}/pdf`).expect(404);
     expect((await history("briefing", b.id)).map((e) => e.action)).toContain("delete");
     await t.as(MEMBER).post("/api/vendors/00000000-0000-4000-8000-000000000000/briefings").expect(404);
+  });
+});
+
+describe("review fixes: what a person accepts is what they read, and a summary knows when its figures moved on", () => {
+  it("AI-1 accepting or rejecting names the text that was read; if the AI has written another since, nothing happens (report)", async () => {
+    const month = "2026-03";
+    const first = (await t.as(MEMBER).post("/api/report/suggestion").query({ month }).expect(201)).body as ManagementReport;
+    // A colleague asks again before the first person presses the button.
+    const second = (await t.as(ADMIN).post("/api/report/suggestion").query({ month }).expect(201)).body as ManagementReport;
+    expect(second.suggestion!.id).not.toBe(first.suggestion!.id);
+    for (const action of ["accept", "reject"] as const) {
+      const res = await t.as(MEMBER).post("/api/report/suggestion/review").query({ month }).send({ action, suggestionId: first.suggestion!.id });
+      expect(res.status).toBe(409);
+      expect(res.body.error).toMatchObject({ code: "suggestion_replaced" });
+    }
+    const now = (await t.as(MEMBER).get("/api/report").query({ month })).body as ManagementReport;
+    expect(now).toMatchObject({ summary: null, suggestion: { id: second.suggestion!.id, status: "proposed" } });
+    await t.as(MEMBER).post("/api/report/suggestion/review").query({ month }).send({ action: "accept" }).expect(400);
+    await t.as(MEMBER).post("/api/report/suggestion/review").query({ month }).send({ action: "accept", suggestionId: second.suggestion!.id }).expect(200);
+  });
+
+  it("AI-1 the same for a briefing", async () => {
+    const made = (await t.as(MEMBER).post(`/api/vendors/${ids["Larkspur Data"]}/briefings`).expect(201)).body.briefing as Briefing;
+    const again = (await t.as(ADMIN).post(`/api/briefings/${made.id}/suggestion`).expect(201)).body as Briefing;
+    const stale = await t.as(MEMBER).post(`/api/briefings/${made.id}/suggestion/review`).send({ action: "accept", suggestionId: made.suggestion!.id });
+    expect(stale.status).toBe(409);
+    expect(stale.body.error.code).toBe("suggestion_replaced");
+    expect((await t.as(MEMBER).get(`/api/briefings/${made.id}`)).body).toMatchObject({
+      summary: null,
+      talkingPoints: null,
+      suggestion: { id: again.suggestion!.id, status: "proposed" },
+    });
+  });
+
+  it("AI-1 two people accepting the same text at the same moment leave one summary and no error", async () => {
+    const month = "2026-02";
+    const r = (await t.as(MEMBER).post("/api/report/suggestion").query({ month }).expect(201)).body as ManagementReport;
+    const send = (as: string) => t.as(as).post("/api/report/suggestion/review").query({ month }).send({ action: "accept", suggestionId: r.suggestion!.id });
+    const [a, b] = await Promise.all([send(MEMBER), send(ADMIN)]);
+    expect([a.status, b.status]).toEqual([200, 200]);
+    const now = (await t.as(MEMBER).get("/api/report").query({ month })).body as ManagementReport;
+    expect(now).toMatchObject({ summary: r.suggestion!.output.summary, suggestion: { status: "accepted" } });
+  });
+
+  it("D-2 a saved summary is marked once the month's figures have changed, in the report and in the PDF, until someone saves it again", async () => {
+    const other = await testApp();
+    const who = (await other.as(MEMBER).get("/api/me")).body.id;
+    const month = "2026-11"; // the running month
+    const get = async () => (await other.as(MEMBER).get("/api/report").query({ month })).body as ManagementReport;
+    const text = async () => textOf((await other.as(MEMBER).get("/api/report/pdf").query({ month }).buffer(true).parse(binary)).body as Buffer);
+    const note = "The figures below have changed since this summary was written";
+    await other.as(MEMBER).put("/api/report").query({ month }).send({ summary: "November so far looks calm." }).expect(200);
+    expect((await get()).summaryOutdated).toBe(false);
+    expect((await text()).text).not.toContain(note);
+    // An invoice dated in the month is keyed in afterwards.
+    const v = (await other.as(MEMBER).post("/api/vendors").send({ name: "Late Invoice Vendor", type: "software", ownerUserId: who, ndaRequired: false, dpaRequired: false })).body
+      .id;
+    const sub = (
+      await other.as(MEMBER).post("/api/agreements").send({
+        vendorId: v,
+        ownerUserId: who,
+        kind: "subscription",
+        title: "Licence",
+        status: "active",
+        signedOn: "2026-01-01",
+        startDate: "2026-01-01",
+        endDate: "2027-12-31",
+        annualValueMinor: 1000_00,
+        autoRenews: true,
+      })
+    ).body.id;
+    await other.as(MEMBER).post("/api/invoices").send({ agreementId: sub, invoiceNumber: "LATE-1", invoiceDate: "2026-11-20", amountMinor: 1000_00 }).expect(201);
+    expect((await get()).summaryOutdated).toBe(true);
+    expect((await text()).text).toContain(note);
+    // Saving the same words again confirms them for today's figures.
+    const confirmed = (await other.as(MEMBER).put("/api/report").query({ month }).send({ summary: "November so far looks calm." }).expect(200)).body as ManagementReport;
+    expect(confirmed.summaryOutdated).toBe(false);
+    expect((await text()).text).not.toContain(note);
+    // A report without a summary is never "outdated".
+    await other.as(MEMBER).put("/api/report").query({ month }).send({ summary: "" }).expect(200);
+    expect((await get()).summaryOutdated).toBe(false);
+    await other.close();
+  });
+
+  it("D-2 saving nothing on an untouched month creates no record, and the first real save is logged as the record being made", async () => {
+    const count = async () =>
+      ((await t.as(ADMIN).get("/api/admin/audit").query({ entityType: "report", pageSize: "200" })).body.items as { summary: string; action: string }[]).filter(
+        (e) => e.summary === "Management report January 2026",
+      );
+    await t.as(MEMBER).put("/api/report").query({ month: "2026-01" }).send({ summary: "" }).expect(200);
+    await t.as(MEMBER).put("/api/report").query({ month: "2026-01" }).send({ summary: null }).expect(200);
+    expect(await count()).toEqual([]);
+    expect((await t.as(MEMBER).get("/api/report").query({ month: "2026-01" })).body).toMatchObject({ summary: null, updatedBy: null });
+    await t.as(MEMBER).put("/api/report").query({ month: "2026-01" }).send({ summary: "First words." }).expect(200);
+    await t.as(MEMBER).put("/api/report").query({ month: "2026-01" }).send({ summary: "Second words." }).expect(200);
+    expect((await count()).map((e) => e.action).sort()).toEqual(["create", "update"]);
+  });
+
+  it("R-1 and D-2 a helpdesk vendor that is no longer in use raises no flag and is not in the report's missed targets", async () => {
+    const other = await testApp();
+    const before = (await other.as(MEMBER).get("/api/report").query({ month: "2026-10" })).body as ManagementReport;
+    expect(before.data.missed.some((m) => m.vendorName === "Tarnwick Software")).toBe(true);
+    const all = (await other.as(MEMBER).get("/api/vendors").query({ status: "all", pageSize: "200" })).body.items as { id: string; name: string }[];
+    const tarnwick = all.find((v) => v.name === "Tarnwick Software")!;
+    const detail = (await other.as(MEMBER).get(`/api/vendors/${tarnwick.id}`)).body;
+    // Its only agreement is ended first, since a vendor with a running agreement cannot be offboarded.
+    const agreements = (await other.as(MEMBER).get("/api/agreements").query({ vendorId: tarnwick.id, pageSize: "200" })).body.items as { id: string; status: string }[];
+    for (const a of agreements.filter((x) => x.status === "active")) {
+      const full = (await other.as(MEMBER).get(`/api/agreements/${a.id}`)).body;
+      await other
+        .as(MEMBER)
+        .patch(`/api/agreements/${a.id}`)
+        .send({ ...full, status: "ended", endReason: "terminated" })
+        .expect(200);
+    }
+    await other
+      .as(MEMBER)
+      .patch(`/api/vendors/${tarnwick.id}`)
+      .send({ ...detail, status: "offboarded" })
+      .expect(200);
+    const after = (await other.as(MEMBER).get("/api/report").query({ month: "2026-10" })).body as ManagementReport;
+    expect(after.data.missed.some((m) => m.vendorName === "Tarnwick Software")).toBe(false);
+    expect(after.data.measuredVendors).toBe(before.data.measuredVendors - 1);
+    await other.close();
+  });
+
+  it("B-1 a briefing's PDF keeps the accents of the vendor's name in its file name", async () => {
+    const v = (
+      await t
+        .as(MEMBER)
+        .post("/api/vendors")
+        .send({ name: `Société Générique ${n()}`, type: "software", ownerUserId: me, ndaRequired: false, dpaRequired: false })
+    ).body as { id: string; name: string };
+    const b = (await t.as(MEMBER).post(`/api/vendors/${v.id}/briefings`).expect(201)).body.briefing as Briefing;
+    const res = await t.as(MEMBER).get(`/api/briefings/${b.id}/pdf`).buffer(true).parse(binary);
+    expect(res.headers["content-disposition"]).toContain(`filename*=UTF-8''${encodeURIComponent(`${v.name} briefing ${TODAY}`)}.pdf`);
+    expect(res.headers["content-disposition"]).toMatch(/filename="Socit Gnrique \w+ briefing 2026-11-21\.pdf"/);
   });
 });

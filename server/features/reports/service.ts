@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { managementReports } from "../../../db/schema";
 import { ask, readSuggestion, recordSuggestion, reviewSuggestion } from "../../ai";
@@ -10,14 +11,13 @@ import { suggestionStatusLabels, type SuggestionStatus } from "../../../shared/s
 import type { User } from "../../../shared/types";
 import { audit } from "../../platform/audit";
 import { AppError } from "../../platform/errors";
-import type { Queryable } from "../../platform/ports/types";
-import { agreementsEnding } from "../dashboard/repo";
-import { openRfps, sowBudgetRows, vendorScores, type OverviewContext } from "../dashboard/service";
+import type { Queryable, Tx } from "../../platform/ports/types";
+import { agreementsEnding, openRfps, sowBudgetRows, vendorScores, type OverviewContext } from "../dashboard/service";
 import { getSpend } from "../invoices/service";
 import { currentMonth, figuresOfAll } from "../performance/service";
 
-/** Reports are made for months tickets are still held for. */
-const KEEP_MONTHS = 24;
+/** Reports are made for the running month and the 23 before it: the months the month chooser lists, and tickets are held for. */
+const KEEP_MONTHS = 23;
 type Changes = Record<string, { from: unknown; to: unknown }>;
 
 /** The month asked for: the running month or one of the 24 before it. Without one, the last month that is over. */
@@ -83,12 +83,23 @@ const rowOf = async (db: Queryable, month: Month) => (await db.select().from(man
 /** Two people working on the same month's summary take turns. */
 const lockMonth = (tx: Queryable, month: Month) => tx.execute(sql`select pg_advisory_xact_lock(4205, ${Number(month.replace("-", ""))})`);
 
-async function build(ctx: OverviewContext, month: Month, data?: ReportData): Promise<ManagementReport> {
-  const row = await rowOf(ctx.db, month);
+/**
+ * A fingerprint of the figures a summary speaks about. The figures are worked out afresh
+ * every time the report is opened, while the summary is text someone saved; when the two
+ * no longer belong together (an invoice was added, the running month moved on) the report says so.
+ */
+export const figuresKey = (data: ReportData) =>
+  createHash("sha256")
+    .update(JSON.stringify(reportSummary.input(data)))
+    .digest("hex");
+
+async function build(ctx: OverviewContext, month: Month, given?: ReportData): Promise<ManagementReport> {
+  const [row, data] = await Promise.all([rowOf(ctx.db, month), given ?? reportData(ctx, month)]);
   return {
-    data: data ?? (await reportData(ctx, month)),
+    data,
     summary: row?.summary ?? null,
     suggestion: await readSuggestion<{ summary: string }>(ctx.db, row?.suggestionId ?? null),
+    summaryOutdated: !!row?.summary && row.summaryFigures !== figuresKey(data),
     updatedAt: row?.updatedAt.toISOString() ?? null,
     updatedBy: row?.updatedBy ?? null,
   };
@@ -99,11 +110,35 @@ export const getReport = (ctx: OverviewContext, month: string | undefined): Prom
 const label = (month: Month) => `Management report ${monthName(month)}`;
 const words = (s: SuggestionStatus) => suggestionStatusLabels[s].toLowerCase();
 
-/** Creates the month's record when it is first needed and returns it. Inside a transaction, after `lockMonth`. */
-async function ensure(tx: Queryable, month: Month, by: string) {
-  const existing = await rowOf(tx, month);
-  if (existing) return existing;
-  return (await tx.insert(managementReports).values({ month, createdBy: by, updatedBy: by }).returning())[0]!;
+/**
+ * Writes the month's record, creating it the first time, with its audit entry. Inside a
+ * transaction, after `lockMonth`. Nothing is written when nothing changed, so no record
+ * exists without an entry that says who made it.
+ */
+async function write(
+  tx: Tx,
+  month: Month,
+  existing: Awaited<ReturnType<typeof rowOf>>,
+  values: Partial<typeof managementReports.$inferInsert>,
+  changes: Changes,
+  by: string,
+): Promise<string | null> {
+  if (!Object.keys(changes).length) return existing?.id ?? null;
+  const id = existing
+    ? existing.id
+    : (
+        await tx
+          .insert(managementReports)
+          .values({ month, createdBy: by, updatedBy: by, ...values })
+          .returning()
+      )[0]!.id;
+  if (existing)
+    await tx
+      .update(managementReports)
+      .set({ ...values, updatedAt: new Date(), updatedBy: by })
+      .where(eq(managementReports.id, id));
+  await audit(tx, { userEmail: by, action: existing ? "update" : "create", entityType: "report", entityId: id, summary: label(month), changes });
+  return id;
 }
 
 /**
@@ -116,28 +151,27 @@ export async function suggestSummary(ctx: OverviewContext, monthAsked: string | 
   const { output, model } = await ask(ctx.ai, reportSummary, data, "write a summary");
   await ctx.db.transaction(async (tx) => {
     await lockMonth(tx, month);
-    const row = await ensure(tx, month, by.email);
-    const before = await readSuggestion(tx, row.suggestionId);
+    const row = await rowOf(tx, month);
+    const before = await readSuggestion(tx, row?.suggestionId ?? null);
     // The answer being replaced is closed, so nothing is left that looks as if it still waits for someone.
     if (before?.status === "proposed") await reviewSuggestion(tx, before.id, "rejected", "system", ctx.now());
     const suggestion = await recordSuggestion(tx, {
       prompt: reportSummary,
       subjectType: "report",
-      subjectId: row.id,
+      subjectId: month,
       model,
       inputSummary: `${monthName(month)}: ${data.sows.length} SOWs, ${data.ending.length} agreements ending, ${data.scores.length} scores, ${data.missed.length} missed targets`,
       output,
       at: ctx.now(),
     });
-    await tx.update(managementReports).set({ suggestionId: suggestion.id }).where(eq(managementReports.id, row.id));
-    await audit(tx, {
-      userEmail: by.email,
-      action: "update",
-      entityType: "report",
-      entityId: row.id,
-      summary: label(month),
-      changes: { "AI summary": { from: before ? words(before.status) : null, to: before ? "written again by the AI" : "written by the AI" } },
-    });
+    await write(
+      tx,
+      month,
+      row,
+      { suggestionId: suggestion.id },
+      { "AI summary": { from: before ? words(before.status) : null, to: before ? "written again by the AI" : "written by the AI" } },
+      by.email,
+    );
   });
   return build(ctx, month, data);
 }
@@ -150,12 +184,13 @@ const afterSave = (status: SuggestionStatus, mine: string | null, ai: string): S
 export async function saveReport(ctx: OverviewContext, monthAsked: string | undefined, input: unknown, by: User): Promise<ManagementReport> {
   const month = reportMonth(ctx, monthAsked);
   const value = reportSaveSchema.parse(input);
+  const data = await reportData(ctx, month);
   await ctx.db.transaction(async (tx) => {
     await lockMonth(tx, month);
-    const row = await ensure(tx, month, by.email);
+    const row = await rowOf(tx, month);
     const changes: Changes = {};
-    if ((row.summary ?? null) !== value.summary) changes.Summary = { from: row.summary, to: value.summary };
-    const suggestion = await readSuggestion<{ summary: string }>(tx, row.suggestionId);
+    if ((row?.summary ?? null) !== value.summary) changes.Summary = { from: row?.summary ?? null, to: value.summary };
+    const suggestion = await readSuggestion<{ summary: string }>(tx, row?.suggestionId ?? null);
     if (suggestion) {
       const status = afterSave(suggestion.status, value.summary, suggestion.output.summary);
       if (status !== suggestion.status) {
@@ -163,31 +198,41 @@ export async function saveReport(ctx: OverviewContext, monthAsked: string | unde
         changes["AI summary"] = { from: words(suggestion.status), to: words(status) };
       }
     }
-    if (!Object.keys(changes).length) return;
-    await tx.update(managementReports).set({ summary: value.summary, updatedAt: new Date(), updatedBy: by.email }).where(eq(managementReports.id, row.id));
-    await audit(tx, { userEmail: by.email, action: "update", entityType: "report", entityId: row.id, summary: label(month), changes });
+    const key = value.summary ? figuresKey(data) : null;
+    // Saving the same words again says "this still holds for today's figures".
+    if (row?.summary && value.summary && row.summaryFigures !== key && !changes.Summary)
+      changes["Summary checked against the figures"] = { from: "figures had changed", to: "confirmed" };
+    await write(tx, month, row, { summary: value.summary, summaryFigures: key }, changes, by.email);
   });
-  return build(ctx, month);
+  return build(ctx, month, data);
 }
 
-/** A person takes the AI's summary over as it is, or rejects it (AI-1). */
+/**
+ * A person takes the AI's summary over as it is, or rejects it (AI-1). The request names
+ * the suggestion the person was looking at: if the AI has written another since, nothing
+ * happens and they are asked to read the new one.
+ */
 export async function reviewSummary(ctx: OverviewContext, monthAsked: string | undefined, input: unknown, by: User): Promise<ManagementReport> {
   const month = reportMonth(ctx, monthAsked);
-  const { action } = suggestionReviewSchema.parse(input);
+  const { action, suggestionId } = suggestionReviewSchema.parse(input);
+  const data = await reportData(ctx, month);
   await ctx.db.transaction(async (tx) => {
     await lockMonth(tx, month);
     const row = await rowOf(tx, month);
     const suggestion = await readSuggestion<{ summary: string }>(tx, row?.suggestionId ?? null);
     if (!row || !suggestion) throw new AppError(409, "no_suggestion", "There is no AI summary for this month. Ask the AI for one first.");
+    if (suggestion.id !== suggestionId) throw replaced();
     const status: SuggestionStatus = action === "accept" ? "accepted" : "rejected";
     const changes: Changes = {};
     if (status !== suggestion.status) changes["AI summary"] = { from: words(suggestion.status), to: words(status) };
     if (action === "accept" && row.summary !== suggestion.output.summary) changes.Summary = { from: row.summary, to: suggestion.output.summary };
     if (!Object.keys(changes).length) return;
     await reviewSuggestion(tx, suggestion.id, status as "accepted" | "rejected", by.email, ctx.now());
-    if (changes.Summary)
-      await tx.update(managementReports).set({ summary: suggestion.output.summary, updatedAt: new Date(), updatedBy: by.email }).where(eq(managementReports.id, row.id));
-    await audit(tx, { userEmail: by.email, action: "update", entityType: "report", entityId: row.id, summary: label(month), changes });
+    await write(tx, month, row, action === "accept" ? { summary: suggestion.output.summary, summaryFigures: figuresKey(data) } : {}, changes, by.email);
   });
-  return build(ctx, month);
+  return build(ctx, month, data);
 }
+
+/** The AI's text on screen is no longer the current one: someone asked again in the meantime. */
+export const replaced = () =>
+  new AppError(409, "suggestion_replaced", "The AI has written a new text since this page was loaded. Nothing was changed. Read the new text, then choose again.");

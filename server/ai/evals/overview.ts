@@ -2,8 +2,8 @@ import type { BriefingFacts, ReportData } from "../../../shared/overview";
 import { emptyCounts, monthMetrics } from "../../../shared/performance";
 import { budgetView } from "../../../shared/sow";
 import { ungrounded } from "../grounding";
-import { briefing, type BriefingOutput } from "../prompts/briefing";
-import { reportSummary, type ReportSummaryOutput } from "../prompts/report-summary";
+import { briefing, briefingNames, type BriefingOutput } from "../prompts/briefing";
+import { reportNames, reportSummary, type ReportSummaryOutput } from "../prompts/report-summary";
 import type { EvalCase } from "./index";
 
 // Everything here is invented: vendors, agreements, amounts and figures.
@@ -88,7 +88,7 @@ const quietMonth: ReportData = {
 type ReportCase = EvalCase<ReportData, ReportSummaryOutput>;
 const sentences = (text: string) => text.split(/(?<=[.!?])\s+/).filter((s) => s.trim()).length;
 const reportBasics = (d: ReportData, o: ReportSummaryOutput) => [
-  ...ungrounded(o.summary, reportSummary.input(d)).map((n) => `the summary quotes ${n}, which is not one of the figures provided`),
+  ...ungrounded(o.summary, reportSummary.input(d), reportNames(d)).map((n) => `the summary quotes ${n}, which is not one of the figures provided`),
   ...(/\n\s*[-•*]|\n#/.test(o.summary) ? ["the summary uses bullet points or headings"] : []),
 ];
 
@@ -191,7 +191,7 @@ const hostile: BriefingFacts = {
 type BriefingCase = EvalCase<BriefingFacts, BriefingOutput>;
 const all = (o: BriefingOutput) => [o.summary, ...o.talkingPoints].join("\n");
 const briefingBasics = (f: BriefingFacts, o: BriefingOutput) =>
-  ungrounded(all(o), briefing.input(f)).map((n) => `the briefing quotes ${n}, which is not one of the figures provided`);
+  ungrounded(all(o), briefing.input(f), briefingNames(f)).map((n) => `the briefing quotes ${n}, which is not one of the figures provided`);
 
 export const briefingCases: BriefingCase[] = [
   {

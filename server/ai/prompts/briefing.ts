@@ -2,12 +2,22 @@ import { z } from "zod";
 import { agreementName, statusLabels } from "../../../shared/agreements";
 import { formatDay } from "../../../shared/dates";
 import { formatMoney } from "../../../shared/money";
-import { metricTrendWords, trendWords, type BriefingFacts } from "../../../shared/overview";
+import { BRIEFING_DATES_DAYS, BRIEFING_MONTHS, metricTrendWords, trendWords, type BriefingFacts } from "../../../shared/overview";
 import { formatMetric, formatTarget, metricInfo, metricKeys, monthName } from "../../../shared/performance";
 import { formatScore, paperworkWords, quarterName } from "../../../shared/scorecards";
 import { vendorStatusLabels, vendorTypeLabels } from "../../../shared/vendors";
 import { ungrounded } from "../grounding";
 import type { Prompt } from "../index";
+
+/** The names people typed that appear in a briefing's facts. */
+export const briefingNames = (f: BriefingFacts): string[] => [
+  f.vendor.name,
+  f.vendor.ownerName,
+  ...f.agreements.map((a) => a.title),
+  ...f.budgets.map((b) => b.title),
+  ...f.milestones.flatMap((m) => [m.title, m.sowTitle]),
+  ...f.changeRequests.flatMap((c) => [c.title, c.sowTitle]),
+];
 
 const output = z.object({
   summary: z.string().trim().min(1).max(1200),
@@ -36,6 +46,8 @@ export const briefing: Prompt<BriefingFacts, BriefingOutput> = {
   input: (f) => ({
     task: "briefing",
     asAt: formatDay(f.asAt),
+    // The windows the briefing uses, so that "the last 12 months" is a figure the model was given.
+    windows: { datesLookAhead: `${BRIEFING_DATES_DAYS} days`, invoicedOver: "12 months", helpdeskMonthsShown: BRIEFING_MONTHS },
     vendor: {
       name: f.vendor.name,
       type: vendorTypeLabels[f.vendor.type],
@@ -97,7 +109,7 @@ export const briefing: Prompt<BriefingFacts, BriefingOutput> = {
   }),
   output,
   check: (f, o) => {
-    const extra = ungrounded([o.summary, ...o.talkingPoints].join("\n"), briefing.input(f));
+    const extra = ungrounded([o.summary, ...o.talkingPoints].join("\n"), briefing.input(f), briefingNames(f));
     return extra.length ? `the briefing quotes ${extra.join(", ")}, which is not among the figures provided` : null;
   },
 };

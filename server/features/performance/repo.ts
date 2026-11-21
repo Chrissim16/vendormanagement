@@ -8,7 +8,7 @@ export type LinkRow = typeof jiraBoardLinks.$inferSelect;
 
 // ---------- Board links
 
-const linkColumns = { link: jiraBoardLinks, vendorName: vendors.name, scoringEnabled: vendors.scoringEnabled };
+const linkColumns = { link: jiraBoardLinks, vendorName: vendors.name, scoringEnabled: vendors.scoringEnabled, vendorStatus: vendors.status };
 export const listLinks = (db: Queryable) =>
   db
     .select(linkColumns)

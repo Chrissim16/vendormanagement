@@ -2,11 +2,21 @@ import { z } from "zod";
 import { agreementName } from "../../../shared/agreements";
 import { formatDay } from "../../../shared/dates";
 import { formatMoney } from "../../../shared/money";
-import { trendWords, type ReportData } from "../../../shared/overview";
+import { REPORT_ENDING_DAYS, trendWords, type ReportData } from "../../../shared/overview";
 import { formatMetric, formatTarget, metricInfo, monthName } from "../../../shared/performance";
 import { formatScore, quarterName } from "../../../shared/scorecards";
 import { ungrounded } from "../grounding";
 import type { Prompt } from "../index";
+
+/** The names people typed that the report's figures are listed under. */
+export const reportNames = (d: ReportData): string[] => [
+  ...d.spend.byVendor.map((v) => v.vendorName),
+  ...d.sows.flatMap((s) => [s.vendorName, s.title]),
+  ...d.ending.flatMap((e) => [e.vendorName, e.title]),
+  ...d.scores.map((s) => s.vendorName),
+  ...d.missed.map((m) => m.vendorName),
+  ...d.rfps.map((r) => r.title),
+];
 
 const output = z.object({ summary: z.string().trim().min(1).max(1200) });
 export type ReportSummaryOutput = z.infer<typeof output>;
@@ -32,6 +42,8 @@ export const reportSummary: Prompt<ReportData, ReportSummaryOutput> = {
     task: "report_summary",
     month: monthName(d.month),
     figuresAsAt: formatDay(d.asAt),
+    // The windows the report uses, so that "ending in the next 90 days" is a figure the model was given.
+    windows: { agreementsEndingWithin: `${REPORT_ENDING_DAYS} days` },
     invoicedInTheMonth: {
       euros: formatMoney(d.spend.total.EUR, "EUR"),
       pounds: formatMoney(d.spend.total.GBP, "GBP"),
@@ -70,7 +82,7 @@ export const reportSummary: Prompt<ReportData, ReportSummaryOutput> = {
   }),
   output,
   check: (d, o) => {
-    const extra = ungrounded(o.summary, reportSummary.input(d));
+    const extra = ungrounded(o.summary, reportSummary.input(d), reportNames(d));
     return extra.length ? `the summary quotes ${extra.join(", ")}, which is not among the figures provided` : null;
   },
 };

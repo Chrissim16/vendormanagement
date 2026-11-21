@@ -57,6 +57,13 @@
       "when": 1795278750431,
       "tag": "0007_bitter_talisman",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795280834278,
+      "tag": "0008_warm_ultimates",
+      "breakpoints": true
     }
   ]
 }

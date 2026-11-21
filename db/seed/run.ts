@@ -404,8 +404,8 @@ async function seedOverview(ctx: ScorecardContext, today: Day) {
   if (!sanne || !quillon) return;
   await createBriefing(ctx, quillon.id, toUser(sanne));
   const month = addMonth(monthOf(today), -2);
-  await suggestSummary(ctx, month, toUser(sanne));
-  await reviewSummary(ctx, month, { action: "accept" }, toUser(sanne));
+  const report = await suggestSummary(ctx, month, toUser(sanne));
+  await reviewSummary(ctx, month, { action: "accept", suggestionId: report.suggestion!.id }, toUser(sanne));
 }
 
 async function seedCore(db: Db, today: Day) {

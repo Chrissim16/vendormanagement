@@ -113,11 +113,11 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 
 **B-1 Vendor briefing.** From a vendor page a member prepares a briefing covering agreements and upcoming dates, spend against budget, performance and trend, missed targets, open milestones and change requests, risk flags and suggested talking points. Every figure matches the app's data on the day it was prepared, and the briefing keeps those figures afterwards. The AI suggests a summary and talking points; they become part of the briefing when a member uses them, and can be edited, saved and exported as PDF.
 
-**R-1 Risk flags.** The warnings page also shows: a time and materials SOW whose invoicing rate points to an overrun before its end date; a vendor whose metric has worsened three months in a row; a SOW ending within the SOW warning window (30 days unless an admin changed it) with open milestones. Each flag states the facts that triggered it.
+**R-1 Risk flags.** The warnings page also shows: a SOW whose invoicing rate points to an overrun before its end date; a vendor whose metric has worsened three months in a row; a SOW ending within the SOW warning window (30 days unless an admin changed it) with open milestones. Each flag states the facts that triggered it.
 
 **D-1 Dashboard.** The landing page shows warnings and risk flags by type, SOWs by budget used, spend for the last 12 months, vendor scores with trend, scorecards due this quarter and open RFPs. Each item links to the detail.
 
-**D-2 Monthly management report.** A member generates a one to two page PDF for a chosen month with spend against budgets, agreements ending in the next 90 days, vendor scores with trend, missed SLA targets and open RFPs with their stage. An AI-written summary paragraph can be edited before export; it is printed only once a member has used or written it.
+**D-2 Monthly management report.** A member generates a one to two page PDF for a chosen month with spend against budgets, agreements ending in the next 90 days, vendor scores with trend, missed SLA targets and open RFPs with their stage. An AI-written summary paragraph can be edited before export; it is printed only once a member has used or written it, and the report says so when the month's figures have changed since.
 
 ## RFP (M6)
 
