@@ -178,6 +178,7 @@ test.describe("P-2 quarterly scorecard", () => {
     const suggested = (await getJson<ScorecardDetail>(request, `/scorecards/${page.url().split("/").pop()}`)).lines[0]!.suggestion!;
     expect(suggested.months.map((m) => m.month)).toContain("2026-04");
     await expect(quality.getByText(`AI suggests ${suggested.score}`)).toBeVisible();
+    await expect(quality.getByText(/Nobody has reviewed (it|them|\d of them) yet\./)).toBeVisible();
     await expect(scoreButton(page, "Quality of delivery", suggested.score)).toHaveAttribute("aria-pressed", "false");
     await expect(scoreButton(page, "Quality of delivery", suggested.score)).toHaveAccessibleName(`${suggested.score}, suggested by the AI`);
     await quality.getByRole("button", { name: "Show evidence" }).click();
@@ -185,8 +186,17 @@ test.describe("P-2 quarterly scorecard", () => {
     await expect(quality.getByRole("list", { name: "Monthly proposals for Quality of delivery" })).toContainText(april.scores[0]!.reason);
     await expectAccessible(page);
 
-    // Accepting makes it the score.
+    // Accepting makes it the score, with a short burst of small squares (design guide).
+    await page.evaluate(() => {
+      const w = window as unknown as { squares: number };
+      w.squares = 0;
+      new MutationObserver((list) => {
+        for (const m of list)
+          for (const node of m.addedNodes) if (node instanceof HTMLElement && node.style.position === "fixed" && node.getAttribute("aria-hidden") === "true") w.squares++;
+      }).observe(document.body, { childList: true });
+    });
     await quality.getByRole("button", { name: `Accept ${suggested.score}` }).click();
+    await expect.poll(() => page.evaluate(() => (window as unknown as { squares: number }).squares)).toBe(9);
     await expect(scoreButton(page, "Quality of delivery", suggested.score)).toHaveAttribute("aria-pressed", "true");
     await expect(quality.getByText("Accepted as it was.")).toBeVisible();
     await expect(page.getByRole("status")).toContainText("4 of 5 still to score");

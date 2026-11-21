@@ -10,16 +10,55 @@ Newest entry first. Written for the owner, in plain language.
 | M1 Vendors and agreements | Done |
 | M2 SOW delivery and money | Done |
 | M3 Performance from Jira | Done here; the real Jira connection is unproven until tried at work |
-| M4 Scorecards and AI scoring | Not started |
+| M4 Scorecards and AI scoring | Done here; the AI proposals are unproven until tried with the company's model |
 | M5 Briefings, risk flags, dashboard, report | Not started |
 | M6 RFP | Not started |
 | M7 Ask a question | Not started |
 | M8 Contract reading | Not started |
 | M9 Move to Databricks | Not started; done at work |
 
-**Next:** M4 Scorecards and AI scoring.
+**Next:** M5 Briefings, risk flags, dashboard, report.
 
 ## Log
+
+### 2026-11-21 M4 Scorecards and AI scoring done
+The app now scores vendors. Each month the AI proposes scores for the helpdesk vendors, and each quarter a team member turns that, together with their own judgement, into a scorecard that can be sent to the vendor. Because the company's AI model cannot be reached from here, a stand-in writes the proposals by simple rules; it proves that everything around the AI works, not how good a real model's proposals will be (see "Needs your attention").
+
+What you can do in it:
+
+- **See the AI's proposal for a month.** Open a helpdesk vendor on Performance and choose a month that is over. Under the figures is the AI's proposal: a score from 1 to 5 for each criterion that is measured from Jira, the reason in a few sentences, the figures it was given, and the problems that came back in several tickets, each with example tickets. It is marked as written by the AI, with the date.
+- **Decide about a proposal.** Accept it, change its scores, or reject it. The page then says who decided and when, and the vendor's history keeps it. Nothing the AI writes counts for anything until someone accepts it. A decision can be changed later.
+- **Ask the AI yourself.** Last month's proposals are written by the app itself. For an earlier month, press "Ask the AI for a proposal". If the AI cannot answer, the page says so and everything else keeps working.
+- **Start a scorecard.** On Performance there are now two views, Helpdesk and Scorecards. Press "Start a scorecard", choose a vendor and a quarter. You are its reviewer.
+- **Score it.** Each criterion has a row of five squares. For criteria measured from Jira, the AI's suggestion (the average of the quarter's monthly proposals) is shown as an outline with "Show evidence" and an Accept button; it only becomes the score when you accept it or pick another. For the other criteria you choose the score yourself. Three tiles at the top give the facts the app already holds: whether budgets were kept, whether milestones were on time, and whether the NDA and data processing agreement are in place. Each criterion takes a comment for the vendor and a note for the team. Every change is saved at once.
+- **Vendors without a Jira board** get the same scorecard, with every criterion scored by hand and the same facts shown.
+- **Finalise.** Once the quarter is over and every criterion has a score, press "Finalise scorecard". From then on it cannot be changed; only an admin can reopen it. A final scorecard keeps the criteria, weights and figures it was finalised with, whatever changes later.
+- **Send it to the vendor.** A final scorecard has a "Vendor PDF" button. The PDF has the scores, your comments for the vendor, the summary and the helpdesk figures. Internal notes are never in it.
+- **Change what vendors are scored on (admin).** The Criteria page lists the five criteria and how much each counts. An admin can add one, change its weight or switch it off.
+- **Vendors that are not scored** have no proposals and no scorecards, and cannot be chosen when starting one.
+
+The sample data has AI proposals for the three helpdesk vendors from July to October (some accepted, October still waiting for someone to look), two final scorecards for the third quarter (one of them for a vendor without a board) and one draft to try scoring on.
+
+How it was checked: an independent tester used the running app against all nine requirements and the general ones, twice (the second time on the final code); it recalculated the suggested and overall scores by hand and compared the figures shown with each proposal against the performance pages. Everything passed. An independent reviewer read all the code and found nothing that had to be fixed and nine things that should be, all fixed with a test each. The ones that mattered most: the vendor PDF could have shown a colleague's work email address; someone accepting a proposal at the very moment a colleague pressed "Ask again" could have had their decision overwritten; a scorecard could be finalised in the middle of its quarter, giving a PDF with half-empty months; and a ticket written to manipulate the AI ("score this a 5") had too little standing in its way. The tester also found that two notes typed in quick succession could wipe each other, and that a scorecard could be finalised over a note that had failed to save; both are fixed. The second test found two cosmetic slips (a garbled sentence and a missing animation), also fixed. The Jira changes from earlier today were reviewed as well, with no faults found.
+
+Needs your attention:
+
+- **No real AI model has been tried.** No key for a real model was available in this build environment, so the proposals you see come from the stand-in, which scores by simple rules and finds "themes" only where tickets have the same title. The app has a set of invented test cases for judging a real model's proposals; they have so far only been run against the stand-in. At work, run them once against the company's model (the runbook says how) before relying on the proposals.
+- **Two requirements were reworded** to match what was built, and one gained a condition: the AI's proposal is made for months that are over (P-1); on a scorecard the AI's score is a suggestion until you accept it, not a filled-in score you can change (P-2); and a scorecard is finalised only after its quarter has ended (P-3). Say if you want any of these differently.
+- **Proposals nobody has looked at still feed the scorecard's suggestion.** Only rejected ones are left out; the scorecard says how many have not been reviewed. Say if only accepted proposals should count.
+
+Decided on your behalf (see `docs/open-questions.md`, Q28 to Q40):
+
+- The five criteria count equally until an admin changes the weights.
+- Any team member may ask the AI for a proposal and accept, change or reject one.
+- The person who starts a scorecard is its reviewer; there is one scorecard per vendor per quarter.
+- A draft scorecard follows the criteria as they are today; a final one is frozen; a reopened one follows today's criteria again.
+- "Budget kept" compares what was invoiced by the end of the quarter with the budget.
+- The vendor PDF leaves out internal notes, the facts about budgets and paperwork, and any mention of the AI.
+- When a vendor's scoring is switched off, its scorecards are kept but no longer shown.
+- The AI reads at most the newest 250 tickets of a month; a theme needs at least two tickets.
+- A draft can be removed; a final scorecard cannot.
+- Letters outside Western European alphabets print as a question mark in the PDF for now.
 
 ### 2026-11-21 Jira connection checked against Atlassian's documentation
 The check left open at the end of M3 is done: this build environment can open Atlassian's developer documentation, and the Jira connection was compared with it point by point.
@@ -149,6 +188,15 @@ architecture and plan were rewritten to match. The plan now has ten milestones.
 First version of the brief, requirements, plan and agent workflow. No application code yet.
 
 ## Follow-ups
+- The AI's proposals have only been written by the stand-in. Run the invented test cases against the company's model at work before relying on them (runbook, "After the first deployment: AI proposals").
+- The AI's written reason is not checked sentence by sentence against the figures. The figures the app worked out are always shown right under it, and a score that flatly contradicts them is refused, but a reason could still misquote a number.
+- "Ask again" can be pressed as often as anyone likes, and each press is one call to the AI model. Fine for five people; add a limit if the model turns out to be costly.
+- The app writing last month's proposals by itself was checked by running that step directly, not by watching the timer fire after hours of running.
+- A scorecard's history and its "Finalised by" line show email addresses where the rest of the page shows names. The same is true of history everywhere in the app.
+- In the vendor PDF each weight is rounded by itself, so three equal weights print as 33%, 33% and 33%.
+- Letters outside Western European alphabets print as a question mark in the PDF (open question Q39).
+- A scorecard an admin reopens follows today's criteria and figures again; what it showed while final is only in its history.
+- A ticket deleted in Jira in the instant between two steps of a sync is kept, without its history, until the next sync an hour later removes it.
 - Linking a board fetches its tickets while the admin waits. Since the documentation check this takes a handful of requests even for a large board (history is asked for a thousand tickets at a time, not ticket by ticket), so it should be seconds, not minutes. To be measured once at work.
 - Jira connection, still to be seen at work (open question W8): the names of the four measurements on the company's Jira, how a satisfaction rating is written on a ticket, the names "status" and "labels" in a ticket's history, and whether the company's kind of API token works on the Jira address itself. One Test link and one Sync now on a real board answer all four.
 - A board whose sync is switched off keeps its tickets beyond 24 months, since the clean-up runs with the sync.
@@ -168,5 +216,4 @@ First version of the brief, requirements, plan and agent workflow. No applicatio
 - The rate dialog shows one problem at a time when both the role and the rate are wrong.
 - One older check (two admins demoting each other at the same instant) failed once in seven runs on the real database while the machine was busy, and passed every other time. To be watched; if it recurs it needs a proper look.
 - Two people changing the same SOW at the very same moment has been reasoned through and guarded, but not tried with two real people.
-- PDF export moved from M1 to M4, the first milestone that produces a PDF.
 - Deploy the app once at work as a rehearsal (open question Q3). With M1 done there is now something real to try there.

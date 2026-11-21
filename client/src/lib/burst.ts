@@ -5,9 +5,10 @@ const colours = ["var(--accent)", "var(--primary)", "var(--ok)", "var(--warn)", 
  * suggestion, finalising). Decoration only: it is skipped when the person asked for
  * reduced motion, and nothing waits for it.
  */
-export function burst(from: Element | null, count = 12) {
+export function burst(from: Element | DOMRect | null | undefined, count = 12) {
   if (!from || typeof window.matchMedia !== "function" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  const box = from.getBoundingClientRect();
+  // A place measured earlier can be passed in, for a button that is gone by the time its action has succeeded.
+  const box = from instanceof Element ? from.getBoundingClientRect() : from;
   for (let i = 0; i < count; i++) {
     const square = document.createElement("span");
     square.setAttribute("aria-hidden", "true");

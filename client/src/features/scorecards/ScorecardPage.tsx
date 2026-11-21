@@ -282,7 +282,7 @@ function CriterionRow({
           <p className="min-w-[240px] flex-1">
             The average of {plural(s.months.length, "monthly proposal")}: {s.months.map((m) => `${monthShort(m.month)} ${m.score}`).join(", ")}.
             {waiting > 0 &&
-              ` ${waiting === s.months.length ? (waiting === 1 ? "It has" : "None has") : `${waiting} of them ${waiting === 1 ? "has" : "have"}`} not been reviewed by anyone yet.`}
+              ` ${waiting === s.months.length ? (waiting === 1 ? "Nobody has reviewed it yet." : "Nobody has reviewed them yet.") : `Nobody has reviewed ${waiting} of them yet.`}`}
           </p>
           {toggle}
           <Button
@@ -290,7 +290,9 @@ function CriterionRow({
             variant="primary"
             className="h-8"
             onClick={async () => {
-              if (await onChange({ ...current, score: s.score, acceptedSuggestion: true })) burst(acceptRef.current, 9);
+              // The button is gone once the score is saved, so where it was is noted first.
+              const from = acceptRef.current?.getBoundingClientRect();
+              if (await onChange({ ...current, score: s.score, acceptedSuggestion: true })) burst(from, 9);
             }}
           >
             Accept {s.score}
