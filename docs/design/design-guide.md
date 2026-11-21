@@ -20,7 +20,7 @@ with a dark mode the user switches to.
 | Sunken fill (tiles, search, pills) | `#F2F6FB` | `#181B22` |
 | Text | `#1A1F2B` | `#F3F4F7` |
 | Secondary text | `#555D70` | `#B4B9C6` |
-| Faint text | `#8B92A3` | `#7F8696` |
+| Faint text | `#6A7285` | `#8E95A5` |
 | Brand accent (links, chart highlight, focus) | `#0089DD` | `#39A9F0` |
 | Primary fill (main button, selected score) | `#0077C8` | `#39A9F0` |
 | Brand tint (AI suggestion, selected row, hover) | `#EBF5FC` | accent at 16% |
@@ -131,6 +131,8 @@ with the fact ("Notice deadline passed 12 Nov"), not the system's term for it.
 | Toasts | Sonner |
 | Theme switch | The browser's View Transitions feature, no library |
 
-To settle at M0: whether Databricks AppKit's own component set is built on the same
-foundations. If it is, use it restyled; if it conflicts with this guide, use the list
-above and keep AppKit for the server side.
+Settled at M0: Databricks AppKit's component set is not used. It is built on the same
+foundations (shadcn, Radix) but brings its own look and a different chart library, so the
+app uses the list above. Components are written in the repository in the shadcn manner.
+TanStack Table and Recharts are added when the first screen needs them (M1 and M2).
+Faint text was darkened from the prototype so small labels meet contrast requirements.

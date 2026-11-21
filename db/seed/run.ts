@@ -17,15 +17,3 @@ export async function seed(db: Db) {
     .values(seedUsers.map((u) => ({ ...u, createdBy: "seed", updatedBy: "seed" })))
     .onConflictDoNothing();
 }
-
-if (import.meta.url === `file://${process.argv[1]}`) {
-  const { loadConfig } = await import("../../server/platform/config");
-  const { buildPorts } = await import("../../server/platform/ports");
-  const config = loadConfig();
-  if (config.platform !== "local") throw new Error("Sample data is for local use only.");
-  const ports = await buildPorts(config);
-  await ports.database.migrate();
-  await seed(ports.database.db);
-  await ports.database.close();
-  console.log("Sample data loaded.");
-}

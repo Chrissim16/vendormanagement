@@ -1,0 +1,26 @@
+# Databricks Apps configuration. UNPROVEN until the first deployment; see docs/runbook.md.
+# The platform runs `npm run build`, then this command.
+command: ["npm", "run", "start"]
+env:
+  - name: PLATFORM
+    value: databricks
+  - name: NODE_ENV
+    value: production
+  # The first admin. Change to the owner's work email before deploying.
+  - name: BOOTSTRAP_ADMIN_EMAIL
+    value: "change-me@example.test"
+  # Resources attached to the app in Databricks. The value after valueFrom is the resource key.
+  - name: LAKEBASE_ENDPOINT
+    valueFrom: postgres
+  - name: VOLUME_PATH
+    valueFrom: volume
+  - name: AI_STRONG_ENDPOINT
+    valueFrom: ai-strong
+  - name: AI_FAST_ENDPOINT
+    valueFrom: ai-fast
+  - name: JIRA_BASE_URL
+    value: "https://change-me.atlassian.net"
+  - name: JIRA_EMAIL
+    valueFrom: jira-email
+  - name: JIRA_API_TOKEN
+    valueFrom: jira-token

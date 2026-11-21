@@ -45,9 +45,9 @@ Read `progress.md` first in every session. Read the other files when the task to
 
 ## Rules that are easy to get wrong
 
-- Databricks AppKit is a v0 SDK and changes quickly. Before using an AppKit or Databricks
-  Apps API, check the current docs (use the `databricks-researcher` agent) instead of
-  relying on memory.
+- Databricks, Lakebase and Jira cannot be reached from here. Before writing code against
+  one of them, check the current docs with the `databricks-researcher` agent, and mark
+  the code UNPROVEN until it has run in the workspace.
 - The signed-in user comes from the `X-Forwarded-Email` header, which only exists when
   deployed. Local development uses the `DEV_USER_EMAIL` variable. Never trust a user
   identity sent in a request body or query string.
@@ -72,8 +72,8 @@ Read `progress.md` first in every session. Read the other files when the task to
 
 ## Commands
 
-These exist from milestone M0 onwards. Update this list if they change.
-
-- `npm run dev` starts the app locally against the local Postgres database
-- `npm run check` runs typecheck, lint, unit tests and end-to-end tests; must pass before any commit
-- `npm run db:migrate` applies migrations; `npm run db:seed` loads sample data
+- `npm run dev` starts the app locally (server on 3000, screens on http://localhost:5173) with a built-in database in `.data/`; no install beyond `npm install`
+- `npm run check` runs typecheck, lint, server tests, build and browser tests; must pass before any commit
+- `npm run db:seed` loads the invented sample data; `npm run db:generate` creates a migration after a schema change (migrations apply themselves at start)
+- `npx vitest run <path>` and `npx playwright test -g "<requirement ID>" --trace off` run part of the tests
+- Sign in locally as someone else with the "Viewing as" menu, or the `dev_user` cookie in tests

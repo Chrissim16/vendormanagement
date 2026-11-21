@@ -16,9 +16,7 @@ export function devIdentity(defaultEmail: string): IdentityPort {
     },
     async check(req) {
       const id = this.resolve(req);
-      return id
-        ? { ok: true, detail: `Stand-in sign-in. You are ${id.email}.` }
-        : { ok: false, detail: "No stand-in user is set.", fix: "Set DEV_USER_EMAIL in the .env file." };
+      return id ? { ok: true, detail: `Stand-in sign-in. You are ${id.email}.` } : { ok: false, detail: "No stand-in user is set.", fix: "Set DEV_USER_EMAIL in the .env file." };
     },
   };
 }

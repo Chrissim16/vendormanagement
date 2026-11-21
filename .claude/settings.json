@@ -15,11 +15,6 @@
       "Bash(git add *)",
       "Bash(git commit *)"
     ],
-    "deny": [
-      "Read(./.env)",
-      "Read(./.env.local)",
-      "Bash(databricks apps delete *)",
-      "Bash(git push --force *)"
-    ]
+    "deny": ["Read(./.env)", "Read(./.env.local)", "Bash(databricks apps delete *)", "Bash(git push --force *)"]
   }
 }

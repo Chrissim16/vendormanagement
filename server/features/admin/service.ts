@@ -64,7 +64,15 @@ export async function systemCheck(ports: Ports, req: Request, user: User): Promi
         cases: ran,
       };
     } catch (e) {
-      return { key, label, kind: port.kind, ok: false, detail: (e as Error).message, fix: "Try again. If it keeps failing, the service may be unreachable from the app.", cases: [] };
+      return {
+        key,
+        label,
+        kind: port.kind,
+        ok: false,
+        detail: (e as Error).message,
+        fix: "Try again. If it keeps failing, the service may be unreachable from the app.",
+        cases: [],
+      };
     }
   };
   return Promise.all([

@@ -44,18 +44,20 @@ export async function postgresDatabase(
   const pg = (await import("pg")).default;
   const { drizzle } = await import("drizzle-orm/node-postgres");
   const { migrate } = await import("drizzle-orm/node-postgres/migrator");
-  const pool = options.pool ?? new pg.Pool({
-    connectionString: options.connectionString,
-    host: options.host,
-    port: options.port,
-    database: options.database,
-    user: options.user,
-    password: options.password,
-    ssl: options.ssl ? { rejectUnauthorized: true } : undefined,
-    max: 5,
-    // Lakebase tokens last about an hour; recycle connections well before that.
-    maxLifetimeSeconds: kind === "real" ? 1800 : 0,
-  });
+  const pool =
+    options.pool ??
+    new pg.Pool({
+      connectionString: options.connectionString,
+      host: options.host,
+      port: options.port,
+      database: options.database,
+      user: options.user,
+      password: options.password,
+      ssl: options.ssl ? { rejectUnauthorized: true } : undefined,
+      max: 5,
+      // Lakebase tokens last about an hour; recycle connections well before that.
+      maxLifetimeSeconds: kind === "real" ? 1800 : 0,
+    });
   const d = drizzle(pool, { schema });
   const db = d as unknown as Db;
   return {

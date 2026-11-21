@@ -35,7 +35,10 @@ export function storageContract(store: StoragePort): ContractCase[] {
       async run() {
         await store.remove(key);
         await store.remove(key);
-        await assert.rejects(() => store.get(key), (e: { status?: number }) => e.status === 404);
+        await assert.rejects(
+          () => store.get(key),
+          (e: { status?: number }) => e.status === 404,
+        );
       },
     },
     {

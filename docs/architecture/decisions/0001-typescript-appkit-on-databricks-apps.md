@@ -22,3 +22,12 @@ One language, TypeScript, using Databricks AppKit (Express plus React) with Lake
 ## Alternatives considered
 - FastAPI plus React: two languages for no gain here.
 - Streamlit or Dash: quick to start, weak for multi-page CRUD with role checks and tested UI flows.
+
+## Revised at M0 (2026-11-21)
+AppKit is not adopted as the server framework. The app has to run and be tested outside
+Databricks, and AppKit's server expects a workspace. The app is plain Express and React,
+which Databricks Apps runs as it runs any Node.js app. Only Databricks' standalone
+`@databricks/lakebase` helper is used, inside the database port, because it handles the
+database token refresh. AppKit's component set (shadcn-based, with ECharts) is not used
+either; the app follows its own design guide. If the workspace only offers Lakebase
+Provisioned, the database port connects with a plain pool and the credentials API.

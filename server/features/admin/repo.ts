@@ -24,8 +24,17 @@ export async function listUsers(db: Queryable, f: UserFilter) {
   const cond = where.length ? and(...where) : undefined;
   const col = userSort[f.sort];
   const [items, total] = await Promise.all([
-    db.select().from(users).where(cond).orderBy(f.dir === "asc" ? asc(col) : desc(col), asc(users.email)).limit(f.pageSize).offset((f.page - 1) * f.pageSize),
-    db.select({ n: sql<number>`count(*)::int` }).from(users).where(cond),
+    db
+      .select()
+      .from(users)
+      .where(cond)
+      .orderBy(f.dir === "asc" ? asc(col) : desc(col), asc(users.email))
+      .limit(f.pageSize)
+      .offset((f.page - 1) * f.pageSize),
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(users)
+      .where(cond),
   ]);
   return { items, total: total[0]?.n ?? 0 };
 }
@@ -33,10 +42,19 @@ export async function listUsers(db: Queryable, f: UserFilter) {
 export const getUser = async (db: Queryable, id: string) => (await db.select().from(users).where(eq(users.id, id)))[0];
 
 export const countOtherActiveAdmins = async (db: Queryable, id: string) =>
-  (await db.select({ n: sql<number>`count(*)::int` }).from(users).where(and(eq(users.role, "admin"), eq(users.active, true), ne(users.id, id))))[0]?.n ?? 0;
+  (
+    await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(users)
+      .where(and(eq(users.role, "admin"), eq(users.active, true), ne(users.id, id)))
+  )[0]?.n ?? 0;
 
 export async function updateUser(db: Queryable, id: string, patch: { role?: "admin" | "member"; active?: boolean }, by: string) {
-  const rows = await db.update(users).set({ ...patch, updatedAt: new Date(), updatedBy: by }).where(eq(users.id, id)).returning();
+  const rows = await db
+    .update(users)
+    .set({ ...patch, updatedAt: new Date(), updatedBy: by })
+    .where(eq(users.id, id))
+    .returning();
   return rows[0]!;
 }
 
@@ -59,11 +77,19 @@ export async function listAudit(db: Queryable, f: AuditFilter) {
   if (f.to) where.push(lt(auditLog.at, new Date(new Date(`${f.to}T00:00:00Z`).getTime() + 86_400_000)));
   const cond = where.length ? and(...where) : undefined;
   const [items, total] = await Promise.all([
-    db.select().from(auditLog).where(cond).orderBy(desc(auditLog.at), desc(auditLog.id)).limit(f.pageSize).offset((f.page - 1) * f.pageSize),
-    db.select({ n: sql<number>`count(*)::int` }).from(auditLog).where(cond),
+    db
+      .select()
+      .from(auditLog)
+      .where(cond)
+      .orderBy(desc(auditLog.at), desc(auditLog.id))
+      .limit(f.pageSize)
+      .offset((f.page - 1) * f.pageSize),
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(auditLog)
+      .where(cond),
   ]);
   return { items, total: total[0]?.n ?? 0 };
 }
 
-export const auditEntityTypes = async (db: Queryable) =>
-  (await db.selectDistinct({ t: auditLog.entityType }).from(auditLog).orderBy(asc(auditLog.entityType))).map((r) => r.t);
+export const auditEntityTypes = async (db: Queryable) => (await db.selectDistinct({ t: auditLog.entityType }).from(auditLog).orderBy(asc(auditLog.entityType))).map((r) => r.t);

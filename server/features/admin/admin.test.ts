@@ -110,7 +110,10 @@ describe("F-3 audit trail", () => {
   it("writes nothing when nothing changed or the change was refused", async () => {
     const id = await userId(ADMIN);
     // The previous test made a second admin; undo that so the last-admin rule applies again.
-    await t.as(ADMIN).patch(`/api/admin/users/${await userId("sanne@example.test")}`).send({ role: "member" });
+    await t
+      .as(ADMIN)
+      .patch(`/api/admin/users/${await userId("sanne@example.test")}`)
+      .send({ role: "member" });
     const before = (await t.as(ADMIN).get("/api/admin/audit")).body.total;
     await t.as(ADMIN).patch(`/api/admin/users/${id}`).send({ role: "admin" });
     await t.as(ADMIN).patch(`/api/admin/users/${id}`).send({ role: "member" });

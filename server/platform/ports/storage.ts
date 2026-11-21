@@ -54,8 +54,7 @@ export function diskStorage(root: string): StoragePort {
  * `getToken` returns a workspace access token for the app's service principal.
  */
 export function volumeStorage(host: string, volumePath: string, getToken: () => Promise<string>): StoragePort {
-  const url = (key: string) =>
-    `${host.replace(/\/$/, "")}/api/2.0/fs/files${volumePath.replace(/\/$/, "")}/${safeKey(key).split("/").map(encodeURIComponent).join("/")}`;
+  const url = (key: string) => `${host.replace(/\/$/, "")}/api/2.0/fs/files${volumePath.replace(/\/$/, "")}/${safeKey(key).split("/").map(encodeURIComponent).join("/")}`;
   const call = async (method: string, key: string, body?: Buffer) => {
     const res = await fetch(url(key) + (method === "PUT" ? "?overwrite=true" : ""), {
       method,
@@ -80,11 +79,7 @@ export function volumeStorage(host: string, volumePath: string, getToken: () => 
       await call("DELETE", key);
     },
     check: () =>
-      probe(
-        store,
-        `the volume ${volumePath}`,
-        "Check that VOLUME_PATH points to an existing volume and that the app's service principal has READ VOLUME and WRITE VOLUME on it.",
-      ),
+      probe(store, `the volume ${volumePath}`, "Check that VOLUME_PATH points to an existing volume and that the app's service principal has READ VOLUME and WRITE VOLUME on it."),
   };
   return store;
 }

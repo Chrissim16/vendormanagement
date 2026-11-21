@@ -1,0 +1,7 @@
+dist
+node_modules
+.data
+db/migrations
+docs
+package-lock.json
+*.md

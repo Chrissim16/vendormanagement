@@ -41,7 +41,13 @@ describe("database: built-in", () => {
     await port.migrate();
   });
   afterAll(() => port.close());
-  each(databaseContract({ get db() { return port.db; } } as DatabasePort));
+  each(
+    databaseContract({
+      get db() {
+        return port.db;
+      },
+    } as DatabasePort),
+  );
   it("reports healthy", async () => expect((await port.check()).ok).toBe(true));
 });
 
@@ -53,7 +59,13 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("database: Postgres server", () 
     await port.migrate();
   });
   afterAll(() => port.close());
-  each(databaseContract({ get db() { return port.db; } } as DatabasePort));
+  each(
+    databaseContract({
+      get db() {
+        return port.db;
+      },
+    } as DatabasePort),
+  );
 });
 
 describe("configuration", () => {
