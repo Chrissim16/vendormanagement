@@ -30,7 +30,7 @@ export function ConfirmButton({
     <Button
       className={clsx(className, armed && "border-crit text-crit-text")}
       disabled={disabled}
-      aria-label={armed ? `${label}: click again to confirm` : label}
+      aria-label={armed ? `Really remove? ${label}, click again to confirm` : label}
       onBlur={() => setArmed(false)}
       onClick={() => {
         setArmed(!armed);

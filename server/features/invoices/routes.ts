@@ -44,9 +44,9 @@ export function invoiceRoutes(db: Db, today: () => Day) {
     const period = service.defaultPeriod(today());
     const from = q.from ?? period.from;
     const to = q.to ?? period.to;
-    res
-      .set({ "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="spend-${from}-to-${to}.csv"` })
-      .send(await service.exportSpendCsv(db, from, to));
+    // Build the file first, so a refused period is answered as an error and not as a download.
+    const csv = await service.exportSpendCsv(db, from, to);
+    res.set({ "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="spend-${from}-to-${to}.csv"` }).send(csv);
   });
   r.get("/spend", async (req, res) => {
     const q = spendQuery.parse(req.query);

@@ -71,7 +71,7 @@ export function SpendPage() {
   return (
     <>
       <PageHeader context={ready ? `${formatDay(range.from)} to ${formatDay(range.to)}` : "Choose both dates"} title="Spend">
-        {ready && (
+        {ready && range.from <= range.to && (
           <a
             href={`/api/spend/export.csv?from=${range.from}&to=${range.to}`}
             download

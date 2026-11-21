@@ -358,6 +358,7 @@ test.describe("M-6 spend overview and M-7 exchange rate", () => {
     expect(download.suggestedFilename()).toBe("spend-2026-01-01-to-2026-11-21.csv");
     await page.goto("/money?period=custom&from=2026-12-01&to=2026-01-01");
     await expect(page.getByText("The end of the period is before its start")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Export CSV" })).toHaveCount(0);
   });
 
   test("X-2 a period with no invoices says so and points to the invoices", async ({ page, context }) => {
@@ -404,6 +405,18 @@ test.describe("throughout M2", () => {
         await page.keyboard.press("Escape");
       }
     }
+  });
+
+  test('X-1 a remove button that is asking "Really remove?" still passes the accessibility checks', async ({ page, context }) => {
+    await signInAs(context, MEMBER);
+    await page.goto("/agreements?q=SOW+07");
+    await page.getByRole("button", { name: /Open SOW 07/ }).click();
+    await page.getByRole("button", { name: "Remove Alex Example" }).click();
+    await expect(page.getByRole("button", { name: "Really remove? Remove Alex Example" })).toBeVisible();
+    await expectAccessible(page);
+    // Moving away without the second click removes nothing.
+    await page.getByRole("button", { name: "Add consultant" }).focus();
+    await expect(page.getByRole("button", { name: "Remove Alex Example" })).toHaveText("Remove");
   });
 
   test("X-4 dates on the money pages are day month year", async ({ page, context, request }) => {

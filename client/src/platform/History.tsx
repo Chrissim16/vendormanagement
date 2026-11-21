@@ -73,7 +73,8 @@ export function describeChanges(e: AuditEntry): string {
       if (hidden.has(last)) return `${fieldName(k)} changed`;
       const blank = c.from === null || c.from === undefined || c.from === "";
       // A line of a list (a milestone, a consultant, a rate) that came or went reads as that, not as a field change.
-      if (c.to === "added" && blank) return `${fieldName(k)} added`;
+      if (blank && typeof c.to === "string" && (c.to === "attached" || c.to.startsWith("added"))) return `${fieldName(k)} ${c.to}`;
+      if (blank && k.startsWith("rate for ")) return `${fieldName(k)} added at ${show(last, c.to)}`;
       if (c.to === "removed") return blank || c.from === "listed" || c.from === "attached" ? `${fieldName(k)} removed` : `${fieldName(k)} removed (was ${show(last, c.from)})`;
       return blank ? `${fieldName(k)} set to ${show(last, c.to)}` : `${fieldName(k)} from ${show(last, c.from)} to ${show(last, c.to)}`;
     })

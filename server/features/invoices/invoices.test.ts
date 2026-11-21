@@ -286,6 +286,10 @@ describe("M-6 spend overview and M-7 exchange rate", () => {
         .send({ agreementId: s2, invoiceNumber: `X-${d}`, invoiceDate: d, amountMinor: a });
     const res = await other.as(MEMBER).get("/api/spend/export.csv").query({ from: "2026-01-01", to: "2026-03-31" }).buffer(true).parse(binary);
     expect(res.headers["content-disposition"]).toBe('attachment; filename="spend-2026-01-01-to-2026-03-31.csv"');
+    const backwards = await other.as(MEMBER).get("/api/spend/export.csv").query({ from: "2026-03-31", to: "2026-01-01" });
+    expect(backwards.status).toBe(400);
+    expect(backwards.headers["content-type"]).toMatch(/json/);
+    expect(backwards.headers["content-disposition"]).toBeUndefined();
     const lines = (res.body as Buffer).toString("utf8").slice(1).trimEnd().split("\r\n");
     expect(lines).toEqual(['"Vendor","Month","Currency","Invoiced"', '"\'=Export, ""Vendor""","2026-01","GBP","150.50"', '"\'=Export, ""Vendor""","2026-03","GBP","0.07"']);
     await other.close();
