@@ -372,7 +372,10 @@ export function fakeJiraSite(now: () => Date): JiraTransport {
         logs.set(id, list);
         list.push({ id: String(from + i + 1), created: jiraTime(c.at), items: [{ field: c.field, fieldtype: "jira", fieldId: c.field, fromString: c.from, toString: c.to }] });
       });
-      return { issueChangeLogs: [...logs].map(([issueId, changeHistories]) => ({ issueId, changeHistories })), ...(from + size < all.length ? { nextPageToken: String(from + size) } : {}) };
+      return {
+        issueChangeLogs: [...logs].map(([issueId, changeHistories]) => ({ issueId, changeHistories })),
+        ...(from + size < all.length ? { nextPageToken: String(from + size) } : {}),
+      };
     }
     throw refuse(404, `The stand-in Jira has no answer for ${method} ${route}.`);
   };

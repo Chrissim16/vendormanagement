@@ -12,6 +12,8 @@ import { importRoutes } from "./features/import/routes";
 import { invoiceRoutes } from "./features/invoices/routes";
 import { performanceRoutes } from "./features/performance/routes";
 import type { PerformanceContext } from "./features/performance/service";
+import { scorecardRoutes } from "./features/scorecards/routes";
+import type { ScorecardContext } from "./features/scorecards/service";
 import { getSettings, saveSettings } from "./features/settings/service";
 import { sowRoutes } from "./features/sow/routes";
 import { vendorRoutes } from "./features/vendors/routes";
@@ -19,7 +21,7 @@ import { listWarnings } from "./features/warnings/service";
 import { authenticate, currentUser, requireRole } from "./platform/auth";
 import { clock, type Config } from "./platform/config";
 import { AppError, errorHandler } from "./platform/errors";
-import type { Ports } from "./platform/ports/types";
+import { aiModes, type Ports } from "./platform/ports/types";
 
 type Layer = { route?: { stack: Layer[] }; handle: RequestHandler & { stack?: Layer[] }; name: string };
 
@@ -59,6 +61,12 @@ export const performanceContext = (config: Config, ports: Ports): PerformanceCon
   syncEveryMinutes: config.jiraSyncMinutes,
 });
 
+/** What the scorecards feature needs: the performance figures, the AI and the clock. */
+export const scorecardContext = (config: Config, ports: Ports): ScorecardContext => {
+  const perf = performanceContext(config, ports);
+  return { db: ports.database.db, ai: ports.ai, perf, today: perf.today, now: perf.now };
+};
+
 export function createApp(config: Config, ports: Ports) {
   const app = express();
   app.disable("x-powered-by");
@@ -79,6 +87,16 @@ export function createApp(config: Config, ports: Ports) {
     });
   }
 
+  // Local only: switch the stand-in AI to unavailable or to nonsense, to see what the pages do then (AI-2).
+  const simulate = ports.ai.kind === "stand-in" ? ports.ai.simulate : undefined;
+  if (simulate && ports.identity.kind === "stand-in") {
+    api.post("/dev/ai", (req, res) => {
+      const { mode } = z.object({ mode: z.enum(aiModes) }).parse(req.body);
+      simulate(mode);
+      res.json({ mode });
+    });
+  }
+
   // "Today" is the date in the team's time zone. Tests may pin it with TODAY.
   const today = () => config.today ?? todayIn(config.timeZone);
   api.get("/config", (_req, res) => res.json({ standInSignIn: ports.identity.kind === "stand-in", timeZone: config.timeZone, today: today() }));
@@ -91,6 +109,7 @@ export function createApp(config: Config, ports: Ports) {
   api.use(sowRoutes(db, today));
   api.use(invoiceRoutes(db, today));
   api.use(performanceRoutes(performanceContext(config, ports)));
+  api.use(scorecardRoutes(scorecardContext(config, ports), config.timeZone));
   api.get("/settings", async (_req, res) => res.json(await getSettings(db)));
   api.put("/admin/settings", requireRole("admin"), async (req, res) => res.json(await saveSettings(db, req.body, currentUser(req))));
   api.use("/admin/import", importRoutes(db, today));

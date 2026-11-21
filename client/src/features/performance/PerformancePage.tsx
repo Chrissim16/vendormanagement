@@ -9,6 +9,7 @@ import { useUrlState } from "../../lib/useUrlState";
 import { DataTable, type Column } from "../../platform/DataTable";
 import { useMe } from "../../platform/session";
 import { Button, EmptyState, ErrorState, Loading, PageHeader } from "../../platform/ui";
+import { PerformanceTabs } from "../scorecards/parts";
 import { BoardLinkForm, linkSavedMessage } from "./BoardLinkForm";
 import { everyWords, metricLabel, MetricFigure, MissedPill, MonthSelect, monthTitle, plural, SyncButton, SyncStatus } from "./parts";
 
@@ -72,6 +73,7 @@ export function PerformancePage() {
           </Button>
         )}
       </PageHeader>
+      <PerformanceTabs />
 
       {q.isPending ? (
         <Loading />

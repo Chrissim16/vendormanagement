@@ -117,7 +117,11 @@ export interface AiPort {
   kind: PortKind;
   complete(req: AiRequest): Promise<AiResponse>;
   check(): Promise<CheckResult>;
+  /** Stand-in only: make the AI unreachable or make it answer nonsense, to try what the app does then (AI-2). */
+  simulate?(mode: AiMode): void;
 }
+export const aiModes = ["working", "unavailable", "nonsense"] as const;
+export type AiMode = (typeof aiModes)[number];
 
 export interface Ports {
   identity: IdentityPort;

@@ -397,3 +397,131 @@ export const performanceTargets = pgTable(
     check("targets_value_check", sql`${t.targetTenths} >= 0`),
   ],
 );
+
+/** What a vendor is scored on (P-7). `metrics` names the helpdesk figures a measured criterion is judged from. */
+export const scorecardCriteria = pgTable(
+  "scorecard_criteria",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    description: text("description"),
+    /** Relative weight in the overall score, 1 to 100. */
+    weight: integer("weight").notNull(),
+    source: text("source", { enum: ["measured", "manual"] }).notNull(),
+    metrics: text("metrics")
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
+    active: boolean("active").notNull().default(true),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...stamps,
+  },
+  (t) => [
+    uniqueIndex("criteria_name_unique").on(sql`lower(${t.name})`),
+    check("criteria_source_check", sql`${t.source} in ('measured', 'manual')`),
+    check("criteria_weight_check", sql`${t.weight} between 1 and 100`),
+  ],
+);
+
+/** Everything the AI has produced, and what a person did with it (AI-1). The output is kept exactly as the model gave it. */
+export const aiSuggestions = pgTable(
+  "ai_suggestions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    kind: text("kind").notNull(),
+    subjectType: text("subject_type").notNull(),
+    subjectId: text("subject_id").notNull(),
+    model: text("model").notNull(),
+    promptVersion: text("prompt_version").notNull(),
+    inputSummary: text("input_summary"),
+    output: jsonb("output").notNull(),
+    status: text("status", { enum: ["proposed", "accepted", "edited", "rejected"] })
+      .notNull()
+      .default("proposed"),
+    reviewedBy: text("reviewed_by"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("ai_suggestions_subject_idx").on(t.subjectType, t.subjectId),
+    check("ai_suggestions_status_check", sql`${t.status} in ('proposed', 'accepted', 'edited', 'rejected')`),
+  ],
+);
+
+/**
+ * The AI's proposal for one vendor and month (P-1): a score per measured criterion and the
+ * ticket themes. `scores` holds the scores as they stand after a person's review; the
+ * model's own answer stays in the suggestion.
+ */
+export const monthlyProposals = pgTable(
+  "monthly_proposals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    vendorId: uuid("vendor_id")
+      .notNull()
+      .references(() => vendors.id),
+    month: text("month").notNull(),
+    suggestionId: uuid("suggestion_id")
+      .notNull()
+      .references(() => aiSuggestions.id),
+    scores: jsonb("scores").notNull(),
+    themes: jsonb("themes").notNull(),
+    /** How many of the month's tickets the model was given to read. */
+    ticketsRead: integer("tickets_read").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("proposals_one_per_month").on(t.vendorId, t.month), check("proposals_month_check", sql`${t.month} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`)],
+);
+
+/** A vendor's scorecard for one quarter (P-2 to P-4). `snapshot` is filled when it is finalised and makes a final scorecard independent of later changes. */
+export const scorecards = pgTable(
+  "scorecards",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    vendorId: uuid("vendor_id")
+      .notNull()
+      .references(() => vendors.id),
+    periodStart: date("period_start", { mode: "string" }).notNull(),
+    periodEnd: date("period_end", { mode: "string" }).notNull(),
+    reviewerUserId: uuid("reviewer_user_id")
+      .notNull()
+      .references(() => users.id),
+    status: text("status", { enum: ["draft", "final"] })
+      .notNull()
+      .default("draft"),
+    summary: text("summary"),
+    finalisedAt: timestamp("finalised_at", { withTimezone: true }),
+    finalisedBy: text("finalised_by"),
+    snapshot: jsonb("snapshot"),
+    ...stamps,
+  },
+  (t) => [
+    uniqueIndex("scorecards_one_per_quarter").on(t.vendorId, t.periodStart),
+    check("scorecards_status_check", sql`${t.status} in ('draft', 'final')`),
+    check("scorecards_period_check", sql`${t.periodEnd} > ${t.periodStart}`),
+  ],
+);
+
+export const scorecardLines = pgTable(
+  "scorecard_lines",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    scorecardId: uuid("scorecard_id")
+      .notNull()
+      .references(() => scorecards.id, { onDelete: "cascade" }),
+    criterionId: uuid("criterion_id")
+      .notNull()
+      .references(() => scorecardCriteria.id),
+    score: integer("score"),
+    vendorComment: text("vendor_comment"),
+    internalNote: text("internal_note"),
+    /** What the AI suggested when the reviewer scored, and whether the reviewer took it as it was (AI-1). */
+    suggestedScore: integer("suggested_score"),
+    acceptedSuggestion: boolean("accepted_suggestion").notNull().default(false),
+    ...stamps,
+  },
+  (t) => [
+    uniqueIndex("scorecard_lines_one_per_criterion").on(t.scorecardId, t.criterionId),
+    check("scorecard_lines_score_check", sql`${t.score} is null or ${t.score} between 1 and 5`),
+  ],
+);

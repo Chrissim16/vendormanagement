@@ -173,7 +173,11 @@ and from the sync: `last_synced_at`, `last_attempt_at`, `last_sync_ok`, `last_sy
 
 **Performance overview** (J-5): vendors with `scoring_enabled` and a board, for a chosen month (the running month by default), sorted by targets missed, by name or by any metric. Scored vendors in use without a board are named below the list.
 
-**Scorecard criterion** (admin): `name*`, `description`, `weight*`, `source*` (measured | manual), `active*`. Starting set:
+**Scorecard criterion** (admin): `name*` (unique, ignoring case), `description`, `weight*` (1 to 100, relative to the other weights), `source*` (measured | manual), `metrics` (the helpdesk metrics a measured criterion is judged from; at least one), `active*`.
+- The source is fixed once the criterion exists. Criteria are switched off, never deleted, and at least one stays in use.
+- Changes are recorded in the criterion's own history.
+
+Starting set, each with weight 20:
 
 | Criterion | Source |
 |---|---|
@@ -183,14 +187,25 @@ and from the sync: `last_synced_at`, `last_attempt_at`, `last_sync_ok`, `last_sy
 | Value for money | manual (budget kept is shown as a fact) |
 | Compliance and security | manual (NDA and DPA status is shown as a fact) |
 
-**Monthly proposal**: `vendor_id*`, `month*`, per measured criterion a proposed score 1 to 5 with a written reason and the metric values used, plus a ticket theme summary. Produced by AI. Never final by itself.
+**Monthly proposal**: `vendor_id*`, `month*` (one per vendor and month), per measured criterion a proposed score 1 to 5 with a written reason and the metric values used, plus ticket themes. Produced by AI. Never final by itself.
+- Made only for a month that is over, for a scored vendor with a board, when something was measured. The app writes last month's by itself (it looks every `AI_PROPOSALS_EVERY_MINUTES`); any member can ask for an earlier month's.
+- The metric values are the app's own, handed to the model and stored with the proposal. The model writes the score and the reason.
+- The model is given the tickets created in the month (at most 250) and names the tickets of each theme. The app keeps only tickets it really handed over, counts them itself, drops a theme with fewer than two, and keeps at most five themes with three example tickets each.
+- A person accepts it, changes its scores (the AI's own score stays visible), or rejects it; the decision can be changed later. Each decision is in the vendor's history with who and when.
+- It can be asked for again while nobody has accepted it. Once accepted or changed by a person it is kept.
+- If the model cannot be reached or its answer cannot be used (asked twice), nothing is stored and the page says so.
 
 **Scorecard**: `vendor_id*`, `period_start*`, `period_end*` (a quarter), `reviewer_user_id*`, `status*` (draft | final),
 per criterion a `score` 1 to 5, a `vendor_comment` and an `internal_note`, plus `summary`.
-- Starts from the average of the quarter's monthly proposals; the reviewer may change every score.
-- Finalising needs a score on every active criterion. A final scorecard is read-only; an admin can reopen it.
-- Overall = weighted average, one decimal.
-- Only for vendors with `scoring_enabled`.
+- One per vendor and quarter. The quarter must have started. The person who starts it is the reviewer.
+- For a measured criterion the suggestion is the average of the quarter's monthly proposals that were not rejected, rounded to a whole score (a half rounds up). It is only a suggestion: the line has no score until the reviewer accepts it or chooses one. The line remembers what was suggested and whether it was taken as it was.
+- A draft follows the criteria in use today. Each change (a score, a comment, a note) is saved by itself, so two saved at once do not undo each other.
+- Supporting facts, worked out in code: SOWs with a budget that ran in the quarter and whether what was invoiced by the end of the quarter is within the budget; milestones due in the quarter (on time, late, overdue, not yet due; cancelled ones left out); NDA and DPA status on the day shown.
+- Finalising needs a score on every active criterion, and freezes what the scorecard shows: its criteria with their names and weights, the suggestions, the facts and the helpdesk figures. Later changes to criteria, targets or agreements do not alter it (P-7).
+- A final scorecard is read-only; an admin can reopen it, after which it is a draft that follows today's criteria and figures again. A draft can be removed; a final one cannot.
+- Overall = weighted average of the scored lines, one decimal.
+- Only for vendors with `scoring_enabled`. When scoring is switched off, the vendor's scorecards and proposals are kept but not shown, and come back when it is switched on again.
+- The vendor PDF (final only) holds the overall score, each criterion's score, weight and comment for the vendor, the summary, and the quarter's helpdesk figures. It leaves out internal notes, the supporting facts and anything about the AI.
 
 ## RFP
 
@@ -216,5 +231,7 @@ per criterion a `score` 1 to 5, a `vendor_comment` and an `internal_note`, plus 
 
 **AI suggestion** (every AI output): `kind*`, `subject_type*`, `subject_id*`, `model*`, `prompt_version*`, `input_summary`, `output*`,
 `status*` (proposed | accepted | edited | rejected), `reviewed_by`, `reviewed_at`.
+- `output` is the model's answer exactly as given and is never changed; a person's edits are stored with the record the suggestion belongs to.
+- "Edited" means a person's value now differs from the AI's.
 
 **Audit log entry**: `at*`, `user_email*`, `action*`, `entity_type*`, `entity_id*`, `summary` (a readable label for the record, such as a vendor name), `changes`. Written in the same transaction as the change. Never edited or removed: the database itself refuses any update, delete or truncate of the audit log. Changes the app makes by itself are recorded with `system` as the user.

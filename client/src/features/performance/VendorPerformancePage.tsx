@@ -23,6 +23,7 @@ import { History } from "../../platform/History";
 import { useMe } from "../../platform/session";
 import { Button, EmptyState, ErrorState, Loading, PageHeader, Pill } from "../../platform/ui";
 import { NotFoundPage } from "../placeholders";
+import { MonthProposal } from "../scorecards/MonthProposal";
 import { BoardLinkForm, linkSavedMessage } from "./BoardLinkForm";
 import { count, headlineSet, MissedPill, MonthSelect, monthTitle, plural, SyncButton, SyncStatus, ticketsHref, Verdict } from "./parts";
 import { TargetsForm } from "./TargetsForm";
@@ -163,6 +164,14 @@ export function VendorPerformancePage() {
         }
         title={p?.vendor.name ?? " "}
       >
+        {p?.vendor.scoringEnabled && (
+          <Link
+            to={`/performance/scorecards?vendorId=${vendorId}`}
+            className="inline-flex h-[38px] items-center rounded-full border border-line-2 px-[18px] text-[13.5px] font-semibold hover:bg-sunk"
+          >
+            Scorecards
+          </Link>
+        )}
         {p?.link && <SyncButton vendorId={vendorId} disabled={!p.link.active} />}
         {p?.vendor.scoringEnabled && admin && <Button onClick={() => setDialog("link")}>{p.link ? "Edit board link" : "Link a board"}</Button>}
         {p?.vendor.scoringEnabled && (
@@ -218,6 +227,8 @@ export function VendorPerformancePage() {
               </ul>
             )}
           </section>
+
+          {p!.link.tickets > 0 && <MonthProposal vendorId={vendorId} month={chosen.month} />}
 
           <section className="flex flex-col gap-3">
             <h2 className="text-base font-semibold">Twelve months</h2>

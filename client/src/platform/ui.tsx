@@ -1,6 +1,6 @@
 import clsx from "clsx";
 import { motion } from "motion/react";
-import { useEffect, useId, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from "react";
+import { forwardRef, useEffect, useId, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from "react";
 import { bouncy } from "../lib/motion";
 
 /**
@@ -42,9 +42,13 @@ export function ConfirmButton({
   );
 }
 
-export function Button({ variant = "plain", className, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "plain" | "primary" }) {
+export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "plain" | "primary" }>(function Button(
+  { variant = "plain", className, ...props },
+  ref,
+) {
   return (
     <button
+      ref={ref}
       {...props}
       className={clsx(
         "inline-flex h-[38px] items-center justify-center gap-2 rounded-full px-[18px] text-[13.5px] font-semibold transition duration-200 ease-out active:scale-[.96] disabled:pointer-events-none disabled:opacity-40",
@@ -53,7 +57,7 @@ export function Button({ variant = "plain", className, ...props }: ButtonHTMLAtt
       )}
     />
   );
-}
+});
 
 export function IconButton({ label, className, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { label: string }) {
   return (

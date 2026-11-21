@@ -159,7 +159,11 @@ export function jiraClient(call: JiraTransport, kind: PortKind, browseBase: stri
       let nextPageToken: string | undefined;
       for (let page = 0; ; page++) {
         if (page >= MAX_PAGES) throw new Error("Jira kept sending more pages of ticket history than a board can hold.");
-        const res = (await call("POST", "/rest/api/3/changelog/bulkfetch", { issueIdsOrKeys, maxResults: HISTORY_BATCH, ...(nextPageToken ? { nextPageToken } : {}) })) as BulkChangelogPage;
+        const res = (await call("POST", "/rest/api/3/changelog/bulkfetch", {
+          issueIdsOrKeys,
+          maxResults: HISTORY_BATCH,
+          ...(nextPageToken ? { nextPageToken } : {}),
+        })) as BulkChangelogPage;
         for (const log of res.issueChangeLogs ?? []) {
           if (!log.issueId) continue;
           // One ticket's history can be spread over several pages.

@@ -91,9 +91,9 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 
 ## Scorecards and AI scoring (M4)
 
-**P-1 Monthly proposal.** For each linked vendor the AI proposes a score per measured criterion, with a written reason and the metric values it used, and a summary of recurring ticket themes with example tickets. It is labelled as an AI proposal.
+**P-1 Monthly proposal.** For each linked vendor and each month that is over, the AI proposes a score per measured criterion, with a written reason and the metric values it used, and a summary of recurring ticket themes with example tickets. It is labelled as an AI proposal. Last month's proposal is written by the app itself; any member can ask for an earlier month's.
 
-**P-2 Quarterly scorecard.** A member starts a scorecard for a quarter. Measured criteria are prefilled from the monthly proposals and can be changed. Manual criteria are scored by the reviewer, with supporting facts shown (budgets kept, milestones on time, NDA and DPA status). Each criterion takes a comment for the vendor and an internal note.
+**P-2 Quarterly scorecard.** A member starts a scorecard for a quarter. Measured criteria come with a suggested score from the monthly proposals, shown as a suggestion until the reviewer accepts it or chooses another. Manual criteria are scored by the reviewer, with supporting facts shown (budgets kept, milestones on time, NDA and DPA status). Each criterion takes a comment for the vendor and an internal note.
 
 **P-3 Finalise.** Finalising requires every criterion scored. A final scorecard is read-only. An admin can reopen it.
 

@@ -9,8 +9,12 @@ import { createAgreement } from "../../server/features/agreements/service";
 import { saveInvoice } from "../../server/features/invoices/service";
 import { decideChange, getDelivery, saveChange, saveConsultant, saveMilestone, saveRateLine } from "../../server/features/sow/service";
 import { saveLink, saveTargets, type PerformanceContext } from "../../server/features/performance/service";
+import { generateProposal, reviewProposal } from "../../server/features/scorecards/proposals";
+import { finaliseScorecard, saveScorecard, startScorecard, type ScorecardContext } from "../../server/features/scorecards/service";
+import { addMonth, monthOf } from "../../shared/performance";
+import { addQuarter, quarterBounds, quarterOf } from "../../shared/scorecards";
 import { createVendor, saveContact } from "../../server/features/vendors/service";
-import { jiraBoardLinks } from "../schema";
+import { jiraBoardLinks, scorecards } from "../schema";
 import type { BoardLinkInput, Targets } from "../../shared/performance";
 
 /** Invented people only. Never real names or addresses. */
@@ -289,12 +293,79 @@ async function seedPerformance(perf: PerformanceContext, admin: ReturnType<typeo
   }
 }
 
-/** Loads the sample people, vendors, agreements and helpdesk boards. Safe to run more than once. */
-export async function seed(db: Db, today: Day, perf?: PerformanceContext) {
+/**
+ * AI proposals for the months since the start of last quarter (some reviewed, the latest
+ * left for someone to look at), and three scorecards for last quarter: a final one for a
+ * helpdesk vendor, a final one scored entirely by hand, and a draft waiting to be scored.
+ */
+async function seedScorecards(ctx: ScorecardContext, today: Day) {
+  if (ctx.perf.jira.kind !== "stand-in" || ctx.ai.kind !== "stand-in") return;
+  if ((await ctx.db.select({ n: sql<number>`count(*)::int` }).from(scorecards))[0]!.n > 0) return;
+  const person = async (email: string) => toUser((await ctx.db.select().from(users).where(eq(users.email, email)))[0]!);
+  const vendorId = async (name: string) => (await ctx.db.select({ id: vendors.id }).from(vendors).where(eq(vendors.name, name)))[0]?.id;
+  const mira = await person("mira@example.test");
+  const sanne = await person("sanne@example.test");
+  const quarter = addQuarter(quarterOf(today), -1);
+  const months: string[] = [];
+  for (let m = quarterBounds(quarter).months[0] as string; m < monthOf(today); m = addMonth(m, 1)) months.push(m);
+
+  for (const name of Object.keys(sampleBoards)) {
+    const id = await vendorId(name);
+    if (!id) continue;
+    for (const month of months) {
+      const proposal = await generateProposal(ctx, id, month, "system").catch(() => null);
+      // Last quarter's proposals have been looked at for two of the three vendors; the newest month is still waiting everywhere.
+      if (proposal && name !== "Tarnwick Software" && quarterBounds(quarter).months.includes(month)) await reviewProposal(ctx, proposal.id, { action: "accept" }, mira);
+    }
+  }
+
+  const comments: Record<string, [score: number, forVendor: string, internal: string]> = {
+    "Responsiveness and communication": [
+      4,
+      "Monthly service reviews were held on time and questions were answered within a day.",
+      "Account manager changed in the quarter; keep an eye on continuity.",
+    ],
+    "Value for money": [4, "Costs stayed within what was agreed.", "Raise the price index clause before the next renewal."],
+    "Compliance and security": [5, "All agreements are in place and the yearly security statement was received.", ""],
+    "Quality of delivery": [4, "Deliverables were accepted without rework.", ""],
+    Timeliness: [3, "One delivery was later than planned.", "The delay was partly ours: the test environment was late."],
+  };
+  const helpdesk: Record<string, string> = {
+    "Quality of delivery": "Most tickets were solved by the first line and users rated the service well.",
+    Timeliness: "First response was on target in July; August and September need attention.",
+  };
+  const score = async (name: string, by: typeof mira, finalise: boolean, only?: string[]) => {
+    const id = await vendorId(name);
+    if (!id) return;
+    const card = await startScorecard(ctx, { vendorId: id, quarter }, by);
+    const lines = card.lines
+      .filter((l) => !only || only.includes(l.name))
+      .map((l) => {
+        const [manual, vendorComment, internalNote] = comments[l.name] ?? [3, "", ""];
+        // Where the AI has a suggestion it is accepted as it is; everything else is scored by hand.
+        return {
+          criterionId: l.criterionId,
+          score: l.suggestion?.score ?? manual,
+          vendorComment: l.suggestion ? (helpdesk[l.name] ?? "") : vendorComment,
+          internalNote: l.suggestion ? "" : internalNote,
+          acceptedSuggestion: !!l.suggestion,
+        };
+      });
+    await saveScorecard(ctx, card.id, { lines, summary: finalise ? "A steady quarter. The points below were discussed in the service review." : undefined }, by);
+    if (finalise) await finaliseScorecard(ctx, card.id, by);
+  };
+  await score("Mossgate IT", mira, true);
+  await score("Quillon Consulting", sanne, true);
+  await score("Bluefinch Systems", mira, false, ["Compliance and security"]);
+}
+
+/** Loads the sample people, vendors, agreements, helpdesk boards, AI proposals and scorecards. Safe to run more than once. */
+export async function seed(db: Db, today: Day, ctx?: ScorecardContext) {
   await seedCore(db, today);
-  if (perf) {
+  if (ctx) {
     const admin = (await db.select().from(users).where(eq(users.email, "admin@example.test")))[0];
-    if (admin) await seedPerformance(perf, toUser(admin));
+    if (admin) await seedPerformance(ctx.perf, toUser(admin));
+    await seedScorecards(ctx, today);
   }
 }
 

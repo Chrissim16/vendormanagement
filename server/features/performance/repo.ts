@@ -279,6 +279,17 @@ export async function listTickets(db: Queryable, f: TicketFilter, timeZone: stri
   return { items, total: total[0]?.n ?? 0 };
 }
 
+/** The tickets created in a month, newest first, for reading by the AI (P-1). */
+export const ticketsCreatedIn = (db: Queryable, linkId: string, month: Month, timeZone: string, now: Date, limit: number) => {
+  const b = monthBounds(month, timeZone, now);
+  return db
+    .select({ key: tickets.key, summary: tickets.summary, description: tickets.description, highestLevel: tickets.highestLevel, resolvedAt: tickets.resolvedAt })
+    .from(tickets)
+    .where(and(eq(tickets.boardLinkId, linkId), sql`${tickets.createdAt} >= ${b.start} and ${tickets.createdAt} < ${b.end}`))
+    .orderBy(desc(tickets.createdAt), desc(tickets.id))
+    .limit(limit);
+};
+
 // ---------- Targets
 
 export const targetsOf = (db: Queryable, vendorIds: string[]) =>

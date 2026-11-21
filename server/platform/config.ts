@@ -20,6 +20,8 @@ export interface Config {
   jira: { baseUrl: string | null; email: string | null; token: string | null };
   /** Tickets are fetched from Jira this often without anyone asking. Zero switches that off. */
   jiraSyncMinutes: number;
+  /** How often the app looks whether last month's AI proposals still have to be made. Zero switches that off. */
+  proposalMinutes: number;
   ai: { strongEndpoint: string | null; fastEndpoint: string | null };
 }
 
@@ -29,10 +31,10 @@ function pinnedDay(value: string): string {
   return value;
 }
 
-function syncMinutes(value: string | undefined): number {
-  if (value === undefined || value === "") return 60;
+function everyMinutes(name: string, value: string | undefined, fallback: number, what: string): number {
+  if (value === undefined || value === "") return fallback;
   const n = Number(value);
-  if (!Number.isInteger(n) || n < 0 || n > 7 * 24 * 60) throw new Error("JIRA_SYNC_EVERY_MINUTES must be a whole number of minutes, or 0 to switch the automatic sync off.");
+  if (!Number.isInteger(n) || n < 0 || n > 7 * 24 * 60) throw new Error(`${name} must be a whole number of minutes, or 0 to switch ${what} off.`);
   return n;
 }
 
@@ -73,7 +75,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     clientDir: env.CLIENT_DIR || "dist/client",
     volumePath: env.VOLUME_PATH || null,
     jira: { baseUrl: env.JIRA_BASE_URL || null, email: env.JIRA_EMAIL || null, token: env.JIRA_API_TOKEN || null },
-    jiraSyncMinutes: syncMinutes(env.JIRA_SYNC_EVERY_MINUTES),
+    jiraSyncMinutes: everyMinutes("JIRA_SYNC_EVERY_MINUTES", env.JIRA_SYNC_EVERY_MINUTES, 60, "the automatic sync"),
+    proposalMinutes: everyMinutes("AI_PROPOSALS_EVERY_MINUTES", env.AI_PROPOSALS_EVERY_MINUTES, 360, "the automatic monthly proposals"),
     ai: { strongEndpoint: env.AI_STRONG_ENDPOINT || null, fastEndpoint: env.AI_FAST_ENDPOINT || null },
   };
 }

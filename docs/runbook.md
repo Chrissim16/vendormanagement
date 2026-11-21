@@ -66,3 +66,10 @@ Rolling back to a previous version, and backups.
 2. On Performance, press Link a board, choose a vendor and its board, and press Test link. It lists the board's statuses and labels and says if this Jira lacks the response-time, resolution-time or satisfaction measurements (open question W8).
 3. Save. The tickets are fetched at once; after that the app fetches changes every hour by itself (`JIRA_SYNC_EVERY_MINUTES`). If figures stay empty although the board has tickets, note what Test link said and pass it on: a field in this Jira is probably named differently.
 4. Three more things the documentation could not settle (open question W8). If System check says Jira refused the sign-in although the email and token are right, the token is probably a newer "scoped" one that needs a different Jira address: pass that on. If every ticket of a board shows as solved by the first line although some were escalated, the names of status or label changes in the ticket history differ. If satisfaction stays empty while the other figures appear, the rating is written differently on this Jira.
+
+## After the first deployment: AI proposals
+
+1. Open System check; the AI row should say both models answered.
+2. Open a helpdesk vendor on Performance, choose last month and press "Ask the AI for a proposal". A proposal with two scores, their reasons and ticket themes should appear within about a minute. If the page says the AI could not write a proposal, the app's log says whether the model could not be reached or answered in a form the app could not read.
+3. Run the evaluation sets once inside the workspace (`npm run ai:eval` with `PLATFORM=databricks`): they show whether the model's scores and themes are sensible on invented examples. Until this has run, the quality of the proposals has only been seen with the stand-in.
+4. From then on the app writes last month's proposals by itself; it looks every six hours (`AI_PROPOSALS_EVERY_MINUTES`).

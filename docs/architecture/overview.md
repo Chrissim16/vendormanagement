@@ -30,7 +30,7 @@ two implementations chosen by configuration.
 | Database | Built-in Postgres in `.data/pg` (in memory for tests), or `DATABASE_URL` | Lakebase app resource |
 | File storage | Folder on disk | Unity Catalog volume |
 | Jira | A pretend Jira site with invented boards and tickets, answering the REST paths the app uses in Jira Cloud's own JSON shapes | Jira Cloud REST API with a service account |
-| AI model | Scripted fake for tests; optionally a real model through an API key for judging output quality | Databricks model serving endpoint |
+| AI model | A rule-based stand-in that answers the app's prompts in the shape a real model is asked for, and can be switched to "unavailable" or "nonsense" (`POST /api/dev/ai`) to try failures; optionally a real model through an API key, for the evaluation sets only | Databricks model serving endpoint |
 
 Rules:
 - Feature code depends on the port interface only, never on an implementation.
@@ -57,7 +57,7 @@ e2e/                      Playwright tests, one file per requirement group
 ```
 
 Features built so far: `admin`, `vendors`, `agreements`, `warnings`, `import`, `settings`, `sow` (milestones, change requests,
-consultants, rate cards), `invoices` (invoices and spend), `performance` (board links, Jira sync, monthly metrics, targets). Still to come: `scorecards`, `briefings`, `rfp`, `chat`, `dashboard`. A feature imports from `platform`, `ai`
+consultants, rate cards), `invoices` (invoices and spend), `performance` (board links, Jira sync, monthly metrics, targets), `scorecards` (criteria, monthly AI proposals, quarterly scorecards, vendor PDF). Still to come: `briefings`, `rfp`, `chat`, `dashboard`. A feature imports from `platform`, `ai`
 and `shared`, and from another feature only through that feature's `service.ts`.
 
 ## Request flow
@@ -70,11 +70,12 @@ and `shared`, and from another feature only through that feature's `service.ts`.
 
 ## AI
 
-- All model calls go through `server/ai`, which records an AI suggestion row (model, prompt version, output, review status). Features never call the model port directly.
+- All model calls go through `server/ai`: a feature describes what it wants as a `Prompt` (in `server/ai/prompts/`, with a version), calls `ask`, and stores the answer with `recordSuggestion` as an AI suggestion row (model, prompt version, output, review status). Features never call the model port directly. The model is asked outside any database transaction; storing the answer and its audit entry is one transaction.
+- When the model cannot be reached or answers something unusable, `ask` fails with `AiUnavailable` (HTTP 502, code `ai_unavailable`), whose message is written for the person on the page. Nothing is stored.
 - Structured outputs (scores, extracted fields, RFP drafts) are requested as JSON and validated with Zod. An invalid response is retried once and then reported as a failure (AI-2).
 - Numbers are computed in code and handed to the model. The model explains and proposes; it does not do arithmetic that the app then shows as fact.
 - Chat answers questions by calling a fixed set of read-only query tools that reuse the list endpoints' queries, plus a search over extracted document text. It has no write tools.
-- Each prompt has a small evaluation set in `server/ai/evals/` with invented inputs and checks on the output. These run on demand against a real model, not in `npm run check`.
+- Each prompt has a small evaluation set in `server/ai/evals/` with invented inputs and checks on the output. `npm run ai:eval` runs them against the Databricks model (inside the workspace), a model reached with `AI_EVAL_URL`, `AI_EVAL_KEY` and `AI_EVAL_MODEL`, or else the stand-in. `npm run check` runs them against the stand-in only, which proves the checks work and nothing about quality; cases that need real understanding are skipped there.
 - Text sent to the model in production stays inside the Databricks workspace.
 
 ## Scheduled work
@@ -85,7 +86,8 @@ wired in `server/main.ts`), by a button in the app, and by a command (`npm run j
 in `server/platform/jobs/run.ts`) for running it by hand or from a scheduler outside the app.
 
 The Jira sync (`jira-sync`) runs every `JIRA_SYNC_EVERY_MINUTES` (60 by default, 0 for off):
-each tick syncs the boards not tried within that interval. Monthly proposal runs join in M4.
+each tick syncs the boards not tried within that interval. The monthly proposals (`monthly-proposals`) are looked at every
+`AI_PROPOSALS_EVERY_MINUTES` (360 by default, 0 for off): a proposal is asked for only where last month's is still missing.
 The timer lives inside the app because a Databricks App is one long-running process with
 its own database sign-in; whether the app is kept running at night is a check for work (W9).
 
@@ -99,6 +101,7 @@ its own database sign-in; whether the app is kept running at night is a check fo
 - Screens are built from the patterns in `client/src/platform`: `DataTable`, `SplitView` and `Panel`, `Tabs`, `Dialog`, `form` (`useForm` and the field components), `History`.
 - List endpoints take `q`, filters, `sort`, `page`, `pageSize` and return `{ items, total }`. Filtering and sorting happen in SQL. The client keeps filters in the URL.
 - Exports are produced on the server from the same query as the screen they belong to.
+- PDFs are drawn with the building blocks in `server/platform/pdf.ts` (title, headings, paragraphs, label and value rows, tables, a footer with page numbers). The built-in fonts cover Western European characters; anything else is replaced by a question mark.
 - Timestamps are stored in UTC and shown in the team's time zone (`APP_TIME_ZONE`, default Europe/Amsterdam). "A day" in a filter means a day in that zone.
 - Date-only fields use the Postgres `date` type.
 - Search text is matched literally (`like()` in a repo escapes `%` and `_`), and free text from the address is validated with the shared `text` schema.

@@ -1,4 +1,5 @@
-import { performanceContext } from "../../app";
+import { performanceContext, scorecardContext } from "../../app";
+import { runMonthlyProposals } from "../../features/scorecards/proposals";
 import { syncAll } from "../../features/performance/service";
 import { loadConfig } from "../config";
 import { buildPorts } from "../ports";
@@ -18,6 +19,20 @@ const jobs: Record<string, () => Promise<void>> = {
       const done = await syncAll(performanceContext(config, ports));
       if (!done.length) console.log("No Jira boards are linked yet.");
       for (const r of done) console.log(`${r.vendorName} (${r.projectKey}): ${r.ok ? `${r.updated} tickets updated` : r.message}`);
+      if (done.some((r) => !r.ok)) process.exitCode = 1;
+    } finally {
+      await ports.database.close();
+    }
+  },
+  /** Asks the AI for last month's proposal for every helpdesk vendor that has none yet (P-1). */
+  "monthly-proposals": async () => {
+    const config = loadConfig();
+    const ports = await buildPorts(config);
+    try {
+      await ports.database.migrate();
+      const done = await runMonthlyProposals(scorecardContext(config, ports));
+      if (!done.length) console.log("Every helpdesk vendor already has last month's proposal, or there was nothing to measure.");
+      for (const r of done) console.log(`${r.vendorName}, ${r.month}: ${r.ok ? "proposal written" : r.message}`);
       if (done.some((r) => !r.ok)) process.exitCode = 1;
     } finally {
       await ports.database.close();

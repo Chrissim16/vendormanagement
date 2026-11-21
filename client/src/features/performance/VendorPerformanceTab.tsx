@@ -19,11 +19,19 @@ export function VendorPerformanceTab({ vendorId }: { vendorId: string }) {
   );
   if (!p.vendor.scoringEnabled)
     return <p className="text-ink-2">Scoring is switched off for this vendor, so it has no performance figures. Switch it on with Edit vendor if it should be measured.</p>;
+  const cards = (
+    <Link to={`/performance/scorecards?vendorId=${vendorId}`} className="font-semibold text-accent-ink underline-offset-2 hover:underline">
+      Scorecards
+    </Link>
+  );
   if (!p.link || !month)
     return (
       <>
         <p className="text-ink-2">No Jira board is linked to this vendor, so there are no helpdesk figures. A vendor without a board is scored by hand.</p>
-        <div>{open}</div>
+        <div className="flex gap-5">
+          {open}
+          {cards}
+        </div>
       </>
     );
   return (
@@ -43,7 +51,10 @@ export function VendorPerformanceTab({ vendorId }: { vendorId: string }) {
           </div>
         ))}
       </dl>
-      <div>{open}</div>
+      <div className="flex gap-5">
+        {open}
+        {cards}
+      </div>
     </>
   );
 }

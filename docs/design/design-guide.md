@@ -138,7 +138,25 @@ AI works quietly inside the pages; there is no assistant panel. A suggestion sit
 the thing it concerns, on the brand tint, labelled "AI suggests", with a link to the
 evidence and an accept button. The suggested value is shown as an outline until a person
 accepts it, and only then becomes filled. Once accepted or overridden, the suggestion
-slides away.
+box goes, and one quiet line stays that says what the AI suggested and what the person
+did with it ("AI suggested 4 · Accepted as it was"), with the evidence still one click away.
+
+A longer piece of AI writing (a month's proposal) is one panel on the brand tint. Its first
+line carries the "AI proposal" label, when it was written and from what, and whether it
+is not reviewed yet, accepted, accepted with changes or rejected, with who and when. Its
+buttons sit at the bottom: the primary one accepts. When the AI cannot answer, the page
+says so in the ordinary error pattern, in place, and everything else stays usable.
+
+A score from 1 to 5 is chosen on a row of five squares on the sunken fill; the chosen one
+is filled with the primary colour and its thumb snaps over with a bounce. The same square,
+alone, shows a score that is not being edited: outlined while only the AI stands behind
+it, filled once a person does.
+
+A scorecard is a full page: the facts for the quarter in three neutral tiles, one block per
+criterion between hairlines (what it is on the left, the selector on the right, then the
+comment for the vendor and the internal note side by side), and a bar that stays at the
+bottom of the window with the overall score, what is still to do and the one primary
+action. Changes on it are saved at once, each by itself; there is no Save button.
 
 ## Words
 

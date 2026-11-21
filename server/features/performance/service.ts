@@ -17,6 +17,7 @@ import {
   type LinkTest,
   type MetricKey,
   type Month,
+  type MonthMetrics,
   type OverviewSort,
   type PerformanceOverview,
   type SyncOutcome,
@@ -430,3 +431,29 @@ export async function syncVendor(ctx: PerformanceContext, vendorId: string): Pro
   if (!link) throw new AppError(409, "no_board", "This vendor has no Jira board yet. An admin can link one.");
   return syncBoard(ctx, link.id);
 }
+
+// ---------- For scorecards (P-1, P-2)
+
+/** A vendor's figures for the given months, judged by today's targets. No board, or not scored: no figures. */
+export async function figuresFor(ctx: PerformanceContext, vendorId: string, months: Month[]): Promise<{ hasBoard: boolean; months: MonthMetrics[] }> {
+  const vendor = await repo.getVendor(ctx.db, vendorId);
+  const link = vendor?.scoringEnabled ? await repo.linkOfVendor(ctx.db, vendorId) : undefined;
+  if (!link) return { hasBoard: false, months: [] };
+  const targets = (await targetsByVendor(ctx.db, [vendorId])).get(vendorId)!;
+  const now = ctx.now();
+  const out: MonthMetrics[] = [];
+  for (const m of months) out.push(monthMetrics(m, (await repo.monthCounts(ctx.db, [link.id], m, ctx.timeZone, now)).get(link.id) ?? emptyCounts, targets));
+  return { hasBoard: true, months: out };
+}
+
+/** The tickets created in a month, newest first, at most `limit`. */
+export async function ticketsCreatedIn(ctx: PerformanceContext, vendorId: string, month: Month, limit: number) {
+  const link = await repo.linkOfVendor(ctx.db, vendorId);
+  return link ? repo.ticketsCreatedIn(ctx.db, link.id, month, ctx.timeZone, ctx.now(), limit) : [];
+}
+
+/** Scored vendors that have a board: the ones the AI makes a monthly proposal for. */
+export const linkedVendors = async (ctx: PerformanceContext) =>
+  (await repo.listLinks(ctx.db)).filter((l) => l.scoringEnabled).map((l) => ({ vendorId: l.link.vendorId, vendorName: l.vendorName }));
+
+export const currentMonth = (ctx: PerformanceContext): Month => monthOf(ctx.today());

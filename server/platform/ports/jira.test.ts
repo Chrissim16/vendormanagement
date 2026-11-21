@@ -122,7 +122,10 @@ describe("reading what Jira sends", () => {
               ],
               nextPageToken: null,
             }
-          : { issueChangeLogs: [{ issueId: "501", changeHistories: [{ items: [{ field: "status", fieldId: "status", fromString: "Open", toString: "Escalated" }] }] }], nextPageToken: "h2" };
+          : {
+              issueChangeLogs: [{ issueId: "501", changeHistories: [{ items: [{ field: "status", fieldId: "status", fromString: "Open", toString: "Escalated" }] }] }],
+              nextPageToken: "h2",
+            };
       }
       throw new Error(`unexpected ${path}`);
     };
@@ -151,7 +154,10 @@ describe("reading what Jira sends", () => {
       if (path === "/rest/api/3/field") return [];
       if (path === "/rest/api/3/search/jql") {
         if ((body as { jql: string }).jql.includes("IS EMPTY")) return { issues: [], isLast: true };
-        return { issues: Array.from({ length: 2300 }, (_, i) => ({ id: String(i + 1), key: `X-${i + 1}`, fields: { status: { name: "Open" }, created: "2026-11-01T10:00:00.000+0100" } })), isLast: true };
+        return {
+          issues: Array.from({ length: 2300 }, (_, i) => ({ id: String(i + 1), key: `X-${i + 1}`, fields: { status: { name: "Open" }, created: "2026-11-01T10:00:00.000+0100" } })),
+          isLast: true,
+        };
       }
       batches.push((body as { issueIdsOrKeys: string[] }).issueIdsOrKeys.length);
       return { issueChangeLogs: [] };
@@ -280,7 +286,10 @@ describe("the stand-in Jira", () => {
     const ids = found.issues.map((i) => i.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids.some((id) => id.includes("BLU"))).toBe(false);
-    const whole = (await site("POST", "/rest/api/3/changelog/bulkfetch", { issueIdsOrKeys: ids })) as { issueChangeLogs: { issueId: string; changeHistories: unknown[] }[]; nextPageToken?: string };
+    const whole = (await site("POST", "/rest/api/3/changelog/bulkfetch", { issueIdsOrKeys: ids })) as {
+      issueChangeLogs: { issueId: string; changeHistories: unknown[] }[];
+      nextPageToken?: string;
+    };
     expect(whole.nextPageToken).toBeUndefined();
     const total = whole.issueChangeLogs.reduce((n, l) => n + l.changeHistories.length, 0);
     expect(total).toBeGreaterThan(ids.length);
