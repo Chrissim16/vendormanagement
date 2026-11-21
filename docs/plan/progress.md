@@ -7,7 +7,7 @@ Newest entry first. Written for the owner, in plain language.
 | Milestone | State |
 |---|---|
 | M0 Foundation | Done |
-| M1 Vendors and agreements | Not started |
+| M1 Vendors and agreements | Done |
 | M2 SOW delivery and money | Not started |
 | M3 Performance from Jira | Not started |
 | M4 Scorecards and AI scoring | Not started |
@@ -17,9 +17,31 @@ Newest entry first. Written for the owner, in plain language.
 | M8 Contract reading | Not started |
 | M9 Move to Databricks | Not started; done at work |
 
-**Next:** M1 Vendors and agreements.
+**Next:** M2 SOW delivery and money, and M3 Performance from Jira. They do not depend on each other.
 
 ## Log
+
+### 2026-11-21 M1 Vendors and agreements done
+The app now holds your vendors and contracts. What you can do in it:
+
+- **Vendors.** Add and edit vendors with their type, owner, contacts and status. The list can be searched, filtered and sorted, and a vendor opens in a panel beside the list. Each vendor shows whether its NDA and data processing agreement are in place, missing or expired. A vendor with a running agreement cannot be offboarded by accident.
+- **Agreements.** Add an MSA, SOW, subscription, NDA or data processing agreement; the form only asks for what that kind needs. A SOW can sit under an MSA. Each agreement has a status (draft, in negotiation, out for signature, active, ended) and its own page with its documents and full history.
+- **Documents.** Attach PDF, Word and Excel files to an agreement, download them and remove them.
+- **Renewals.** Every subscription shows its notice deadline. The Renewals page lists what is overdue or coming up within 30, 60, 90 or 180 days. You record the decision (renew, renegotiate, terminate), and renewing can move the renewal date on to the next term.
+- **Warnings.** The bell in the header counts what needs attention: notice deadlines, SOWs about to end or past their end date, and missing or expired paperwork. Each warning links to its record, and the dashboard lists the first few.
+- **Export and import.** The agreement list downloads as a file that opens in Excel. An admin can fill an Excel template with vendors and agreements, see what each row would do before anything is saved, and import the rows that are fine. Importing the same file twice adds nothing.
+
+The app comes with nine invented sample vendors so every screen and every kind of warning has something to show. They are clearly marked "(invented)" and are not loaded when the app runs at work.
+
+How it was checked: as before, an independent tester used the running app against every requirement and an independent reviewer read all the code. They confirmed seven real defects and about thirty smaller points. The ones that mattered most: a vendor could be offboarded and then still have an agreement made active; the Excel import could misread an amount that came from a formula by a factor of a thousand; and the import preview could promise rows that the import then refused. All were fixed, each with a test that would catch it again, and re-checked.
+
+Decided on your behalf (see `docs/open-questions.md`, Q6 to Q11):
+
+- Renewing a subscription moves its renewal date and leaves the original start date.
+- A SOW still marked active after its end date gets a red warning.
+- An amount typed as 1.234 is read as one thousand two hundred and thirty-four; the form shows how it read the amount before you save.
+- If two people edit the same record at the same moment, the last save wins.
+- Amounts always show cents.
 
 ### 2026-11-21 M0 Foundation done
 The app now exists and runs. What you can do in it:
@@ -52,8 +74,12 @@ architecture and plan were rewritten to match. The plan now has ten milestones.
 First version of the brief, requirements, plan and agent workflow. No application code yet.
 
 ## Follow-ups
-- The database does not itself forbid an unknown role or an edit to the audit log; only the app's code does. Worth adding as database rules in M1.
+- Search and sorting do not ignore accents: searching "beta" does not find "Béta", and "École" sorts after "Z".
+- Sorting agreements by value compares EUR and GBP amounts as if they were the same currency.
+- The app allows two agreements with the same vendor, kind and title; the import treats that combination as "already there".
+- The date boxes in forms follow the browser's own date format, which may be month-first on some machines. Everything the app itself writes is day month year.
+- A renewal term shorter than a year that starts on the 31st drifts to the 28th after passing through February.
 - A person's name is taken at first sign-in and not refreshed if it later changes in the company directory.
-- If two browser tabs are open, one can show a person's role up to 15 seconds out of date.
-- The date boxes in the audit log follow the browser's own date format, which may be month-first on some machines.
-- Deploy the empty app once at work as a rehearsal (open question Q3).
+- The warning windows (90 and 30 days) are fixed; they become settings in M2.
+- PDF export moved from M1 to M4, the first milestone that produces a PDF.
+- Deploy the app once at work as a rehearsal (open question Q3). With M1 done there is now something real to try there.
