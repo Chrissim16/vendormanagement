@@ -134,7 +134,10 @@ test.describe("D-1 dashboard", () => {
     const rfps = page.getByRole("list", { name: "Open RFPs" }).getByRole("listitem");
     await expect(rfps).toHaveCount(d.rfps.length);
     await expect(rfps.filter({ hasText: "Expense management tool" })).toContainText("Evaluating");
-    await expect(rfps.filter({ hasText: "Expense management tool" }).getByRole("link")).toHaveAttribute("href", `/rfps/${d.rfps.find((x) => x.title === "Expense management tool")!.id}`);
+    await expect(rfps.filter({ hasText: "Expense management tool" }).getByRole("link")).toHaveAttribute(
+      "href",
+      `/rfps/${d.rfps.find((x) => x.title === "Expense management tool")!.id}`,
+    );
     await expect(rfps.filter({ hasText: "Treasury reporting advice" })).toHaveCount(0);
     await expectAccessible(page);
 

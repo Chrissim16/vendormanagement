@@ -71,6 +71,13 @@
       "when": 1795284408473,
       "tag": "0009_vengeful_hex",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795287239660,
+      "tag": "0010_slimy_chameleon",
+      "breakpoints": true
     }
   ]
 }

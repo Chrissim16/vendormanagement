@@ -137,6 +137,11 @@ test.describe("Q-2 draft", () => {
     await page.getByLabel("Weight of Functional fit").fill("50");
     await page.getByLabel("Question 1", { exact: true }).fill("How does your product handle receipts in a foreign currency?");
     await expect(written).toContainText("Adds up to 110; it must be 100.");
+    // A look at another tab does not lose what was typed and not saved.
+    await page.getByRole("tab", { name: "Review" }).click();
+    await page.getByRole("tab", { name: "Document" }).click();
+    await expect(page.getByLabel("Question 1", { exact: true })).toHaveValue("How does your product handle receipts in a foreign currency?");
+    await expect(page.getByLabel("Weight of Functional fit")).toHaveValue("50");
     await page.getByRole("button", { name: "Save document" }).click();
     await expect(page.getByRole("alert")).toContainText("Some of what was entered is not valid");
     await expect(page.getByText("The weights for written answers must add up to 100. They now add up to 110.")).toBeVisible();
@@ -170,6 +175,11 @@ test.describe("Q-2 draft", () => {
     await open(page, rfp);
     await page.getByRole("region", { name: "AI draft" }).getByRole("button", { name: "Ask the AI" }).click();
     await expect(page.getByRole("alert")).toContainText("The AI could not write a draft just now.");
+    // Something typed and not saved is never replaced: the template is offered again once it is discarded.
+    await page.getByRole("button", { name: "Add section" }).click();
+    await page.getByLabel("Heading of section 1").fill("My own start");
+    await expect(page.getByRole("button", { name: "Start from the template" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Discard changes" }).click();
     await page.getByRole("button", { name: "Start from the template" }).click();
     await expect(page.getByLabel("Heading of section 6")).toHaveValue("Confidentiality and terms");
     await expect(page.getByRole("group", { name: "Demo and interview" })).toContainText("Adds up to 100.");
@@ -223,6 +233,18 @@ test.describe("Q-3 review", () => {
     await approve.click();
     await expect(currentStage(page)).toContainText("Approved");
     await expect(nextStep(page)).toContainText("Shortlist the candidates");
+
+    // If the document is changed after all, the approval was for an earlier version and a new one is needed.
+    await page.getByRole("button", { name: "Back to drafting" }).click();
+    await page.getByRole("tab", { name: "Document" }).click();
+    await page.getByLabel("Question 1", { exact: true }).fill("A question the reviewers never saw?");
+    await page.getByRole("button", { name: "Save document" }).click();
+    await expect(page.getByText("Document saved")).toBeVisible();
+    await page.getByRole("button", { name: "Send for review" }).click();
+    await page.getByRole("tab", { name: "Review" }).click();
+    await expect(signoffs.filter({ hasText: "Chris Tanaka" })).toContainText("Approved an earlier version");
+    await expect(approve).toBeDisabled();
+    await expect(page.getByRole("status").filter({ hasText: "the earlier approval no longer counts" })).toBeVisible();
   });
 });
 
@@ -306,9 +328,10 @@ test.describe("Q-5 issue", () => {
     expect(ws.getRow(6).getCell(3).value).toBe(r.questions[0]!.text);
     expect(ws.rowCount).toBe(5 + r.questions.length);
 
-    // The document can still be changed while nothing has been issued.
+    // What was approved is what goes out: the approved document is shown, not open for changes.
     await page.getByRole("tab", { name: "Document" }).click();
-    await expect(page.getByRole("button", { name: "Save document" })).toBeVisible();
+    await expect(page.getByText("This is the document as it was approved.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save document" })).toHaveCount(0);
     await page.getByRole("tab", { name: "Candidates" }).click();
 
     await row.getByRole("button", { name: `Issue the RFP to ${name}` }).click();

@@ -112,8 +112,8 @@ export function ReviewTab({ rfp }: { rfp: RfpDetail }) {
               return (
                 <li key={s.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line py-3.5">
                   <span className="w-44 shrink-0">
-                    <Pill tone={s.outcome === "approved" ? "ok" : open ? "warn" : "none"}>
-                      {s.outcome === "approved" ? "Approved" : open ? "Changes requested, open" : "Changes dealt with"}
+                    <Pill tone={s.superseded ? "none" : s.outcome === "approved" ? "ok" : open ? "warn" : "none"}>
+                      {s.outcome === "approved" ? (s.superseded ? "Approved an earlier version" : "Approved") : open ? "Changes requested, open" : "Changes dealt with"}
                     </Pill>
                   </span>
                   <span className="min-w-0 flex-1">
@@ -164,7 +164,8 @@ export function ReviewTab({ rfp }: { rfp: RfpDetail }) {
       {rfp.stage === "approved" && (
         <div className="flex flex-wrap items-center gap-2.5 rounded-2xl bg-sunk px-5 py-4">
           <p className="min-w-0 flex-1 text-ink-2">
-            The RFP is approved. If it has to change after all, take it back to drafting; the sign-offs are kept and it goes through review again.
+            The RFP is approved, and its document is fixed as approved. If it has to change after all, take it back to drafting: once the document is changed, the approval no
+            longer counts and a new one is needed.
           </p>
           <Button onClick={() => move("drafting")}>Back to drafting</Button>
         </div>

@@ -165,9 +165,9 @@ const questionBank: string[][] = [
 
 /** A first draft put together from the template and the need as it was typed. */
 function rfpDraft(ask: RfpDraftAsk): string {
-  const need = ask.need.trim().replace(/\s+/g, " ");
   const bodies = [
-    `We invite you to respond to this request for proposal for ${ask.title}. What we need: ${need}`,
+    // The need was written for colleagues; a real model rewords it for vendors. The stand-in leaves that to a person and does not copy it.
+    `We invite you to respond to this request for proposal for ${ask.title}. [Describe here, in words meant for vendors, what you need and why. The need as recorded in the demand was written for colleagues and is not copied into this document.]`,
     `The scope of this request is ${ask.title}, as described in the introduction. Please make clear what your offer includes as standard and what it does not. [Add what is out of scope.]`,
     `Responses are compared on the written answers first. Vendors on the shortlist may then be invited to a demonstration or an interview. ${ask.decisionWantedBy ? `We intend to decide by ${ask.decisionWantedBy}.` : "[Add the day a decision is expected.]"}`,
     "Answer every question in the answer sheet that comes with this document, in the Answer column, and return the sheet as an Excel file. Supporting material may be sent along as PDF or Word. [Add the closing date and whom to ask questions.]",
@@ -202,6 +202,12 @@ function opening(answer: string): string {
   return sentence.slice(0, sentence.lastIndexOf(" ", 280));
 }
 
+/** A passage to quote: the opening of the first answer that is long enough to show something, or else a whole short answer. */
+function passage(answers: string[]): string {
+  const openings = answers.map(opening);
+  return openings.find((o) => o.length >= 20) ?? answers.map((a) => a.trim().replace(/\s+/g, " ")).find((a) => a.length <= 500) ?? openings[0]!;
+}
+
 /** Summaries that open with each candidate's own words, and scores that only reward how much was answered. */
 function rfpComparison(ask: RfpComparisonAsk): string {
   const name = (id: string) => ask.candidates.find((c) => c.id === id)?.name ?? "A candidate";
@@ -233,7 +239,7 @@ function rfpComparison(ask: RfpComparisonAsk): string {
         candidateId: c.id,
         score,
         reason: `${c.name} answered ${c.answered} on ${ask.criterion}, ${how}. Read the answers before relying on this score.`,
-        quote: opening(mine[0]!),
+        quote: passage(mine),
       },
     ];
   });

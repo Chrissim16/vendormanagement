@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { managementReports } from "../../../db/schema";
-import { ask, readSuggestion, recordSuggestion, reviewSuggestion } from "../../ai";
+import { ask, replaced, readSuggestion, recordSuggestion, reviewSuggestion } from "../../ai";
 import { reportSummary } from "../../ai/prompts/report-summary";
 import { noticeDeadline } from "../../../shared/agreements";
 import { addDays, addMonths, daysBetween, type Day } from "../../../shared/dates";
@@ -233,6 +233,4 @@ export async function reviewSummary(ctx: OverviewContext, monthAsked: string | u
   return build(ctx, month, data);
 }
 
-/** The AI's text on screen is no longer the current one: someone asked again in the meantime. */
-export const replaced = () =>
-  new AppError(409, "suggestion_replaced", "The AI has written a new text since this page was loaded. Nothing was changed. Read the new text, then choose again.");
+export { replaced };

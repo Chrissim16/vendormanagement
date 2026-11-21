@@ -250,7 +250,7 @@ export function decisionRecordPdf(r: RfpDetail, today: Day): Promise<Buffer> {
         ],
         r.signoffs.map((s) => [
           `${s.reviewerName}${s.reviewerRole ? `, ${s.reviewerRole}` : ""}`,
-          signoffLabels[s.outcome],
+          s.superseded && s.outcome === "approved" ? "Approved an earlier version" : signoffLabels[s.outcome],
           formatDay(s.onDate),
           [s.comment, s.outcome === "changes_requested" ? (s.resolvedOn ? `Dealt with on ${formatDay(s.resolvedOn)}.` : "Still open.") : null].filter(Boolean).join(" ") || "–",
         ]),

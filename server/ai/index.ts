@@ -121,3 +121,7 @@ export async function readSuggestion<T>(db: Queryable, id: string | null): Promi
     output: row.output as T,
   };
 }
+
+/** The AI's writing on screen is no longer the current one: someone asked again in the meantime. */
+export const replaced = () =>
+  new AppError(409, "suggestion_replaced", "The AI has written a new text since this page was loaded. Nothing was changed. Read the new text, then choose again.");

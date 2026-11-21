@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
 import { and, asc, desc, eq, ilike, inArray, notInArray, sql, type SQL } from "drizzle-orm";
 import { documents, rfpAnswers, rfpCandidates, rfpCriteria, rfpQuestions, rfpScores, rfpSections, rfpSignoffs, rfps, users } from "../../../db/schema";
-import type { Day } from "../../../shared/dates";
+import { formatDay, type Day } from "../../../shared/dates";
 import { formatMoney } from "../../../shared/money";
 import type { OpenRfp } from "../../../shared/overview";
 import {
   approvalBlocker,
+  contentEditable,
   contentLocked,
   contentProblems,
   draftToContent,
@@ -33,13 +34,12 @@ import {
 import { suggestionStatusLabels, type SuggestionStatus } from "../../../shared/scorecards";
 import type { Page, User } from "../../../shared/types";
 import { z } from "zod";
-import { ask, readSuggestion, recordSuggestion, reviewSuggestion } from "../../ai";
+import { ask, readSuggestion, recordSuggestion, replaced, reviewSuggestion } from "../../ai";
 import { rfpDraft } from "../../ai/prompts/rfp-draft";
 import { audit } from "../../platform/audit";
 import { AppError, notFound } from "../../platform/errors";
 import { failFields, like } from "../../platform/http";
 import type { AiPort, Db, Queryable, StoragePort, Tx } from "../../platform/ports/types";
-import { replaced } from "../reports/service";
 import { getVendor } from "../vendors/service";
 
 /** What the RFP feature needs: the database, the AI, the place files are kept, and the clock. */
@@ -151,6 +151,7 @@ export async function getRfp(db: Queryable, id: string, today: Day): Promise<Rfp
       onDate: s.onDate,
       comment: s.comment,
       resolvedOn: s.resolvedOn,
+      superseded: s.superseded,
       createdBy: s.createdBy,
     })),
     candidates,
@@ -272,12 +273,34 @@ export async function change(ctx: RfpContext, id: string, by: User, apply: (tx: 
 }
 
 export const closed = () => new AppError(409, "rfp_closed", "This RFP is decided or cancelled, so nothing on it can be changed any more.");
-const locked = () =>
-  new AppError(
-    409,
-    "rfp_locked",
-    "The RFP has been issued to a candidate, so its sections, criteria, questions and weights can no longer be changed. Every candidate must answer the same questions.",
-  );
+/** Why the document or the part weights cannot be changed at this stage. */
+const locked = (stage: RfpStage) =>
+  contentLocked(stage)
+    ? new AppError(
+        409,
+        "rfp_locked",
+        "The RFP has been issued to a candidate, so its sections, criteria, questions and weights can no longer be changed. Every candidate must answer the same questions.",
+      )
+    : new AppError(409, "rfp_approved", "The RFP is approved as it is. To change it, take it back to drafting on the Review tab; it then needs approving again.");
+
+/**
+ * The document or its weights changed: an approval given before speaks for an earlier
+ * version and no longer counts (Q-3). It stays in the trail, marked as such.
+ */
+async function supersedeApprovals(tx: Tx, rfp: RfpDetail): Promise<Changes> {
+  const earlier = rfp.signoffs.filter((x) => x.outcome === "approved" && !x.superseded);
+  if (!earlier.length) return {};
+  await tx
+    .update(rfpSignoffs)
+    .set({ superseded: true })
+    .where(and(eq(rfpSignoffs.rfpId, rfp.id), eq(rfpSignoffs.outcome, "approved")));
+  return {
+    [earlier.length === 1 ? `approval by ${earlier[0]!.reviewerName}` : `${earlier.length} approvals`]: {
+      from: "counted",
+      to: "no longer counted: the document was changed afterwards",
+    },
+  };
+}
 
 async function checkOwner(db: Queryable, ownerUserId: string) {
   const owner = (
@@ -325,15 +348,16 @@ export async function updateRfp(ctx: RfpContext, id: string, input: unknown, by:
   return change(ctx, id, by, async (tx, rfp) => {
     if (!isOpen(rfp.stage)) throw closed();
     const current = Object.fromEntries(Object.keys(demandLabels).map((k) => [k, rfp[k as keyof RfpDetail]]));
-    const next = rfpDemandSchema.parse({ ...current, ...Object.fromEntries(Object.entries(sent).filter(([k]) => k in demandLabels)) });
+    const next = rfpDemandSchema.parse({ ...current, ...Object.fromEntries(Object.entries(sent).filter(([k]) => Object.hasOwn(demandLabels, k))) });
     if (next.demandApprovedOn && next.demandApprovedOn !== rfp.demandApprovedOn && next.demandApprovedOn > ctx.today())
       failFields({ demandApprovedOn: "The approval date cannot be in the future." });
     if (next.ownerUserId !== rfp.ownerUserId) await checkOwner(tx, next.ownerUserId);
     const changes: Changes = {};
     for (const k of Object.keys(demandLabels) as (keyof typeof next)[]) if (next[k] !== current[k]) changes[demandLabels[k]!] = { from: current[k], to: next[k] };
-    if (("Weight of the written answers" in changes || "Weight of demo and interview" in changes) && contentLocked(rfp.stage)) throw locked();
+    const weights = "Weight of the written answers" in changes || "Weight of demo and interview" in changes;
+    if (weights && !contentEditable(rfp.stage)) throw locked(rfp.stage);
     if (Object.keys(changes).length) await tx.update(rfps).set(next).where(eq(rfps.id, id));
-    return changes;
+    return { ...changes, ...(weights ? await supersedeApprovals(tx, rfp) : {}) };
   });
 }
 
@@ -409,11 +433,11 @@ export async function saveContent(ctx: RfpContext, id: string, input: unknown, b
   if (Object.keys(problems).length) failFields(problems);
   return change(ctx, id, by, async (tx, rfp) => {
     if (!isOpen(rfp.stage)) throw closed();
-    if (contentLocked(rfp.stage)) throw locked();
+    if (!contentEditable(rfp.stage)) throw locked(rfp.stage);
     const changes = contentChanges(rfp, content);
     if (!Object.keys(changes).length) return;
     await writeContent(tx, id, content);
-    return { ...changes, ...(await settleDraft(ctx, tx, rfp, by)) };
+    return { ...changes, ...(await settleDraft(ctx, tx, rfp, by)), ...(await supersedeApprovals(tx, rfp)) };
   });
 }
 
@@ -428,7 +452,7 @@ export async function startFromTemplate(ctx: RfpContext, id: string, by: User): 
     if (hasContent(rfp)) throw new AppError(409, "not_empty", "The RFP already has sections, criteria or questions. The template only fills an empty one.");
     const draft = templateDraft();
     await writeContent(tx, id, draftToContent(draft));
-    return { Document: { from: null, to: `started from the template (${draftCounts(draft)})` } };
+    return { Document: { from: null, to: `started from the template (${draftCounts(draft)})` }, ...(await supersedeApprovals(tx, rfp)) };
   });
 }
 
@@ -464,6 +488,7 @@ export async function reviewDraft(ctx: RfpContext, id: string, input: unknown, b
     if (!draft) throw new AppError(409, "no_suggestion", "There is no AI draft for this RFP. Ask the AI for one first.");
     // The person read one draft; if the AI has written another since, that one has not been read.
     if (draft.id !== suggestionId) throw replaced();
+    if (!isOpen(rfp.stage)) throw closed();
     if (action === "reject") {
       if (draft.status !== "proposed") return;
       await reviewSuggestion(tx, draft.id, "rejected", by.email, ctx.now());
@@ -474,6 +499,7 @@ export async function reviewDraft(ctx: RfpContext, id: string, input: unknown, b
     await writeContent(tx, id, draftToContent(draft.output));
     await reviewSuggestion(tx, draft.id, "accepted", by.email, ctx.now());
     return {
+      ...(await supersedeApprovals(tx, rfp)),
       "AI draft": { from: words(draft.status), to: words("accepted") },
       Document: { from: hasContent(rfp) ? draftCounts(rfp) : null, to: `the AI's draft (${draftCounts(draft.output)})` },
     };
@@ -511,7 +537,7 @@ export async function addSignoff(ctx: RfpContext, id: string, input: unknown, by
   return change(ctx, id, by, async (tx, rfp) => {
     if (rfp.stage !== "in_review") throw new AppError(409, "not_in_review", "Sign-offs are recorded while the RFP is in review. Send it for review first.");
     await tx.insert(rfpSignoffs).values({ ...v, rfpId: id, createdBy: by.email, updatedBy: by.email });
-    return { [signoffName(v)]: { from: null, to: `${signoffLabels[v.outcome]} on ${v.onDate}${v.comment ? `: ${short(v.comment)}` : ""}` } };
+    return { [signoffName(v)]: { from: null, to: `${signoffLabels[v.outcome]} on ${formatDay(v.onDate)}${v.comment ? `: ${short(v.comment)}` : ""}` } };
   });
 }
 

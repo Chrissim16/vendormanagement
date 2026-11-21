@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowUp, X } from "lucide-react";
-import { useEffect, useState } from "react";
-import { contentLocked, contentProblems, partLabels, parts, reviewBlockers, rfpContentSchema, type Part, type RfpDetail } from "../../../../shared/rfp";
+import { useEffect, useState, type MutableRefObject } from "react";
+import { contentEditable, contentLocked, contentProblems, partLabels, parts, reviewBlockers, rfpContentSchema, type Part, type RfpDetail } from "../../../../shared/rfp";
 import { api, ApiError, messageOf } from "../../lib/api";
 import { burst } from "../../lib/burst";
 import { Button, ErrorState, IconButton, Select, TextInput } from "../../platform/ui";
@@ -12,6 +12,8 @@ interface Editing {
   criteria: { key: string; name: string; weight: string; part: Part }[];
   questions: { text: string; criterionKey: string }[];
 }
+/** Unsaved changes to the document, held by the RFP's page so that they outlive this tab. */
+export type Kept = MutableRefObject<{ v: Editing; base: string } | null>;
 const editingOf = (r: RfpDetail): Editing => ({
   sections: r.sections.map((s) => ({ heading: s.heading, body: s.body ?? "" })),
   criteria: r.criteria.map((c) => ({ key: c.id, name: c.name, weight: String(c.weight), part: c.part })),
@@ -79,12 +81,13 @@ function ReadOnly({ rfp }: { rfp: RfpDetail }) {
 }
 
 /** Sections, criteria and questions in one form with one Save (Q-2). Nothing typed is lost when saving fails (X-3). */
-function Editor({ rfp }: { rfp: RfpDetail }) {
+function Editor({ rfp, onDirty, keep }: { rfp: RfpDetail; onDirty: (dirty: boolean) => void; keep: Kept }) {
   const saved = editingOf(rfp);
-  const [v, setV] = useState(saved);
+  // What was typed and not saved survives a look at another tab: the page keeps it while this form is away.
+  const [v, setV] = useState<Editing>(() => keep.current?.v ?? saved);
   // When the saved document changes underneath (a colleague saved), follow it, unless something typed here would be lost.
   const savedJson = JSON.stringify(saved);
-  const [base, setBase] = useState(savedJson);
+  const [base, setBase] = useState(() => keep.current?.base ?? savedJson);
   const [overtaken, setOvertaken] = useState(false);
   useEffect(() => {
     if (savedJson === base) return;
@@ -95,6 +98,18 @@ function Editor({ rfp }: { rfp: RfpDetail }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [problem, setProblem] = useState<string | null>(null);
   const dirty = JSON.stringify(v) !== JSON.stringify(saved);
+  // The page above needs to know, so that it never replaces the document while something typed here is unsaved.
+  useEffect(() => onDirty(dirty), [dirty]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    keep.current = dirty ? { v, base } : null;
+  }, [v, base, dirty, keep]);
+  // Closing or reloading the window with unsaved text asks first, the way browsers do.
+  useEffect(() => {
+    if (!dirty) return;
+    const ask = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", ask);
+    return () => window.removeEventListener("beforeunload", ask);
+  }, [dirty]);
   const save = useRfpChange(
     rfp.id,
     () => {
@@ -359,7 +374,7 @@ function Editor({ rfp }: { rfp: RfpDetail }) {
               : dirty
                 ? "Not saved yet. The exports and the review use the saved document."
                 : rfp.stage !== "drafting"
-                  ? "Saved. The document can be changed until the RFP is issued to a candidate."
+                  ? "Saved. A change made now means that an approval already recorded no longer counts."
                   : blockers.length
                     ? `Saved. Before it can go to review: ${blockers.join(" ")}`
                     : "Saved. The draft is complete enough to go to review."}
@@ -389,7 +404,7 @@ function Editor({ rfp }: { rfp: RfpDetail }) {
 }
 
 /** Q-2: the RFP's own text. The AI's draft is a proposal next to it; the document is what people saved. */
-export function DocumentTab({ rfp }: { rfp: RfpDetail }) {
+export function DocumentTab({ rfp, keep }: { rfp: RfpDetail; keep: Kept }) {
   const empty = rfp.sections.length + rfp.criteria.length + rfp.questions.length === 0;
   const drafting = rfp.stage === "drafting";
   const ask = useRfpChange(rfp.id, () => api<RfpDetail>(`/rfps/${rfp.id}/draft`, { method: "POST" }), { quiet: true });
@@ -398,23 +413,28 @@ export function DocumentTab({ rfp }: { rfp: RfpDetail }) {
     (v: { action: "accept" | "reject"; at: DOMRect | null }) => api<RfpDetail>(`/rfps/${rfp.id}/draft/review`, { body: { action: v.action, suggestionId: rfp.draft!.id } }),
     {
       done: (_r, v) => (v.action === "accept" ? "The AI's draft is now the document. Change whatever you like." : "AI draft rejected"),
-      after: (_r, v) => v.action === "accept" && (burst(v.at, 9), setReplacedTimes((n) => n + 1)),
+      after: (_r, v) => v.action === "accept" && (burst(v.at, 9), ((keep.current = null), setReplacedTimes((n) => n + 1))),
     },
   );
   const template = useRfpChange(rfp.id, () => api<RfpDetail>(`/rfps/${rfp.id}/template`, { method: "POST" }), {
     done: "Started from the template",
-    after: () => setReplacedTimes((n) => n + 1),
+    after: () => ((keep.current = null), setReplacedTimes((n) => n + 1)),
   });
   const d = rfp.draft?.output;
   const taken = rfp.draft?.status === "accepted" || rfp.draft?.status === "edited";
   const [confirming, setConfirming] = useState(false);
   // Counts the times the whole document was replaced (a draft taken over, the template), so the form starts afresh then.
   const [replacedTimes, setReplacedTimes] = useState(0);
+  const [unsaved, setUnsaved] = useState(false);
 
-  if (contentLocked(rfp.stage))
+  if (!contentEditable(rfp.stage))
     return (
       <>
-        <Nothing>The RFP has been issued, so its sections, criteria and questions can no longer be changed: every candidate answers the same questions.</Nothing>
+        <Nothing>
+          {contentLocked(rfp.stage)
+            ? "The RFP has been issued, so its sections, criteria and questions can no longer be changed: every candidate answers the same questions."
+            : "This is the document as it was approved. To change it, take the RFP back to drafting on the Review tab; it then needs approving again."}
+        </Nothing>
         <ReadOnly rfp={rfp} />
       </>
     );
@@ -432,7 +452,7 @@ export function DocumentTab({ rfp }: { rfp: RfpDetail }) {
             askProblem={ask.isError ? messageOf(ask.error) : null}
             onReview={(action, at) => {
               // Taking a draft over replaces what is there: ask once more when there is something to lose.
-              if (action === "accept" && !empty && !confirming) return setConfirming(true);
+              if (action === "accept" && (!empty || unsaved) && !confirming) return setConfirming(true);
               setConfirming(false);
               review.mutate({ action, at });
             }}
@@ -445,9 +465,9 @@ export function DocumentTab({ rfp }: { rfp: RfpDetail }) {
                 : !drafting
                   ? "This draft was not used."
                   : confirming
-                    ? "Using the draft replaces the sections, criteria and questions that are there now. Press again to confirm."
+                    ? `Using the draft replaces the sections, criteria and questions that are there now${unsaved ? ", including what you typed and have not saved" : ""}. Press again to confirm.`
                     : empty
-                      ? "Nothing here is part of the RFP until you use it."
+                      ? "Nothing here is part of the RFP until you use it. It is written from the need, so read it as a vendor would before it goes out."
                       : "Using it replaces the sections, criteria and questions below."
             }
           >
@@ -490,7 +510,7 @@ export function DocumentTab({ rfp }: { rfp: RfpDetail }) {
               </>
             )}
           </AiTextPanel>
-          {drafting && empty && (
+          {drafting && empty && !unsaved && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl bg-sunk px-5 py-4">
               <p className="min-w-0 flex-1 text-ink-2">Or write it yourself: the template gives the usual sections, still empty, and the usual criteria with their weights.</p>
               <Button onClick={() => !template.isPending && template.mutate()} aria-disabled={template.isPending || undefined}>
@@ -500,7 +520,7 @@ export function DocumentTab({ rfp }: { rfp: RfpDetail }) {
           )}
         </Section>
       )}
-      <Editor key={replacedTimes} rfp={rfp} />
+      <Editor key={replacedTimes} rfp={rfp} onDirty={setUnsaved} keep={keep} />
     </>
   );
 }

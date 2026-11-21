@@ -28,7 +28,7 @@ import type { Queryable } from "../../platform/ports/types";
 import { listAgreements } from "../agreements/service";
 import { sowBudgetRows, vendorScores, type OverviewContext } from "../dashboard/service";
 import { defaultPeriod, getSpend } from "../invoices/service";
-import { replaced } from "../reports/service";
+import { replaced } from "../../ai";
 import { currentMonth, figuresFor } from "../performance/service";
 import { getDelivery } from "../sow/service";
 import { getVendor } from "../vendors/service";

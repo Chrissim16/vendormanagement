@@ -11,12 +11,14 @@ import {
   isOpen,
   issueSchema,
   matchAnswers,
+  MAX_ANSWER,
   ndaInPlace,
   reviewBlockers,
   rfpStageLabels,
   type Candidate,
   type RfpDetail,
   type SheetRow,
+  unmatchedRowSchema,
 } from "../../../shared/rfp";
 import type { User } from "../../../shared/types";
 import { AppError, notFound } from "../../platform/errors";
@@ -27,6 +29,8 @@ import { createVendor, findVendorByName, getVendor } from "../vendors/service";
 import { readAnswerSheet } from "./files";
 import { change, closed, getRfp, type Changes, type RfpContext } from "./service";
 
+/** More unmatched rows than this are not kept; the upload says how many were left out. */
+const MAX_UNMATCHED = 200;
 const short = (s: string | null | undefined, max = 160) => (s == null ? null : s.length > max ? `${s.slice(0, max)}…` : s);
 
 /** The RFP a candidate belongs to. */
@@ -185,7 +189,7 @@ const discard = (ctx: RfpContext, key: string) => ctx.storage.remove(key).catch(
 export interface UploadResult {
   rfp: RfpDetail;
   /** What the app made of the sheet, to tell the person who uploaded it. */
-  result: { matched: number; unmatched: number; unanswered: number };
+  result: { matched: number; unmatched: number; unanswered: number; shortened: number; notListed: number };
 }
 
 /**
@@ -200,13 +204,25 @@ export async function uploadResponse(ctx: RfpContext, candidateId: string, file:
   checkDocument(cleanFileName(file.name), file.data);
   const rows = await readAnswerSheet(file.data);
   const stored = await store(ctx, rfpId, candidateId, file);
-  let result = { matched: 0, unmatched: 0, unanswered: 0 };
+  let result: UploadResult["result"] = { matched: 0, unmatched: 0, unanswered: 0, shortened: 0, notListed: 0 };
+  let saved = false;
   try {
     const rfp = await change(ctx, rfpId, by, async (tx, now) => {
       const c = answering(now, candidateId);
       const { matched, unmatched } = matchAnswers(rows, now.questions);
-      for (const m of matched) await putAnswer(tx, candidateId, m.questionId, m.text.slice(0, 8000), by);
-      const left: SheetRow[] = unmatched.map((u) => ({ ...u, number: u.number.slice(0, 40), question: u.question.slice(0, 1000), answer: u.answer.slice(0, 8000) })).slice(0, 200);
+      const before = new Map(now.answers.filter((a) => a.candidateId === candidateId).map((a) => [a.questionId, a.text]));
+      const changes: Changes = {};
+      for (const m of matched) {
+        const text = m.text.slice(0, MAX_ANSWER);
+        await putAnswer(tx, candidateId, m.questionId, text, by);
+        // An answer that was there already and now reads differently is named in the history with both texts, so nothing typed by hand is lost without a trace.
+        const was = before.get(m.questionId);
+        if (was != null && was !== text)
+          changes[`answer of ${c.vendorName} to question ${now.questions.find((q) => q.id === m.questionId)!.number}`] = { from: short(was), to: short(text) };
+      }
+      const left: SheetRow[] = unmatched
+        .slice(0, MAX_UNMATCHED)
+        .map((u) => ({ ...u, number: u.number.slice(0, 40), question: u.question.slice(0, 1000), answer: u.answer.slice(0, MAX_ANSWER) }));
       await tx
         .update(rfpCandidates)
         .set({ unmatched: left, responseReceivedOn: c.responseReceivedOn ?? ctx.today(), updatedAt: new Date(), updatedBy: by.email })
@@ -220,22 +236,40 @@ export async function uploadResponse(ctx: RfpContext, candidateId: string, file:
         storageKey: stored.storageKey,
         createdBy: by.email,
       });
-      const answeredNow = new Set([...now.answers.filter((a) => a.candidateId === candidateId).map((a) => a.questionId), ...matched.map((m) => m.questionId)]);
-      result = { matched: matched.length, unmatched: left.length, unanswered: now.questions.length - answeredNow.size };
+      const answeredNow = new Set([...before.keys(), ...matched.map((m) => m.questionId)]);
+      result = {
+        matched: matched.length,
+        unmatched: left.length,
+        unanswered: now.questions.length - answeredNow.size,
+        shortened: [...matched, ...unmatched.slice(0, MAX_UNMATCHED)].filter((x) => ("text" in x ? x.text : x.answer).length > MAX_ANSWER).length,
+        notListed: unmatched.length - left.length,
+      };
+      const stage = await startEvaluating(tx, now);
+      saved = true;
       return {
         [`answers of ${c.vendorName}`]: {
           from: `${c.answered} of ${now.questions.length} answered`,
           to: `${answeredNow.size} of ${now.questions.length} answered, from ${stored.fileName} (${left.length} rows could not be matched)`,
         },
-        ...(await startEvaluating(tx, now)),
+        ...changes,
+        ...stage,
       };
     });
     return { rfp, result };
   } catch (e) {
-    await discard(ctx, stored.storageKey);
+    // Only when nothing was saved: once the document's record exists its file must stay, whatever failed afterwards.
+    if (!saved) await discard(ctx, stored.storageKey);
     throw e;
   }
 }
+
+/** The list of unmatched rows is not the one the person was looking at: a sheet was uploaded, or a colleague placed the row, in the meantime. */
+const rowsChanged = () =>
+  new AppError(
+    409,
+    "rows_changed",
+    "The rows that could not be matched have changed since this page was loaded: a sheet was uploaded again, or a colleague dealt with this row. Nothing was changed. Look at the list as it is now.",
+  );
 
 /** Q-6: an answer typed in by hand, or changed. An empty answer removes it. Placing one of the unmatched rows takes it off that list. */
 export async function saveAnswer(ctx: RfpContext, candidateId: string, questionId: string, input: unknown, by: User): Promise<RfpDetail> {
@@ -251,9 +285,11 @@ export async function saveAnswer(ctx: RfpContext, candidateId: string, questionI
       else await tx.delete(rfpAnswers).where(and(eq(rfpAnswers.candidateId, candidateId), eq(rfpAnswers.questionId, questionId)));
       changes[`answer of ${c.vendorName} to question ${q.number}`] = { from: short(before), to: short(v.text) || null };
     }
-    const left = v.fromUnmatchedRow == null ? c.unmatched : c.unmatched.filter((u) => u.row !== v.fromUnmatchedRow);
-    if (left.length !== c.unmatched.length)
-      changes[`unmatched row ${v.fromUnmatchedRow} of ${c.vendorName}'s answer sheet`] = { from: "not matched", to: `placed under question ${q.number}` };
+    // Placing a row names the row by its place and by what it says; a row of another sheet that happens to sit in the same place is not taken for it.
+    const placed = v.fromUnmatchedRow == null ? null : c.unmatched.find((u) => u.row === v.fromUnmatchedRow && u.answer.trim() === v.text);
+    if (v.fromUnmatchedRow != null && !placed) throw rowsChanged();
+    const left = placed ? c.unmatched.filter((u) => u !== placed) : c.unmatched;
+    if (placed) changes[`unmatched row ${v.fromUnmatchedRow} of ${c.vendorName}'s answer sheet`] = { from: "not matched", to: `placed under question ${q.number}` };
     if (!Object.keys(changes).length) return;
     await tx
       .update(rfpCandidates)
@@ -264,13 +300,17 @@ export async function saveAnswer(ctx: RfpContext, candidateId: string, questionI
 }
 
 /** Sets aside a row of the answer sheet that belongs to no question. */
-export async function discardUnmatched(ctx: RfpContext, candidateId: string, row: number, by: User): Promise<RfpDetail> {
+export async function discardUnmatched(ctx: RfpContext, candidateId: string, input: unknown, by: User): Promise<RfpDetail> {
+  const v = unmatchedRowSchema.parse(input);
   return change(ctx, await rfpOfCandidate(ctx.db, candidateId), by, async (tx, rfp) => {
     const c = answering(rfp, candidateId);
-    const left = c.unmatched.filter((u) => u.row !== row);
-    if (left.length === c.unmatched.length) return;
-    await tx.update(rfpCandidates).set({ unmatched: left, updatedAt: new Date(), updatedBy: by.email }).where(eq(rfpCandidates.id, candidateId));
-    return { [`unmatched row ${row} of ${c.vendorName}'s answer sheet`]: { from: "not matched", to: "set aside" } };
+    const gone = c.unmatched.find((u) => u.row === v.row && u.answer === v.answer);
+    if (!gone) throw rowsChanged();
+    await tx
+      .update(rfpCandidates)
+      .set({ unmatched: c.unmatched.filter((u) => u !== gone), updatedAt: new Date(), updatedBy: by.email })
+      .where(eq(rfpCandidates.id, candidateId));
+    return { [`unmatched row ${v.row} of ${c.vendorName}'s answer sheet`]: { from: short(gone.answer), to: "set aside" } };
   });
 }
 
@@ -278,6 +318,7 @@ export async function discardUnmatched(ctx: RfpContext, candidateId: string, row
 export async function addDocument(ctx: RfpContext, candidateId: string, file: { name: string; data: Buffer }, by: User): Promise<RfpDetail> {
   const rfpId = await rfpOfCandidate(ctx.db, candidateId);
   const stored = await store(ctx, rfpId, candidateId, file);
+  let saved = false;
   try {
     return await change(ctx, rfpId, by, async (tx, rfp) => {
       const c = answering(rfp, candidateId);
@@ -290,10 +331,11 @@ export async function addDocument(ctx: RfpContext, candidateId: string, file: { 
         storageKey: stored.storageKey,
         createdBy: by.email,
       });
+      saved = true;
       return { [`document ${stored.fileName} of ${c.vendorName}`]: { from: null, to: "attached" } };
     });
   } catch (e) {
-    await discard(ctx, stored.storageKey);
+    if (!saved) await discard(ctx, stored.storageKey);
     throw e;
   }
 }

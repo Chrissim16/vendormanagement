@@ -64,7 +64,7 @@ function CriterionRow({ rfp, candidate: c, criterion: k, canScore }: { rfp: RfpD
             </Button>
           </div>
           <p className="text-[13px] text-ink-2">
-            From {c.vendorName}'s answer: “{proposal.quote}”
+            From the answer of {c.vendorName}: “{proposal.quote}”
           </p>
         </div>
       )}

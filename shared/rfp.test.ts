@@ -102,21 +102,19 @@ describe("the document (Q-2)", () => {
 
 describe("review (Q-3)", () => {
   it("needs at least one approval and no open change request", () => {
+    const ok = { outcome: "approved" as const, resolvedOn: null, superseded: false };
+    const asked = { outcome: "changes_requested" as const, resolvedOn: null, superseded: false };
     expect(approvalBlocker([])).toContain("No reviewer has approved");
-    expect(approvalBlocker([{ outcome: "approved", resolvedOn: null }])).toBeNull();
-    expect(
-      approvalBlocker([
-        { outcome: "approved", resolvedOn: null },
-        { outcome: "changes_requested", resolvedOn: null },
-      ]),
-    ).toContain("still open");
-    expect(
-      approvalBlocker([
-        { outcome: "approved", resolvedOn: null },
-        { outcome: "changes_requested", resolvedOn: "2026-11-20" },
-      ]),
-    ).toBeNull();
-    expect(approvalBlocker([{ outcome: "changes_requested", resolvedOn: "2026-11-20" }])).toContain("No reviewer has approved");
+    expect(approvalBlocker([ok])).toBeNull();
+    expect(approvalBlocker([ok, asked])).toContain("still open");
+    expect(approvalBlocker([ok, { ...asked, resolvedOn: "2026-11-20" }])).toBeNull();
+    expect(approvalBlocker([{ ...asked, resolvedOn: "2026-11-20" }])).toContain("No reviewer has approved");
+  });
+  it("an approval of an earlier version of the document does not count, and a request about it is no longer open", () => {
+    const old = { outcome: "approved" as const, resolvedOn: null, superseded: true };
+    expect(approvalBlocker([old])).toContain("changed after it was approved");
+    expect(approvalBlocker([old, { outcome: "changes_requested", resolvedOn: null, superseded: true }])).toContain("changed after it was approved");
+    expect(approvalBlocker([old, { outcome: "approved", resolvedOn: null, superseded: false }])).toBeNull();
   });
 });
 
@@ -142,6 +140,20 @@ describe("matching an answer sheet (Q-6)", () => {
   it("falls back to the question's wording when the number is missing or unknown", () => {
     const { matched } = matchAnswers([row(6, "", "where is the DATA  stored", "In the EU"), row(7, "99", "Describe your pricing model.", "Per user")], questions);
     expect(matched.map((m) => m.questionId)).toEqual(["q1", "q2"]);
+  });
+  it("does not trust a number when the row's own question is a different one: the wording decides", () => {
+    // A sheet made before question 2 was removed: its old number 3 now belongs to another question.
+    const old = matchAnswers(
+      [row(6, "1", "Where is the data stored?", "In the EU"), row(7, "2", "Who is on the team?", "Three consultants"), row(8, "3", "A question that no longer exists", "Stray")],
+      questions,
+    );
+    expect(old.matched).toEqual([
+      { questionId: "q1", text: "In the EU", row: 6 },
+      { questionId: "q3", text: "Three consultants", row: 7 },
+    ]);
+    expect(old.unmatched.map((u) => u.answer)).toEqual(["Stray"]);
+    // Small differences in spacing, case and the closing mark are still the same question.
+    expect(matchAnswers([row(6, "2", "  describe your PRICING model", "Per user")], questions).matched.map((m) => m.questionId)).toEqual(["q2"]);
   });
   it("hands back what it cannot match, and a second answer to the same question", () => {
     const { matched, unmatched } = matchAnswers([row(6, "1", "", "First"), row(7, "1", "", "Second"), row(8, "", "Something else?", "Stray")], questions);

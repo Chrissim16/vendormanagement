@@ -95,6 +95,7 @@ interface VendorRfp {
 /** The RFPs this vendor is or was a candidate in. */
 function VendorRfps({ vendorId }: { vendorId: string }) {
   const q = useQuery({ queryKey: ["vendor", vendorId, "rfps"], queryFn: () => api<VendorRfp[]>(`/vendors/${vendorId}/rfps`) });
+  if (q.isError) return <p className="text-[13px] text-ink-2">The RFPs of this vendor could not be loaded. {messageOf(q.error)}</p>;
   if (!q.data) return null;
   return (
     <section aria-label="RFPs" className="flex flex-col gap-2">

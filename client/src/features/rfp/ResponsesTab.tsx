@@ -10,7 +10,7 @@ import { FileButton, kb, textareaClass, useAdoptRfp, useChoice, useRfpChange } f
 
 interface UploadAnswer {
   rfp: RfpDetail;
-  result: { matched: number; unmatched: number; unanswered: number };
+  result: { matched: number; unmatched: number; unanswered: number; shortened: number; notListed: number };
 }
 
 /** One question with the candidate's answer in a box of its own, saved with its own button (X-3). */
@@ -71,7 +71,9 @@ function Unmatched({ rfp, candidate, row }: { rfp: RfpDetail; candidate: Candida
     () => api<RfpDetail>(`/rfp-candidates/${candidate.id}/answers/${questionId}`, { method: "PUT", body: { text: row.answer, fromUnmatchedRow: row.row } }),
     { done: "Answer placed under its question" },
   );
-  const aside = useRfpChange(rfp.id, () => api<RfpDetail>(`/rfp-candidates/${candidate.id}/unmatched/${row.row}`, { method: "DELETE" }), { done: "Row set aside" });
+  const aside = useRfpChange(rfp.id, () => api<RfpDetail>(`/rfp-candidates/${candidate.id}/unmatched/discard`, { body: { row: row.row, answer: row.answer } }), {
+    done: "Row set aside",
+  });
   const answered = new Set(rfp.answers.filter((a) => a.candidateId === candidate.id).map((a) => a.questionId));
   return (
     <li className="flex flex-col gap-2.5 border-b border-line py-3.5">
@@ -166,6 +168,10 @@ function CandidateResponse({ rfp, candidate: c }: { rfp: RfpDetail; candidate: C
             ? `${result.unmatched} ${result.unmatched === 1 ? "row" : "rows"} could not be matched and ${result.unmatched === 1 ? "is" : "are"} listed below to place by hand. `
             : ""}
           {result.unanswered ? `${result.unanswered} ${result.unanswered === 1 ? "question has" : "questions have"} no answer yet.` : "Every question has an answer."}
+          {result.shortened
+            ? ` ${result.shortened} ${result.shortened === 1 ? "answer was" : "answers were"} longer than 8,000 characters and ${result.shortened === 1 ? "was" : "were"} cut off there; the full text is in the uploaded sheet under Documents.`
+            : ""}
+          {result.notListed ? ` ${result.notListed} more rows could not be matched and are not listed; they are in the uploaded sheet.` : ""}
         </p>
       )}
 

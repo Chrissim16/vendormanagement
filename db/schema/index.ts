@@ -682,6 +682,8 @@ export const rfpSignoffs = pgTable(
     comment: text("comment"),
     /** For requested changes: the day they were dealt with. Until then the request is open and blocks approval. */
     resolvedOn: date("resolved_on", { mode: "string" }),
+    /** Set on an approval when the document changes afterwards: it was given for an earlier version and no longer counts. */
+    superseded: boolean("superseded").notNull().default(false),
     ...stamps,
   },
   (t) => [index("rfp_signoffs_rfp_idx").on(t.rfpId), check("rfp_signoffs_outcome_check", sql`${t.outcome} in ('approved', 'changes_requested')`)],

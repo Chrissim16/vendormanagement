@@ -156,6 +156,8 @@ describe("Q-2 draft", () => {
     for (const part of ["written", "demo"] as const) expect(d.criteria.filter((c) => c.part === part).reduce((s, c) => s + c.weight, 0)).toBe(100);
     // The draft is written for vendors: the budget and the sponsor are not in it.
     expect(JSON.stringify(d)).not.toMatch(/123,456|123456|Finance director/);
+    // Nor is the need as it was written for colleagues: a person words it for vendors.
+    expect(JSON.stringify(d)).not.toContain("A tool to submit and approve expenses.");
 
     const taken = ok<RfpDetail>(await t.as(MEMBER).post(`/api/rfps/${r.id}/draft/review`).send({ action: "accept", suggestionId: asked.draft!.id }));
     expect(taken.draft).toMatchObject({ status: "accepted", reviewedBy: MEMBER });
@@ -462,8 +464,8 @@ describe("Q-6 responses", () => {
         ws.addRow(["", "", "", "We would also like to mention our awards."]);
       },
     );
-    const up = ok<{ rfp: RfpDetail; result: { matched: number; unmatched: number; unanswered: number } }>(await upload(fresh.id, data, "Answers é.xlsx"), 201);
-    expect(up.result).toEqual({ matched: last - 2, unmatched: 2, unanswered: 2 });
+    const up = ok<{ rfp: RfpDetail; result: Record<string, number> }>(await upload(fresh.id, data, "Answers é.xlsx"), 201);
+    expect(up.result).toEqual({ matched: last - 2, unmatched: 2, unanswered: 2, shortened: 0, notListed: 0 });
     const c = up.rfp.candidates.find((x) => x.id === fresh.id)!;
     expect(c).toMatchObject({ answered: last - 2, responseReceivedOn: TODAY });
     expect(c.unmatched.map((u) => u.answer)).toEqual([`Answer to question ${last}.`, "We would also like to mention our awards."]);
@@ -480,7 +482,7 @@ describe("Q-6 responses", () => {
     expect(placed.candidates.find((x) => x.id === fresh.id)!.unmatched).toHaveLength(1);
     const typed = ok<RfpDetail>(await t.as(ADMIN).put(`/api/rfp-candidates/${fresh.id}/answers/${rfp.questions[1]!.id}`).send({ text: "Typed in by hand." }));
     expect(typed.candidates.find((x) => x.id === fresh.id)!.answered).toBe(last);
-    const aside = ok<RfpDetail>(await t.as(ADMIN).delete(`/api/rfp-candidates/${fresh.id}/unmatched/${c.unmatched[1]!.row}`));
+    const aside = ok<RfpDetail>(await t.as(ADMIN).post(`/api/rfp-candidates/${fresh.id}/unmatched/discard`).send({ row: c.unmatched[1]!.row, answer: c.unmatched[1]!.answer }));
     expect(aside.candidates.find((x) => x.id === fresh.id)!.unmatched).toEqual([]);
     expect((await history(rfp.id)).some((e) => `answer of ${fresh.vendorName} to question 2` in e.changes)).toBe(true);
 
@@ -803,5 +805,202 @@ describe("Q-11 overview", () => {
   it("someone whose access is switched off can do nothing here", async () => {
     expect((await t.as("former@example.test").get("/api/rfps")).status).toBe(403);
     expect((await t.as("former@example.test").post("/api/rfps").send(demand())).status).toBe(403);
+  });
+});
+
+describe("rules the reviewer asked to see proven", () => {
+  const contentOf = (r: RfpDetail) => ({
+    sections: r.sections.map((x) => ({ heading: x.heading, body: x.body })),
+    criteria: r.criteria.map((c) => ({ key: c.id, name: c.name, weight: c.weight, part: c.part })),
+    questions: r.questions.map((q) => ({ text: q.text, criterionKey: q.criterionId })),
+  });
+
+  it("Q-3 what was approved is what goes out: an approved document is fixed, and changing it after going back means the approval no longer counts", async () => {
+    const r = await approved();
+    const fixed = await t
+      .as(MEMBER)
+      .put(`/api/rfps/${r.id}/content`)
+      .send({ ...contentOf(r), sections: [] });
+    expect(fixed.status).toBe(409);
+    expect(fixed.body.error.code).toBe("rfp_approved");
+    expect((await t.as(MEMBER).patch(`/api/rfps/${r.id}`).send({ writtenWeight: 50, demoWeight: 50 })).body.error.code).toBe("rfp_approved");
+
+    // Back to drafting and to review again without a change: the approval still stands.
+    ok(await t.as(MEMBER).post(`/api/rfps/${r.id}/stage`).send({ to: "drafting" }));
+    ok(await t.as(MEMBER).post(`/api/rfps/${r.id}/stage`).send({ to: "in_review" }));
+    expect(ok<RfpDetail>(await t.as(MEMBER).post(`/api/rfps/${r.id}/stage`).send({ to: "approved" })).stage).toBe("approved");
+
+    // Back again, and this time the document is changed.
+    ok(await t.as(MEMBER).post(`/api/rfps/${r.id}/stage`).send({ to: "drafting" }));
+    const content = contentOf(r);
+    const changed = ok<RfpDetail>(
+      await t
+        .as(MEMBER)
+        .put(`/api/rfps/${r.id}/content`)
+        .send({ ...content, questions: [...content.questions, { text: "One more thing?", criterionKey: r.criteria[0]!.id }] }),
+    );
+    expect(changed.signoffs.map((x) => [x.outcome, x.superseded])).toEqual([["approved", true]]);
+    expect((await history(r.id))[0]!.changes["approval by Chris Tanaka"]).toEqual({ from: "counted", to: "no longer counted: the document was changed afterwards" });
+    ok(await t.as(MEMBER).post(`/api/rfps/${r.id}/stage`).send({ to: "in_review" }));
+    const refused = await t.as(MEMBER).post(`/api/rfps/${r.id}/stage`).send({ to: "approved" });
+    expect(refused.status).toBe(409);
+    expect(refused.body.error.message).toContain("changed after it was approved");
+    ok(await t.as(MEMBER).post(`/api/rfps/${r.id}/signoffs`).send({ reviewerName: "Chris Tanaka", reviewerRole: "CTO", outcome: "approved", onDate: TODAY }), 201);
+    expect(ok<RfpDetail>(await t.as(MEMBER).post(`/api/rfps/${r.id}/stage`).send({ to: "approved" })).stage).toBe("approved");
+    expect(await textOf((await file(`/api/rfps/${r.id}/decision-record.pdf`)).body as Buffer)).toContain("Approved an earlier version");
+
+    // A change to the two part weights counts as a change to what was approved, too.
+    ok(await t.as(MEMBER).post(`/api/rfps/${r.id}/stage`).send({ to: "drafting" }));
+    const reweighed = ok<RfpDetail>(await t.as(MEMBER).patch(`/api/rfps/${r.id}`).send({ writtenWeight: 60, demoWeight: 40 }));
+    expect(reweighed.signoffs.every((x) => x.superseded)).toBe(true);
+  });
+
+  it("Q-4 a candidate that was issued the RFP is dropped, never removed or sent back to the longlist", async () => {
+    const { fresh } = await issued();
+    const removed = await t.as(MEMBER).delete(`/api/rfp-candidates/${fresh.id}`);
+    expect(removed.status).toBe(409);
+    expect(removed.body.error.code).toBe("candidate_in_use");
+    expect((await t.as(MEMBER).patch(`/api/rfp-candidates/${fresh.id}`).send({ list: "longlist", reason: "Second thoughts" })).body.error.code).toBe("already_issued");
+    expect(
+      ok<RfpDetail>(await t.as(MEMBER).patch(`/api/rfp-candidates/${fresh.id}`).send({ list: "dropped", reason: "Withdrew" })).candidates.find((c) => c.id === fresh.id)!.list,
+    ).toBe("dropped");
+  });
+
+  it("nothing of one RFP can be used on another", async () => {
+    const one = await issued();
+    const two = await issued();
+    expect((await t.as(MEMBER).put(`/api/rfp-candidates/${one.fresh.id}/scores/${two.rfp.criteria[0]!.id}`).send({ score: 3 })).status).toBe(404);
+    expect((await t.as(MEMBER).put(`/api/rfp-candidates/${one.fresh.id}/answers/${two.rfp.questions[0]!.id}`).send({ text: "Misplaced" })).status).toBe(404);
+    const decision = await t.as(MEMBER).post(`/api/rfps/${one.rfp.id}/decision`).send({ winnerCandidateId: two.fresh.id, decidedOn: TODAY, rationale: "Wrong RFP" });
+    expect(decision.body.error.fields.winnerCandidateId).toBeTruthy();
+    const after = await get(one.rfp.id);
+    expect([after.stage, after.scores.length, after.answers.length]).toEqual(["issued", 0, 0]);
+  });
+
+  it("the demand form cannot set the stage, the winner or anything else that is not the demand", async () => {
+    const { rfp, fresh } = await issued();
+    const next = ok<RfpDetail>(
+      await t
+        .as(MEMBER)
+        .patch(`/api/rfps/${rfp.id}`)
+        .send({ stage: "decided", winnerCandidateId: fresh.id, decidedOn: TODAY, rationale: "Sneaked in", cancelReason: "x", constructor: "y", sponsor: "Real change" }),
+    );
+    expect(next).toMatchObject({ stage: "issued", decision: null, cancelReason: null, sponsor: "Real change" });
+    expect(Object.keys((await history(rfp.id))[0]!.changes)).toEqual(["Sponsor"]);
+  });
+
+  it("a decided or cancelled RFP refuses every change, also to its documents, sign-offs and AI draft", async () => {
+    const r = await create();
+    const asked = ok<RfpDetail>(await t.as(MEMBER).post(`/api/rfps/${r.id}/draft`), 201);
+    ok(await t.as(MEMBER).post(`/api/rfps/${r.id}/cancel`).send({ reason: "Not needed" }));
+    const trail = (await history(r.id)).length;
+    for (const res of [
+      await t.as(MEMBER).post(`/api/rfps/${r.id}/draft/review`).send({ action: "reject", suggestionId: asked.draft!.id }),
+      await t.as(MEMBER).post(`/api/rfps/${r.id}/draft/review`).send({ action: "accept", suggestionId: asked.draft!.id }),
+      await t.as(MEMBER).post(`/api/rfps/${r.id}/draft`),
+      await t.as(MEMBER).post(`/api/rfps/${r.id}/template`),
+      await t.as(MEMBER).post(`/api/rfps/${r.id}/signoffs`).send({ reviewerName: "Late", outcome: "approved", onDate: TODAY }),
+      await t.as(MEMBER).post(`/api/rfps/${r.id}/candidates`).send({ vendorId: vendors["Bluefinch Systems"], reason: "Late" }),
+      await t.as(MEMBER).post(`/api/rfps/${r.id}/stage`).send({ to: "in_review" }),
+      await t.as(MEMBER).post(`/api/rfps/${r.id}/comparison`),
+    ])
+      expect(res.status, JSON.stringify(res.body)).toBe(409);
+    expect((await history(r.id)).length).toBe(trail);
+
+    const x = await issued();
+    const PDF = Buffer.from("%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF");
+    const doc = ok<RfpDetail>(await t.as(MEMBER).post(`/api/rfp-candidates/${x.fresh.id}/documents`).attach("file", PDF, "Offer.pdf"), 201).candidates.find(
+      (c) => c.id === x.fresh.id,
+    )!.documents[0]!;
+    ok(await t.as(MEMBER).post(`/api/rfps/${x.rfp.id}/cancel`).send({ reason: "Stopped" }));
+    expect((await t.as(MEMBER).post(`/api/rfp-candidates/${x.fresh.id}/documents`).attach("file", PDF, "Late.pdf")).status).toBe(409);
+    expect((await t.as(MEMBER).delete(`/api/rfp-documents/${doc.id}`)).status).toBe(409);
+    expect((await upload(x.fresh.id, Buffer.from("x"), "answers.xlsx")).status).toBe(409);
+    expect((await t.as(MEMBER).put(`/api/rfp-candidates/${x.fresh.id}/answers/${x.rfp.questions[0]!.id}`).send({ text: "Late" })).status).toBe(409);
+    // The document that was there can still be downloaded.
+    await file(`/api/documents/${doc.id}/download`);
+  });
+
+  it("Q-6 an answer replaced by a later upload is in the history with both texts, and a row of an earlier sheet cannot be placed after a new upload", async () => {
+    const { rfp, fresh } = await issued();
+    const q1 = rfp.questions[0]!;
+    ok(await t.as(MEMBER).put(`/api/rfp-candidates/${fresh.id}/answers/${q1.id}`).send({ text: "Given by phone: only in part." }));
+    const withStray = (remark: string) =>
+      filledSheet(
+        fresh.id,
+        (number) => (number === 1 ? "From the sheet: yes, fully." : null),
+        (ws) => void ws.addRow(["", "", "", remark]),
+      );
+    const first = ok<{ rfp: RfpDetail }>(await upload(fresh.id, await withStray("A remark in the first sheet.")), 201);
+    expect((await history(rfp.id))[0]!.changes[`answer of ${fresh.vendorName} to question 1`]).toEqual({
+      from: "Given by phone: only in part.",
+      to: "From the sheet: yes, fully.",
+    });
+    const stale = first.rfp.candidates.find((c) => c.id === fresh.id)!.unmatched[0]!;
+
+    // A colleague uploads a corrected sheet; the row on the first person's screen is from the old one.
+    const second = ok<{ rfp: RfpDetail }>(await upload(fresh.id, await withStray("A different remark in the second sheet.")), 201);
+    const placed = await t.as(MEMBER).put(`/api/rfp-candidates/${fresh.id}/answers/${rfp.questions[1]!.id}`).send({ text: stale.answer, fromUnmatchedRow: stale.row });
+    expect(placed.status).toBe(409);
+    expect(placed.body.error.code).toBe("rows_changed");
+    expect((await t.as(MEMBER).post(`/api/rfp-candidates/${fresh.id}/unmatched/discard`).send({ row: stale.row, answer: stale.answer })).status).toBe(409);
+    const now = (await get(rfp.id)).candidates.find((c) => c.id === fresh.id)!;
+    expect(now.unmatched).toEqual(second.rfp.candidates.find((c) => c.id === fresh.id)!.unmatched);
+    expect(now.unmatched[0]!.answer).toBe("A different remark in the second sheet.");
+    expect(now.answered).toBe(1);
+  });
+
+  it("Q-6 a sheet handed out before the questions were renumbered is matched on the wording, never onto another question", async () => {
+    const r = await approved();
+    const now = await addCandidate(r.id, { vendorId: vendors["Bluefinch Systems"] });
+    const c = now.candidates[0]!;
+    // The sheet is downloaded and sent; then the first question is removed, so every number moves up by one.
+    const old = await filledSheet(c.id, (number) => `Answer written for old number ${number}.`);
+    ok(await t.as(MEMBER).post(`/api/rfps/${r.id}/stage`).send({ to: "drafting" }));
+    const content = contentOf(r);
+    ok(
+      await t
+        .as(MEMBER)
+        .put(`/api/rfps/${r.id}/content`)
+        .send({ ...content, questions: content.questions.slice(1) }),
+    );
+    ok(await t.as(MEMBER).post(`/api/rfps/${r.id}/stage`).send({ to: "in_review" }));
+    ok(await t.as(MEMBER).post(`/api/rfps/${r.id}/signoffs`).send({ reviewerName: "Chris Tanaka", outcome: "approved", onDate: TODAY }), 201);
+    ok(await t.as(MEMBER).post(`/api/rfps/${r.id}/stage`).send({ to: "approved" }));
+    ok(await t.as(MEMBER).post(`/api/rfp-candidates/${c.id}/issue`).send({ issuedOn: TODAY }));
+
+    const up = ok<{ rfp: RfpDetail; result: Record<string, number> }>(await upload(c.id, old), 201);
+    expect(up.result).toMatchObject({ matched: r.questions.length - 1, unmatched: 1, unanswered: 0 });
+    for (const q of up.rfp.questions) {
+      const was = r.questions.find((x) => x.text === q.text)!;
+      expect(was.number).toBe(q.number + 1);
+      expect(up.rfp.answers.find((a) => a.questionId === q.id)!.text).toBe(`Answer written for old number ${was.number}.`);
+    }
+    expect(up.rfp.candidates[0]!.unmatched[0]).toMatchObject({ number: "1", question: r.questions[0]!.text, answer: "Answer written for old number 1." });
+  });
+
+  it("Q-9 a decision is not dated before the RFP was issued, and of two decisions at the same moment one wins", async () => {
+    const { rfp, fresh, known } = await issued();
+    const early = await t.as(MEMBER).post(`/api/rfps/${rfp.id}/decision`).send({ winnerCandidateId: fresh.id, decidedOn: "2026-11-20", rationale: "Too soon" });
+    expect(early.body.error.fields.decidedOn).toContain("before the RFP was issued");
+    const both = await Promise.all([
+      t.as(MEMBER).post(`/api/rfps/${rfp.id}/decision`).send({ winnerCandidateId: fresh.id, decidedOn: TODAY, rationale: "Mine" }),
+      t.as(ADMIN).post(`/api/rfps/${rfp.id}/decision`).send({ winnerCandidateId: known.id, decidedOn: TODAY, rationale: "Theirs" }),
+    ]);
+    expect(both.map((x) => x.status).sort()).toEqual([200, 409]);
+    const after = await get(rfp.id);
+    const winner = both.find((x) => x.status === 200)!.body as RfpDetail;
+    expect(after.decision).toEqual(winner.decision);
+    expect((await history(rfp.id)).filter((e) => "Winner" in e.changes)).toHaveLength(1);
+  });
+
+  it("Q-5 the same candidate issued twice at the same moment is issued once", async () => {
+    const r = await approved();
+    const c = (await addCandidate(r.id, { vendorId: vendors["Bluefinch Systems"] })).candidates[0]!;
+    const both = await Promise.all([1, 2].map(() => t.as(MEMBER).post(`/api/rfp-candidates/${c.id}/issue`).send({ issuedOn: TODAY })));
+    expect(both.map((x) => x.status).sort()).toEqual([200, 409]);
+    expect((await history(r.id)).filter((e) => `candidate ${c.vendorName}` in e.changes && String(e.changes[`candidate ${c.vendorName}`]!.to).startsWith("issued"))).toHaveLength(
+      1,
+    );
   });
 });

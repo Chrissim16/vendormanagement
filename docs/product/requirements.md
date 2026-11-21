@@ -125,13 +125,13 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 
 **Q-2 Draft.** The AI drafts sections, criteria with weights and a numbered question list from the need and a template. The draft is a proposal: it becomes the RFP's document when a member takes it over, and a member can edit everything. Each question belongs to one criterion. Weights within a part add up to 100. Without the AI, the template gives the same start by hand.
 
-**Q-3 Review.** The RFP exports as Word and PDF. A member records each reviewer's sign-off or requested changes, and marks a requested change as dealt with. The stage cannot move to approved without at least one approval and no open change request.
+**Q-3 Review.** The RFP exports as Word and PDF. A member records each reviewer's sign-off or requested changes, and marks a requested change as dealt with. The stage cannot move to approved without at least one approval and no open change request. An approved document is fixed; when it is taken back and changed, the earlier approval no longer counts.
 
 **Q-4 Candidates.** A member keeps a longlist and shortlist with a reason per candidate. A candidate not yet known is created as a prospect vendor.
 
-**Q-5 Issue.** For each shortlisted candidate the app exports the RFP as Word and the question list as an Excel answer sheet; neither holds the budget or the sponsor. Issuing to a candidate without an NDA in place shows a warning that must be acknowledged. Once issued, questions, criteria and the weights of the two parts are locked.
+**Q-5 Issue.** For each shortlisted candidate the app exports the RFP as Word and the question list as an Excel answer sheet; neither holds the budget or the sponsor. Issuing to a candidate without an NDA in place shows a warning that must be acknowledged. Once issued, questions, criteria and the weights of the two parts are locked for good.
 
-**Q-6 Responses.** A member uploads a candidate's filled answer sheet. The app matches answers to questions and shows any it could not match for manual entry. Other response documents can be attached.
+**Q-6 Responses.** A member uploads a candidate's filled answer sheet. The app matches answers to questions by number and wording, never onto a question the row was not written for, and shows any it could not match for manual entry. Other response documents can be attached.
 
 **Q-7 AI comparison.** Per question the AI summarises each candidate's answer and the differences between them, and proposes a score per candidate and criterion with a reason that quotes the answer. The proposal gives no score by itself, and the page says when an answer has changed since.
 

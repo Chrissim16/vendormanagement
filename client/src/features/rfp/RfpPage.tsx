@@ -16,7 +16,7 @@ import { Button, ErrorState, Loading, PageHeader } from "../../platform/ui";
 import { linkClass, Section } from "../overview/parts";
 import { CandidatesTab } from "./CandidatesTab";
 import { DecisionTab } from "./DecisionTab";
-import { DocumentTab } from "./DocumentTab";
+import { DocumentTab, type Kept } from "./DocumentTab";
 import { StagePill, useAdoptRfp } from "./parts";
 import { ResponsesTab } from "./ResponsesTab";
 import { ReviewTab } from "./ReviewTab";
@@ -39,8 +39,8 @@ function Stages({ rfp }: { rfp: RfpDetail }) {
   return (
     <ol aria-label="Stages" className="flex flex-wrap gap-x-2 gap-y-2">
       {rfpPath.map((s, i) => {
-        const done = at > i || rfp.stage === "decided";
-        const current = at === i && rfp.stage !== "decided";
+        const done = at > i;
+        const current = at === i;
         return (
           <li
             key={s}
@@ -126,6 +126,8 @@ export function RfpPage() {
   const [url, setUrl] = useUrlState({ tab: "" });
   const [dialog, setDialog] = useState<"edit" | "cancel" | null>(null);
   const opened = useRef<{ id: string; tab: RfpTab } | null>(null);
+  // Unsaved changes to the document, kept here while another tab is looked at.
+  const kept: Kept = useRef(null);
   const q = useQuery({ queryKey: ["rfp", id], queryFn: () => api<RfpDetail>(`/rfps/${id}`), retry: false });
   if (q.isPending) return <Loading />;
   if (q.isError)
@@ -141,7 +143,10 @@ export function RfpPage() {
   const rfp = q.data;
   const next = nextStep(rfp, me.id);
   // Without a choice of its own the page opens where the next step is done, and stays there: a change that moves the next step on must not switch the tab under the reader.
-  if (opened.current?.id !== rfp.id) opened.current = { id: rfp.id, tab: next.tab };
+  if (opened.current?.id !== rfp.id) {
+    opened.current = { id: rfp.id, tab: next.tab };
+    kept.current = null;
+  }
   const tab = tabs.some((t) => t.id === url.tab) ? (url.tab as RfpTab) : opened.current.tab;
   return (
     <>
@@ -173,7 +178,7 @@ export function RfpPage() {
       <Tabs label="Parts of this RFP" tabs={tabs} value={tab} onChange={(t) => setUrl({ tab: t }, { push: true })}>
         <div className="flex flex-col gap-10">
           {tab === "overview" && <Overview rfp={rfp} onEdit={() => setDialog("edit")} onCancel={() => setDialog("cancel")} />}
-          {tab === "document" && <DocumentTab rfp={rfp} />}
+          {tab === "document" && <DocumentTab rfp={rfp} keep={kept} />}
           {tab === "review" && <ReviewTab rfp={rfp} />}
           {tab === "candidates" && <CandidatesTab rfp={rfp} />}
           {tab === "responses" && <ResponsesTab rfp={rfp} />}

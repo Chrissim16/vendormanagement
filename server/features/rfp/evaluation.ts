@@ -1,14 +1,13 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { rfpScores, rfps } from "../../../db/schema";
 import { formatDay } from "../../../shared/dates";
 import { cancelSchema, decisionSchema, inEvaluation, isOpen, rfpScoreSchema, rfpStageLabels, type RfpComparison, type RfpDetail } from "../../../shared/rfp";
 import type { User } from "../../../shared/types";
-import { ask, recordSuggestion, reviewSuggestion } from "../../ai";
+import { ask, recordSuggestion, replaced, reviewSuggestion } from "../../ai";
 import { rfpComparison, type RfpComparisonInput } from "../../ai/prompts/rfp-comparison";
 import { AppError, notFound } from "../../platform/errors";
 import { failFields } from "../../platform/http";
 import type { Db, Tx } from "../../platform/ports/types";
-import { replaced } from "../reports/service";
 import { getVendor, updateVendor } from "../vendors/service";
 import { rfpOfCandidate } from "./candidates";
 import { answersFingerprint, change, closed, getRfp, words, type Changes, type RfpContext } from "./service";
@@ -156,6 +155,10 @@ export async function decide(ctx: RfpContext, rfpId: string, input: unknown, by:
     evaluating(rfp);
     const winner = rfp.candidates.find((c) => c.id === v.winnerCandidateId);
     if (!winner || !inEvaluation(winner)) failFields({ winnerCandidateId: "Choose one of the shortlisted candidates the RFP was issued to." });
+    if (winner!.issuedOn! > v.decidedOn)
+      failFields({ decidedOn: `The decision cannot be dated before the RFP was issued to ${winner!.vendorName}, on ${formatDay(winner!.issuedOn!)}.` });
+    // The vendor is held while it is checked and changed, so it cannot be offboarded in between.
+    await tx.execute(sql`select 1 from vendors where id = ${winner!.vendorId} for update`);
     const vendor = await getVendor(tx, winner!.vendorId, ctx.today());
     if (vendor.status === "offboarded") failFields({ winnerCandidateId: `${vendor.name} has been offboarded and cannot be made the winner.` });
     // The vendor's own history records that it became active, in this same transaction.

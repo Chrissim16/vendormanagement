@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { amountForInput, currencies, formatMoney, parseAmount } from "../../../../shared/money";
-import { contentLocked, type RfpDetail, type RfpRow } from "../../../../shared/rfp";
+import { contentEditable, contentLocked, type RfpDetail, type RfpRow } from "../../../../shared/rfp";
 import type { Page } from "../../../../shared/types";
 import { api } from "../../lib/api";
 import { personName, usePeople } from "../../lib/data";
@@ -47,7 +47,7 @@ export function DemandForm({ rfp, onClose, onSaved }: { rfp?: RfpDetail; onClose
   const me = useMe();
   const today = useToday();
   const people = usePeople();
-  const weightsLocked = !!rfp && contentLocked(rfp.stage);
+  const weightsLocked = !!rfp && !contentEditable(rfp.stage);
   const form = useForm(
     {
       title: rfp?.title ?? "",
@@ -178,7 +178,8 @@ export function DemandForm({ rfp, onClose, onSaved }: { rfp?: RfpDetail; onClose
         </Grid>
         {weightsLocked && (
           <p className="text-[13px] text-ink-2">
-            Written answers count for {rfp.writtenWeight}% and demo and interview for {rfp.demoWeight}%. That is fixed now that the RFP has been issued.
+            Written answers count for {rfp.writtenWeight}% and demo and interview for {rfp.demoWeight}%.{" "}
+            {contentLocked(rfp.stage) ? "That is fixed now that the RFP has been issued." : "To change that, take the RFP back to drafting first; it then needs approving again."}
           </p>
         )}
         <FormFooter problem={form.problem} busy={form.busy} submitLabel={rfp ? "Save demand" : "Create RFP"} onCancel={onClose} />

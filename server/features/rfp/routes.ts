@@ -106,9 +106,7 @@ export function rfpRoutes(ctx: service.RfpContext) {
   r.put("/rfp-candidates/:id/answers/:questionId", async (req, res) =>
     res.json(await candidates.saveAnswer(ctx, id.parse(req.params.id), id.parse(req.params.questionId), body(req), currentUser(req))),
   );
-  r.delete("/rfp-candidates/:id/unmatched/:row", async (req, res) =>
-    res.json(await candidates.discardUnmatched(ctx, id.parse(req.params.id), z.coerce.number().int().parse(req.params.row), currentUser(req))),
-  );
+  r.post("/rfp-candidates/:id/unmatched/discard", async (req, res) => res.json(await candidates.discardUnmatched(ctx, id.parse(req.params.id), body(req), currentUser(req))));
   r.post("/rfp-candidates/:id/documents", upload.single("file"), async (req, res) =>
     res.status(201).json(await candidates.addDocument(ctx, id.parse(req.params.id), file(req, "Choose a file to attach."), currentUser(req))),
   );

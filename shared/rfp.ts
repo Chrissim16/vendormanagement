@@ -26,6 +26,11 @@ export const rfpPath: RfpStage[] = ["drafting", "in_review", "approved", "issued
 export const isOpen = (stage: RfpStage) => stage !== "decided" && stage !== "cancelled";
 /** Sections, criteria and questions can be changed until the RFP has gone out to a candidate (Q-5). */
 export const contentLocked = (stage: RfpStage) => !["drafting", "in_review", "approved"].includes(stage);
+/**
+ * The document and the two part weights are changed while drafting or in review. An
+ * approved RFP is taken back to drafting first, so that what goes out is what was approved.
+ */
+export const contentEditable = (stage: RfpStage) => stage === "drafting" || stage === "in_review";
 
 export const parts = ["written", "demo"] as const;
 export type Part = (typeof parts)[number];
@@ -246,6 +251,8 @@ export const answerSchema = z.object({
   /** The row of the uploaded sheet this text was taken from, when it is one of the rows that could not be matched. */
   fromUnmatchedRow: z.number().int().nullable().default(null),
 });
+/** Names one of the rows that could not be matched: its place in the sheet and what it says, so a row of a sheet uploaded since is never taken for it. */
+export const unmatchedRowSchema = z.object({ row: z.number().int(), answer: z.string().max(MAX_ANSWER) });
 
 export interface SheetRow {
   /** The row in the uploaded sheet, as Excel numbers it. */
@@ -264,9 +271,12 @@ const plainText = (s: string) =>
 
 /**
  * Matches the rows of a filled answer sheet to the questions (Q-6). A row belongs to the
- * question whose number it carries; a row without a usable number belongs to the question
- * with the same wording. Rows without an answer are left out. A row that fits no
- * question, or a second answer to the same question, is handed back as unmatched.
+ * question whose number it carries, provided the question written in the row is that
+ * question: a sheet made before the questions were renumbered, or one in which a vendor
+ * moved rows about, must not put an answer under another question. When number and
+ * wording disagree, or there is no usable number, the wording decides. Rows without an
+ * answer are left out. A row that fits no question, or a second answer to the same
+ * question, is handed back as unmatched.
  */
 export function matchAnswers(
   rows: SheetRow[],
@@ -281,7 +291,9 @@ export function matchAnswers(
     const answer = r.answer.trim();
     if (!answer) continue;
     const number = r.number.trim().replace(/^q\s*/i, "").replace(/\.0*$/, "").replace(/[.)]$/, "");
-    const q = byNumber.get(number) ?? (r.question.trim() ? byText.get(plainText(r.question)) : undefined);
+    const wording = r.question.trim() ? plainText(r.question) : null;
+    const numbered = byNumber.get(number);
+    const q = numbered && (wording == null || plainText(numbered.text) === wording) ? numbered : wording == null ? undefined : byText.get(wording);
     if (!q || taken.has(q.id)) unmatched.push({ ...r, answer });
     else {
       taken.add(q.id);
@@ -441,6 +453,8 @@ export interface Signoff {
   onDate: Day;
   comment: string | null;
   resolvedOn: Day | null;
+  /** The document was changed after this sign-off, so it speaks for an earlier version and no longer counts. */
+  superseded: boolean;
   createdBy: string | null;
 }
 export interface RfpDocument {
@@ -508,12 +522,16 @@ export interface RfpDetail extends Omit<RfpDemand, "ownerUserId"> {
 /** A candidate the RFP has gone out to and that is still in the running: these are the ones answers and scores are about. */
 export const inEvaluation = (c: Pick<Candidate, "list" | "issuedOn">) => c.list === "shortlist" && !!c.issuedOn;
 export const ndaInPlace = (c: Pick<Candidate, "nda">) => c.nda === "in_place" || c.nda === "not_required";
-export const openChangeRequests = (signoffs: Pick<Signoff, "outcome" | "resolvedOn">[]) => signoffs.filter((s) => s.outcome === "changes_requested" && !s.resolvedOn);
-/** Q-3: approved needs at least one approval and no change request still open. Returns why not, or null. */
-export function approvalBlocker(signoffs: Pick<Signoff, "outcome" | "resolvedOn">[]): string | null {
+export const openChangeRequests = (signoffs: Pick<Signoff, "outcome" | "resolvedOn" | "superseded">[]) =>
+  signoffs.filter((s) => s.outcome === "changes_requested" && !s.resolvedOn && !s.superseded);
+/** Q-3: approved needs at least one approval of the document as it stands and no change request still open. Returns why not, or null. */
+export function approvalBlocker(signoffs: Pick<Signoff, "outcome" | "resolvedOn" | "superseded">[]): string | null {
   const open = openChangeRequests(signoffs).length;
   if (open) return `${open === 1 ? "A requested change is" : `${open} requested changes are`} still open. Mark ${open === 1 ? "it" : "them"} as dealt with first.`;
-  if (!signoffs.some((s) => s.outcome === "approved")) return "No reviewer has approved the RFP yet. Record at least one approval first.";
+  if (!signoffs.some((s) => s.outcome === "approved" && !s.superseded))
+    return signoffs.some((s) => s.outcome === "approved")
+      ? "The document was changed after it was approved, so the earlier approval no longer counts. Record an approval of the document as it is now."
+      : "No reviewer has approved the RFP yet. Record at least one approval first.";
   return null;
 }
 

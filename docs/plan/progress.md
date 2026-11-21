@@ -12,14 +12,65 @@ Newest entry first. Written for the owner, in plain language.
 | M3 Performance from Jira | Done here; the real Jira connection is unproven until tried at work |
 | M4 Scorecards and AI scoring | Done here; the AI proposals are unproven until tried with the company's model |
 | M5 Briefings, risk flags, dashboard, report | Done here; the AI-written text is unproven until tried with the company's model |
-| M6 RFP | Not started |
+| M6 RFP | Done here; the AI draft and comparison are unproven until tried with the company's model |
 | M7 Ask a question | Not started |
 | M8 Contract reading | Not started |
 | M9 Move to Databricks | Not started; done at work |
 
-**Next:** M6 RFP.
+**Next:** M7 Ask a question.
 
 ## Log
+
+### 2026-11-21 M6 RFP done
+The app now carries an RFP from the approved demand to the decision, without a separate spreadsheet. As before, the AI part runs on a stand-in that writes by simple rules, because the company's model cannot be reached from here (see "Needs your attention").
+
+What you can do in it:
+
+- **Record the demand.** Under RFPs, press "New RFP" and enter what is needed, the budget, the sponsor, the day the demand was approved and the day a decision is wanted. The list shows every RFP with its stage, owner and target date; running ones are shown first.
+- **Always see where an RFP stands.** An RFP's page shows its six stages in a row (drafting, in review, approved, issued, evaluating, decided) with the current one marked, and one box that says the next step in a sentence, with a button to the place where it is done. The work is spread over tabs: Overview, Document, Review, Candidates, Responses, Scoring and Decision.
+- **Let the AI write the first draft.** On the Document tab, "Ask the AI" gives a draft of the sections, the criteria with their weights and a numbered question list. It is only a proposal until you press "Use this draft". After that everything can be changed in one form: text, order, criteria, weights, questions. Each question belongs to one criterion, and the weights must add up to 100 before the form saves. Without the AI, "Start from the template" gives the usual sections and criteria to fill in by hand.
+- **Have it reviewed.** The Review tab downloads the RFP as Word or PDF for reviewers outside the team. You record what each reviewer decided. A requested change stays open until you mark it as dealt with, and the RFP can only be marked approved with at least one approval and nothing open.
+- **Keep the longlist and shortlist.** On Candidates you add vendors with the reason for each, move them between longlist, shortlist and dropped (again with a reason), and add a vendor the app does not know yet, which becomes a prospect on the Vendors page.
+- **Issue it.** Each shortlisted candidate has its own two downloads: the RFP as Word and the question list as an Excel answer sheet. "Issue" records the day it went out. If no NDA is in place with that candidate, a warning appears that you must tick before going on; your name is kept with that choice. From the first issue on, the questions, criteria and weights are locked, so every candidate answers the same questions.
+- **Bring the answers in.** On Responses you upload the answer sheet a candidate sent back. The app puts each answer under its question and tells you how many it matched. Rows it could not place are listed, so you can choose the question they belong to or set them aside, and every answer can also be typed or corrected by hand. Other documents a candidate sent can be attached.
+- **Let the AI compare.** "Ask the AI to compare" gives, per question, a short summary of each candidate's answer and the differences, and per criterion a proposed score for each candidate with the passage of the answer it rests on. Nothing in it is a score. If an answer changes afterwards the page says the comparison is behind.
+- **Score.** On Scoring every team member gives each candidate 1 to 5 on every criterion, including the demo and interview ones, with an optional comment. The AI's proposal is shown as an outline next to the criterion and becomes your score only if you accept it. The table at the top shows the written score, the demo score, the overall score and the ranking, and under each criterion the average and who gave what.
+- **Decide.** On Decision you choose the winner and write the reasons. The winner becomes an active vendor; no agreement is created, and the other candidates stay as they were. After that the RFP can no longer be changed.
+- **Download the decision record.** One PDF with the whole trail: the demand, the sign-offs, every candidate with the reason, the scores per person and what they add up to, and the decision.
+- **See RFPs elsewhere.** Running RFPs now appear on the dashboard and in the monthly report with their stage, and a vendor's panel lists the RFPs it is or was a candidate in.
+
+The sample data has three RFPs: one being evaluated (answers in, the AI's comparison made, some scores given, and one shortlisted candidate not yet issued and without an NDA, to try the warning), one in drafting with an AI draft waiting to be looked at, and one decided, with its decision record.
+
+How it was checked: an independent tester ran a whole RFP from scratch through the screens, tried to break every rule both on screen and behind it, and worked out the scores, the weighted parts, the overall figures and the ranking by hand for two candidates and three scorers; the page and the decision record matched to the cent. All eleven requirements passed. An independent reviewer read all the code and found one thing that had to be fixed and ten that should be; all are fixed, each with a test. The ones that mattered most:
+
+- **An answer could have ended up under the wrong question.** If a candidate filled in an answer sheet that was made before the question list was reordered, the app trusted the numbers and would have put answers under other questions without a word. It now also looks at the question written in each row: an answer goes under the question it was written for, or is listed for you to place.
+- **An RFP could go out in a form nobody had approved.** The document could be rewritten after approval and still be issued on the old approval. Now an approved document is fixed. If you take it back to drafting and change it, the earlier approval stays visible as "approved an earlier version" but no longer counts, and a new approval is needed.
+- **Typed text could be lost.** Switching to another tab and back threw away changes to the document that were not saved yet, and "Use this draft" could replace them without asking. Both are fixed: unsaved text stays while you look at another tab, and nothing replaces it without asking first.
+- **The AI's "quote" could have been a single word.** A proposed score must now rest on a real passage of the candidate's answer (or the whole answer when it is only a few words), and a proposed score for a candidate that does not exist is refused.
+- **The sample draft copied the internal need into the introduction**, which goes to vendors. The stand-in no longer does that, and the real model is told to reword the need for vendors and not to copy it.
+
+Other fixes worth knowing: an answer that a later upload replaces is now in the history with both texts; a row "that could not be matched" from an older upload can no longer be placed after a colleague uploaded a newer sheet; a decision cannot be dated before the RFP was issued; and an uploaded Excel file is measured by what it really unpacks into, so a file built to swell up cannot stop the app.
+
+Needs your attention:
+
+- **No real AI model has been tried, again.** No key for a real model was available in this build environment. The draft you see is put together from the template and your own words, and the comparison only repeats the opening of each answer and rewards how much was answered, not how good it is. There are seven new invented test cases for the draft and the comparison; the three that the stand-in can take pass, and the four that need real understanding (for example an answer that tells the AI to give itself a 5) wait for the company's model. Run them at work before relying on a draft or a proposed score.
+- **Vendors' answers are read by the AI.** They are passed as material to read and the AI is told never to follow instructions in them, and a proposed score counts for nothing until a person accepts it. Still, this is the first place where text written by outsiders reaches the AI, so read the proposals with that in mind.
+- **Candidates see the criteria and their weights** in the Word document they receive, and how much the written answers and the demo count. The budget and the sponsor are never in it. Say if weights should stay internal.
+- **A decision cannot be undone and a cancelled RFP cannot be reopened.** Say if an admin should be able to.
+- **The built-in template is my guess at a sensible one** (six sections, six criteria, written answers 70% and demo 30%). Give me the team's own template and I will replace it.
+- **A draft is written from the need, so read it before it goes out.** The budget and the sponsor are never given to the AI. But if someone types an amount or a name into the need itself, a real model could repeat it in a section that vendors read.
+- **An approved RFP has to be approved again after any change, however small.** That is the safe reading of "approved". Say if small corrections should be allowed without a new approval.
+- **Several requirements were reworded slightly** to match what was built: the AI's draft is a proposal that you take over (Q-2); a requested change is closed by marking it as dealt with, and an approval stops counting when the document changes afterwards (Q-3); the weights of the two parts are locked together with the questions and criteria (Q-5); answers are matched on number and wording (Q-6); nothing changes after the decision (Q-9); and the decision record can already be downloaded before the decision, as the trail so far (Q-10).
+
+Decided on your behalf (see `docs/open-questions.md`, Q55 to Q70):
+
+- An approved document is fixed. It can be taken back to drafting and changed, after which it needs a new approval.
+- Any vendor that is not offboarded can be a candidate, also one you already work with. Only shortlisted candidates are issued.
+- An answer sheet is matched on the number in its first column as long as the question in that row is still that question, and otherwise on the exact wording of the question. Uploading again replaces the answers it matches and keeps the rest.
+- The AI compares only when asked, and is asked again after more answers have come in.
+- Scores are averaged per criterion, weighted within each part, and combined by the two part weights. They are shown with two decimals; candidates with the same overall score share a place. A part shows a score once every one of its criteria has been scored by someone.
+- Everyone sees everyone's scores and comments, and the decision record prints them per person.
+- A decision can be recorded before everything is scored; the page points it out.
 
 ### 2026-11-21 M5 Briefings, risk flags, dashboard and monthly report done
 The app now opens on a real dashboard, warns about things that are heading the wrong way, prepares you for a vendor meeting and makes the monthly report for the IT management team. As before, the AI part runs on a stand-in that writes by simple rules, because the company's model cannot be reached from here (see "Needs your attention").
@@ -227,6 +278,15 @@ architecture and plan were rewritten to match. The plan now has ten milestones.
 First version of the brief, requirements, plan and agent workflow. No application code yet.
 
 ## Follow-ups
+- Two people changing the same RFP document at the same moment: the last save wins. The one who was typing is told that someone else saved, but only once the page has fetched the newer version.
+- Two quick saves on an RFP page can come back in the wrong order and briefly show the older state; a reload shows the right one.
+- An AI draft or comparison nobody looked at stays "not reviewed yet" after the RFP is decided.
+- The app does not check in the database itself that a question, answer or score belongs to the same RFP as its candidate; the code checks it everywhere and tests prove it.
+- A download's plain file name (for old software) drops accented letters; the full name is sent as well and is what current browsers use.
+- A demo criterion can be saved while the demo part counts for 0%; the page says so before the RFP can go to review.
+- The date boxes in the RFP dialogs follow the browser's own format, like everywhere else in the app.
+- The monthly report page has two small accessibility findings (empty table headers) that an automated check reports; they predate this milestone.
+- Whether the sliding and bouncing on the RFP screens matches the design guide was not checked by the tester, who works from still pictures.
 - Numbers written out in words ("sixty thousand") are not caught by the check on the AI's text; only digits are. A person reads the text before it counts.
 - For an earlier month the report lists agreements as they are today: one that has since been renewed or ended is not shown as "ending" in that month's report.
 - The bell and the Warnings page are worked out afresh on every page, including the helpdesk figures of four months. Fine with the sample data (pages load in under a second); to be measured at work with real ticket numbers, and kept for a few minutes if slow.

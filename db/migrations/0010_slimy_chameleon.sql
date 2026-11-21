@@ -1,0 +1,1 @@
+ALTER TABLE "rfp_signoffs" ADD COLUMN "superseded" boolean DEFAULT false NOT NULL;
