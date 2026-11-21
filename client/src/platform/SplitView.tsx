@@ -1,6 +1,6 @@
 import { X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { bouncy } from "../lib/motion";
 import { IconButton } from "./ui";
 
@@ -31,13 +31,36 @@ export function SplitView({ open, list, panel }: { open: boolean; list: ReactNod
   );
 }
 
+/**
+ * The open record. Keyboard focus moves to its heading when it opens and goes back to
+ * where it came from when it closes; Escape closes it. Give it a `key` per record.
+ */
 export function Panel({ context, title, onClose, children }: { context?: ReactNode; title: string; onClose: () => void; children: ReactNode }) {
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    heading.current?.focus({ preventScroll: true });
+    return () => {
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
+    };
+  }, []);
   return (
-    <section aria-label={title} className="ml-7 flex min-w-[420px] flex-col gap-6 rounded-tile border border-line bg-surface px-8 py-[30px] shadow-float">
+    <section
+      aria-label={title}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          onClose();
+        }
+      }}
+      className="ml-7 flex min-w-[420px] flex-col gap-6 rounded-tile border border-line bg-surface px-8 py-[30px] shadow-float"
+    >
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           {context && <p className="text-[13.5px] font-medium text-ink-2">{context}</p>}
-          <h2 className="mt-1.5 truncate text-2xl font-semibold tracking-[-0.02em]">{title}</h2>
+          <h2 ref={heading} tabIndex={-1} className="mt-1.5 truncate text-2xl font-semibold tracking-[-0.02em] outline-none">
+            {title}
+          </h2>
         </div>
         <IconButton label="Close panel" onClick={onClose}>
           <X size={17} aria-hidden />

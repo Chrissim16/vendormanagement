@@ -1,6 +1,6 @@
 import clsx from "clsx";
 import { motion } from "motion/react";
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
+import { useId, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from "react";
 import { bouncy } from "../lib/motion";
 
 export function Button({ variant = "plain", className, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "plain" | "primary" }) {
@@ -112,35 +112,42 @@ const control = "h-[38px] min-w-0 rounded-full border border-line-2 bg-surface p
 export const TextInput = ({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) => <input {...props} className={clsx(control, className)} />;
 export const Select = ({ className, ...props }: SelectHTMLAttributes<HTMLSelectElement>) => <select {...props} className={clsx(control, "pr-8", className)} />;
 
-/** A choice between a few options; the highlight slides to the chosen one. */
+/**
+ * A choice between a few options that takes effect at once; the highlight slides to the
+ * chosen one. These are toggle buttons (`aria-pressed`), each reachable with Tab. While a
+ * save is running (`busy`) presses are ignored but the buttons stay focusable, so the
+ * keyboard does not lose its place.
+ */
 export function Segmented<T extends string>({
   label,
   value,
   options,
   onChange,
-  disabled,
+  busy,
 }: {
   label: string;
   value: T;
   options: { value: T; label: string }[];
   onChange: (v: T) => void;
-  disabled?: boolean;
+  busy?: boolean;
 }) {
+  const id = useId();
   return (
-    <div role="radiogroup" aria-label={label} className="inline-flex h-10 rounded-full bg-sunk p-[3px]">
+    <div role="group" aria-label={label} className="inline-flex h-10 rounded-full bg-sunk p-[3px]">
       {options.map((o) => (
         <button
           key={o.value}
-          role="radio"
-          aria-checked={o.value === value}
-          disabled={disabled}
-          onClick={() => o.value !== value && onChange(o.value)}
+          type="button"
+          aria-pressed={o.value === value}
+          aria-disabled={busy || undefined}
+          onClick={() => !busy && o.value !== value && onChange(o.value)}
           className={clsx(
-            "relative min-w-[84px] rounded-full px-4 text-[13.5px] font-semibold transition-colors disabled:opacity-50",
+            "relative min-w-[84px] rounded-full px-4 text-[13.5px] font-semibold transition-colors",
             o.value === value ? "text-primary-on" : "text-ink-2 hover:text-ink",
+            busy && "cursor-progress",
           )}
         >
-          {o.value === value && <motion.span layoutId={`seg-${label}`} transition={bouncy} className="absolute inset-0 rounded-full bg-primary" />}
+          {o.value === value && <motion.span layoutId={`seg-${id}`} transition={bouncy} className="absolute inset-0 rounded-full bg-primary" />}
           <span className="relative">{o.label}</span>
         </button>
       ))}

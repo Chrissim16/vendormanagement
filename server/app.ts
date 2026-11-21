@@ -11,15 +11,30 @@ import type { Config } from "./platform/config";
 import { AppError, errorHandler } from "./platform/errors";
 import type { Ports } from "./platform/ports/types";
 
-/** Express 4 does not catch rejected promises from handlers; this makes every route do so. */
+type Layer = { route?: { stack: Layer[] }; handle: RequestHandler & { stack?: Layer[] }; name: string };
+
+/**
+ * Express 4 does not catch rejected promises. This wraps every handler and middleware in
+ * the router, and in routers nested in it, so a rejection becomes a normal error reply
+ * instead of stopping the process. Error handlers (four arguments) are left as they are.
+ * Call it after all routes are added.
+ */
 function catchAsync(router: express.Router) {
-  for (const layer of (router as unknown as { stack: { route?: { stack: { handle: RequestHandler }[] }; handle: unknown; name: string }[] }).stack) {
-    if (layer.route) {
-      for (const l of layer.route.stack) {
-        const fn = l.handle;
-        l.handle = (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+  const wrap = (layer: Layer) => {
+    const fn = layer.handle;
+    if (fn.stack) return catchAsync(fn as unknown as express.Router);
+    if (fn.length >= 4) return;
+    layer.handle = ((req, res, next) => {
+      try {
+        Promise.resolve(fn(req, res, next)).catch(next);
+      } catch (e) {
+        next(e);
       }
-    } else if (layer.name === "router") catchAsync(layer.handle as express.Router);
+    }) as Layer["handle"];
+  };
+  for (const layer of (router as unknown as { stack: Layer[] }).stack) {
+    if (layer.route) layer.route.stack.forEach(wrap);
+    else wrap(layer);
   }
   return router;
 }
@@ -44,9 +59,9 @@ export function createApp(config: Config, ports: Ports) {
     });
   }
 
-  api.get("/config", (_req, res) => res.json({ standInSignIn: ports.identity.kind === "stand-in" }));
+  api.get("/config", (_req, res) => res.json({ standInSignIn: ports.identity.kind === "stand-in", timeZone: config.timeZone }));
   api.use(authenticate(ports.database.db, ports.identity, config.bootstrapAdminEmail));
-  api.use(adminRoutes(ports));
+  api.use(adminRoutes(ports, config.timeZone));
   api.use((_req, _res, next) => next(new AppError(404, "not_found", "That address does not exist.")));
 
   app.use("/api", catchAsync(api));

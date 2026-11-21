@@ -1,13 +1,31 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, type BrowserContext, type Page } from "@playwright/test";
+import { expect, type APIRequestContext, type BrowserContext, type Page } from "@playwright/test";
 
 export const ADMIN = "admin@example.test";
 export const MEMBER = "mira@example.test";
+const BASE = "http://127.0.0.1:4173";
 
 /** Look at the app as this person (the local stand-in for company sign-in). */
 export async function signInAs(context: BrowserContext, email: string) {
   await context.clearCookies();
-  await context.addCookies([{ name: "dev_user", value: email, url: "http://127.0.0.1:4173" }]);
+  await context.addCookies([{ name: "dev_user", value: email, url: BASE }]);
+}
+
+/**
+ * A brand-new person with a unique address, so each test brings its own data and can run
+ * alone or in any order. Returns their email and id.
+ */
+export async function newPerson(request: APIRequestContext, label: string) {
+  const email = `${label}-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.test`;
+  const res = await request.get(`${BASE}/api/me`, { headers: { "x-dev-user": email, cookie: "" } });
+  expect(res.ok()).toBe(true);
+  return { email, id: (await res.json()).id as string };
+}
+
+/** Changes a person as the admin, straight through the API, to set a test up. */
+export async function setPerson(request: APIRequestContext, id: string, change: { role?: "admin" | "member"; active?: boolean }) {
+  const res = await request.patch(`${BASE}/api/admin/users/${id}`, { headers: { "x-dev-user": ADMIN, cookie: "" }, data: change });
+  expect(res.ok()).toBe(true);
 }
 
 /** X-1: no accessibility violations that an automated check can find. */

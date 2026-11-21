@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { limit, TokenError } from "./explain";
 
 /**
  * Access to the Databricks workspace as the app's own service principal.
@@ -11,9 +12,11 @@ export function workspaceToken(host: string, clientId: string, clientSecret: str
 
   async function tokenEndpoint() {
     try {
-      const cfg = (await (await fetch(`${base}/.well-known/databricks-config`)).json()) as { oidc_endpoint?: string };
+      const cfg = (await (await fetch(`${base}/.well-known/databricks-config`, { signal: limit(10_000) })).json()) as { oidc_endpoint?: string };
       if (cfg.oidc_endpoint) {
-        const meta = (await (await fetch(`${cfg.oidc_endpoint.replace(/\/$/, "")}/.well-known/oauth-authorization-server`)).json()) as { token_endpoint?: string };
+        const meta = (await (await fetch(`${cfg.oidc_endpoint.replace(/\/$/, "")}/.well-known/oauth-authorization-server`, { signal: limit(10_000) })).json()) as {
+          token_endpoint?: string;
+        };
         if (meta.token_endpoint) return meta.token_endpoint;
       }
     } catch {
@@ -30,10 +33,16 @@ export function workspaceToken(host: string, clientId: string, clientSecret: str
         Authorization: "Basic " + Buffer.from(`${encodeURIComponent(clientId)}:${encodeURIComponent(clientSecret)}`).toString("base64"),
       },
       body: "grant_type=client_credentials&scope=all-apis",
+      signal: limit(),
+    }).catch((e) => {
+      throw new TokenError(`Databricks sign-in could not be reached: ${(e as Error).message}`);
     });
-    if (!res.ok) throw new Error(`Databricks refused the app's own sign-in (${res.status} ${res.statusText})`);
-    const data = (await res.json()) as { access_token: string; expires_in?: number };
-    cached = { token: data.access_token, expires: Date.now() + ((data.expires_in ?? 3600) - 120) * 1000 };
+    if (!res.ok) throw new TokenError(`Databricks refused the app's own sign-in (${res.status} ${res.statusText})`);
+    const data = (await res.json()) as { access_token?: string; expires_in?: number };
+    if (!data.access_token) throw new TokenError("Databricks answered the app's sign-in without a token.");
+    // Keep a safety margin, but never treat a fresh token as already expired.
+    const life = data.expires_in ?? 3600;
+    cached = { token: data.access_token, expires: Date.now() + Math.max(life - 120, life / 2) * 1000 };
     return data.access_token;
   }
 
@@ -51,6 +60,7 @@ export function provisionedLakebasePassword(host: string, instance: string, getT
       method: "POST",
       headers: { Authorization: `Bearer ${await getToken()}`, "Content-Type": "application/json" },
       body: JSON.stringify({ instance_names: [instance], request_id: randomUUID() }),
+      signal: limit(),
     });
     if (!res.ok) throw new Error(`Databricks would not issue a database password (${res.status} ${res.statusText})`);
     return ((await res.json()) as { token: string }).token;

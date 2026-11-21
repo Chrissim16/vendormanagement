@@ -11,6 +11,8 @@ wrong. Answered questions move to the bottom.
 | Q2 | Is an NDA required for every vendor, and a data processing agreement for every vendor? | Both are required by default and can be switched off per vendor. | M1 |
 | Q3 | Should the app be deployed once at work straight after M0, as an early rehearsal? | Recommended, but the owner decides, since it uses work time. | M9 |
 | Q4 | Can a personal Databricks trial workspace be used to rehearse deployment? | Not assumed. Without it, deployment is first tried at work. | M9 |
+| Q5 | Which time zone does the team work in? Times on screen and "today" in filters use it. | Europe/Amsterdam. One setting to change. | All |
+| Q6 | Sample vendor names in the mockup (Halden, Kestrel, Northgate and others) were meant as invented, but some resemble real firms. | They will be replaced by plainly invented names when sample vendors are added in M1. | M1 |
 
 ## To check at work before M9
 
@@ -18,7 +20,8 @@ These cannot be answered from outside the company. None block the build.
 
 | # | Check | Why |
 |---|---|---|
-| W1 | Does the workspace have Lakebase Autoscaling, or only Lakebase Provisioned? | Decides which database connection is used. |
+| W1 | Does the workspace have Lakebase Autoscaling, or only Lakebase Provisioned? | Decides which database connection is used. The app assumes Autoscaling; the runbook says what to change for Provisioned. |
+| W7 | Does Databricks install the build tools before building the app, and does the `postgres` resource supply the Lakebase endpoint as assumed in `app.yaml`? | Both are assumptions taken from documentation, not yet seen working. |
 | W2 | Can a Databricks App reach Jira Cloud over the network? | Some workspaces block outbound connections; IT may need to allow Atlassian. |
 | W3 | Does the Jira account allow an API token, and can it read every vendor board including SLA and satisfaction fields? | The sync needs it. |
 | W4 | Which model serving endpoint should the app use, and may an app call it? | The AI features need one endpoint name. |

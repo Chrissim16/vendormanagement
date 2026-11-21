@@ -69,8 +69,17 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("database: Postgres server", () 
 });
 
 describe("configuration", () => {
+  const databricks = { DATABRICKS_APP_NAME: "vendorapp", PLATFORM: "databricks", BOOTSTRAP_ADMIN_EMAIL: "owner@company.test" };
   it("refuses to run with stand-ins inside Databricks", () => {
     expect(() => loadConfig({ DATABRICKS_APP_NAME: "vendorapp" })).toThrow(/PLATFORM/);
-    expect(loadConfig({ DATABRICKS_APP_NAME: "vendorapp", PLATFORM: "databricks" }).platform).toBe("databricks");
+    expect(loadConfig(databricks).platform).toBe("databricks");
+  });
+  it("refuses to start in Databricks without a real first admin", () => {
+    expect(() => loadConfig({ ...databricks, BOOTSTRAP_ADMIN_EMAIL: "" })).toThrow(/BOOTSTRAP_ADMIN_EMAIL/);
+    expect(() => loadConfig({ ...databricks, BOOTSTRAP_ADMIN_EMAIL: "change-me@example.test" })).toThrow(/BOOTSTRAP_ADMIN_EMAIL/);
+  });
+  it("only offers stand-in sign-in on this machine", () => {
+    expect(() => loadConfig({ HOST: "0.0.0.0" })).toThrow(/only listens on this machine/);
+    expect(loadConfig({}).host).toBe("127.0.0.1");
   });
 });

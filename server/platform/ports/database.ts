@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import * as schema from "../../../db/schema";
 import type { DatabasePort, Db } from "./types";
 import type { CheckResult } from "../../../shared/types";
+import { explain } from "./explain";
 
 const MIGRATIONS = "db/migrations";
 
@@ -11,7 +12,9 @@ async function probe(db: Db, where: string, fix: string): Promise<CheckResult> {
     const rows = await db.select({ n: sql<number>`count(*)::int` }).from(schema.users);
     return { ok: true, detail: `Connected to ${where}. ${rows[0]?.n ?? 0} people have signed in so far.` };
   } catch (e) {
-    return { ok: false, detail: `Could not use ${where}: ${(e as Error).message}`, fix };
+    const why = explain(e);
+    console.error(`Database check failed for ${where}:`, (e as Error).message);
+    return { ok: false, detail: `Could not use ${where}. ${why.cause}`, fix: why.fix ?? fix };
   }
 }
 
@@ -58,6 +61,8 @@ export async function postgresDatabase(
       // Lakebase tokens last about an hour; recycle connections well before that.
       maxLifetimeSeconds: kind === "real" ? 1800 : 0,
     });
+  // Without a listener, a dropped idle connection would stop the whole app.
+  pool.on("error", (e) => console.error("Database connection dropped; it will be reopened when next needed.", e.message));
   const d = drizzle(pool, { schema });
   const db = d as unknown as Db;
   return {

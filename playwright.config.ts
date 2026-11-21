@@ -18,7 +18,8 @@ export default defineConfig({
     launchOptions: existsSync(systemChromium) ? { executablePath: systemChromium } : {},
   },
   webServer: {
-    command: "tsx server/main.ts",
+    // The bundled server, exactly as Databricks will run it. `npm run check` builds it first.
+    command: "node dist/server/main.js",
     url: `http://127.0.0.1:${PORT}/api/config`,
     reuseExistingServer: false,
     timeout: 60_000,

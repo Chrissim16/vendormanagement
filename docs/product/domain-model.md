@@ -7,7 +7,8 @@ Fields marked `*` are required. Every table also has `id`, `created_at`, `create
 
 **User**: `email*` (unique, lower case, from sign-in), `display_name`, `role*` (admin | member), `active*`.
 - Created as `member` on first sign-in. The `BOOTSTRAP_ADMIN_EMAIL` address becomes `admin`.
-- There is always at least one active admin.
+- There is always at least one active admin. If the app is ever found without one, the `BOOTSTRAP_ADMIN_EMAIL` person is made admin at their next visit.
+- The deployed app refuses to start unless `BOOTSTRAP_ADMIN_EMAIL` is a real address.
 
 **Settings** (admin): `gbp_to_eur_rate*`, warning windows (`notice_days` 90, `sow_end_days` 30, `budget_warning_pct` 80), scorecard criteria.
 
@@ -136,4 +137,4 @@ per criterion a `score` 1 to 5, a `vendor_comment` and an `internal_note`, plus 
 **AI suggestion** (every AI output): `kind*`, `subject_type*`, `subject_id*`, `model*`, `prompt_version*`, `input_summary`, `output*`,
 `status*` (proposed | accepted | edited | rejected), `reviewed_by`, `reviewed_at`.
 
-**Audit log entry**: `at*`, `user_email*`, `action*`, `entity_type*`, `entity_id*`, `changes`. Written in the same transaction as the change. Never edited or removed.
+**Audit log entry**: `at*`, `user_email*`, `action*`, `entity_type*`, `entity_id*`, `summary` (a readable label for the record, such as a vendor name), `changes`. Written in the same transaction as the change. Never edited or removed. Changes the app makes by itself are recorded with `system` as the user.

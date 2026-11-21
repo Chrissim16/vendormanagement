@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import type { Page, UpdateUser, User } from "../../../../shared/types";
 import { api, messageOf } from "../../lib/api";
 import { formatDate } from "../../lib/format";
-import { useUrlState } from "../../lib/useUrlState";
+import { pageNumber, useUrlState } from "../../lib/useUrlState";
 import { DataTable, Pager, type Column } from "../../platform/DataTable";
 import { History } from "../../platform/History";
 import { Panel, SplitView } from "../../platform/SplitView";
@@ -12,7 +12,7 @@ import { useMe } from "../../platform/session";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, Pill, Segmented, Select, TextInput } from "../../platform/ui";
 
 const columns: Column<User>[] = [
-  { key: "name", header: "Person", sort: "email", cell: (u) => u.displayName ?? u.email, className: "w-[30%]" },
+  { key: "name", header: "Person", sort: "name", cell: (u) => u.displayName ?? u.email, className: "w-[30%]" },
   { key: "email", header: "Email", cell: (u) => <span className="text-ink-2">{u.email}</span>, className: "w-[30%]" },
   { key: "role", header: "Role", sort: "role", cell: (u) => (u.role === "admin" ? "Admin" : "Member") },
   { key: "active", header: "Access", sort: "active", cell: (u) => <Pill tone={u.active ? "ok" : "warn"}>{u.active ? "Has access" : "Switched off"}</Pill> },
@@ -24,16 +24,25 @@ const PAGE_SIZE = 25;
 export function PeoplePage() {
   const me = useMe();
   const qc = useQueryClient();
-  const [url, setUrl] = useUrlState({ q: "", role: "", active: "", sort: "email", dir: "asc", page: "1", open: "" });
+  const [url, setUrl] = useUrlState({ q: "", role: "", active: "", sort: "name", dir: "asc", page: "1", open: "" });
   const [search, setSearch] = useState(url.q);
   useEffect(() => {
     const t = setTimeout(() => search !== url.q && setUrl({ q: search, page: "1" }), 250);
     return () => clearTimeout(t);
   }, [search, url.q, setUrl]);
 
-  const query = { q: url.q, role: url.role, active: url.active, sort: url.sort, dir: url.dir, page: url.page, pageSize: PAGE_SIZE };
+  const page = pageNumber(url.page);
+  const query = { q: url.q, role: url.role, active: url.active, sort: url.sort, dir: url.dir, page, pageSize: PAGE_SIZE };
   const list = useQuery({ queryKey: ["people", query], queryFn: () => api<Page<User>>("/admin/users", { query }), placeholderData: (prev) => prev });
-  const open = list.data?.items.find((u) => u.id === url.open);
+  // The open person is fetched by id, so a shared link works even when they are on another page or filtered out.
+  const record = useQuery({ queryKey: ["person", url.open], queryFn: () => api<User>(`/admin/users/${url.open}`), enabled: !!url.open, retry: false });
+  const open = url.open ? (record.data ?? list.data?.items.find((u) => u.id === url.open)) : undefined;
+  useEffect(() => {
+    if (record.isError) {
+      toast.error("That person could not be found.");
+      setUrl({ open: "" });
+    }
+  }, [record.isError, setUrl]);
 
   const [problem, setProblem] = useState<string | null>(null);
   useEffect(() => setProblem(null), [url.open]);
@@ -52,7 +61,7 @@ export function PeoplePage() {
     <>
       <PageHeader context={list.data ? `${list.data.total} ${list.data.total === 1 ? "person" : "people"}` : " "} title="People" />
       <p className="-mt-6 max-w-[62ch] text-ink-2">
-        Colleagues appear here the first time they open the app. Admins can also manage people, settings and connections; everyone else is a member.
+        Colleagues appear here the first time they open the app. Everyone can work with vendors and agreements. Admins can also manage people and check the connections.
       </p>
       <div className="flex flex-wrap items-end gap-3">
         <Field label="Search" htmlFor="people-q">
@@ -96,23 +105,23 @@ export function PeoplePage() {
                 sort={url.sort}
                 dir={url.dir}
                 onSort={(sort, dir) => setUrl({ sort, dir, page: "1" })}
-                onOpen={(u) => setUrl({ open: u.id })}
+                onOpen={(u) => setUrl({ open: u.id }, { push: !url.open })}
                 selectedId={url.open}
                 compact={!!open}
               />
-              <Pager page={Number(url.page)} pageSize={PAGE_SIZE} total={list.data.total} onPage={(p) => setUrl({ page: String(p) })} />
+              <Pager page={page} pageSize={PAGE_SIZE} total={list.data.total} onPage={(p) => setUrl({ page: String(p) })} />
             </>
           }
           panel={
             open && (
-              <Panel context={open.email} title={open.displayName ?? open.email} onClose={() => setUrl({ open: "" })}>
+              <Panel key={open.id} context={open.email} title={open.displayName ?? open.email} onClose={() => setUrl({ open: "" })}>
                 <div className="flex flex-wrap gap-x-10 gap-y-5">
                   <div className="flex flex-col gap-1.5">
                     <span className="text-[12.5px] font-medium text-ink-2">Role</span>
                     <Segmented
                       label="Role"
                       value={open.role}
-                      disabled={change.isPending}
+                      busy={change.isPending}
                       onChange={(role) => change.mutate({ role })}
                       options={[
                         { value: "member", label: "Member" },
@@ -125,7 +134,7 @@ export function PeoplePage() {
                     <Segmented
                       label="Access"
                       value={open.active ? "on" : "off"}
-                      disabled={change.isPending}
+                      busy={change.isPending}
                       onChange={(v) => change.mutate({ active: v === "on" })}
                       options={[
                         { value: "on", label: "Has access" },

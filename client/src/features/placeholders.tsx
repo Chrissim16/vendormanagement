@@ -1,11 +1,11 @@
 import { Link } from "react-router-dom";
-import { longDate } from "../lib/format";
+import { hourNow, longDate } from "../lib/format";
 import { useMe } from "../platform/session";
 import { EmptyState, PageHeader } from "../platform/ui";
 
 export function DashboardPage() {
   const me = useMe();
-  const hour = new Date().getHours();
+  const hour = hourNow();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   return (
     <>

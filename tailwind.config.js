@@ -19,7 +19,7 @@ export default {
         warn: v("warn"),
         ok: v("ok"),
       },
-      fontFamily: { sans: ['"Inter"', "system-ui", "-apple-system", '"Segoe UI"', "sans-serif"] },
+      fontFamily: { sans: ['"Inter Variable"', '"Inter"', "system-ui", "-apple-system", '"Segoe UI"', "sans-serif"] },
       borderRadius: { tile: "24px" },
       boxShadow: { float: "var(--shadow)" },
       transitionTimingFunction: { out: "cubic-bezier(.2,.8,.2,1)", spring: "cubic-bezier(.34,1.5,.5,1)" },

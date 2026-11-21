@@ -6,7 +6,13 @@ import { item, list } from "../../lib/motion";
 import { Button, ErrorState, Loading, PageHeader, Pill } from "../../platform/ui";
 
 export function SystemCheckPage() {
-  const q = useQuery({ queryKey: ["system-check"], queryFn: () => api<SystemCheckItem[]>("/admin/system-check"), staleTime: 0, gcTime: 0, refetchOnWindowFocus: false });
+  const q = useQuery({
+    queryKey: ["system-check"],
+    queryFn: () => api<SystemCheckItem[]>("/admin/system-check", { method: "POST" }),
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+  });
   const failing = q.data?.filter((i) => !i.ok).length ?? 0;
   const standIns = q.data?.some((i) => i.kind === "stand-in");
   return (

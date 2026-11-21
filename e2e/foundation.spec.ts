@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
-import { ADMIN, expectAccessible, MEMBER, signInAs } from "./helpers";
+import { ADMIN, expectAccessible, MEMBER, newPerson, setPerson, signInAs } from "./helpers";
+
+// Every test brings its own data, so any one of them can run alone: `npx playwright test -g "F-3"`.
 
 test.describe("F-1 sign-in", () => {
   test("F-1 the header shows the signed-in person and their role", async ({ page, context }) => {
@@ -14,9 +16,10 @@ test.describe("F-1 sign-in", () => {
   });
 
   test("F-1 a first-time visitor becomes a member", async ({ page, context }) => {
-    await signInAs(context, "newcomer@example.test");
+    const email = `first-${Date.now()}@example.test`;
+    await signInAs(context, email);
     await page.goto("/");
-    await expect(page.getByTestId("me-name")).toHaveText("newcomer@example.test");
+    await expect(page.getByTestId("me-name")).toHaveText(email);
     await expect(page.getByTestId("me-role")).toHaveText("Member");
   });
 
@@ -26,6 +29,9 @@ test.describe("F-1 sign-in", () => {
     await expect(page.getByRole("heading", { name: "You no longer have access" })).toBeVisible();
     await expect(page.getByRole("navigation")).toHaveCount(0);
     await expectAccessible(page);
+    // Locally the stand-in menu stays available, so this is not a dead end while trying roles out.
+    await page.getByLabel("Viewing as (local only)").selectOption(MEMBER);
+    await expect(page.getByTestId("me-name")).toHaveText("Mira Okafor");
   });
 });
 
@@ -37,64 +43,89 @@ test.describe("F-2 admin", () => {
     await expect(page.getByRole("navigation", { name: "Admin" })).toHaveCount(0);
     await page.goto("/admin/people");
     await expect(page.getByRole("heading", { name: "That page does not exist" })).toBeVisible();
-    for (const path of ["/api/admin/users", "/api/admin/audit", "/api/admin/system-check"]) {
-      expect((await page.request.get(path)).status()).toBe(403);
-    }
+    for (const path of ["/api/admin/users", "/api/admin/audit"]) expect((await page.request.get(path)).status()).toBe(403);
+    expect((await page.request.post("/api/admin/system-check")).status()).toBe(403);
   });
 
-  test("F-2 an admin can change a role and switch access off, and F-3 the record shows its history", async ({ page, context }) => {
+  test("F-2 an admin can change a role and switch access off, and F-3 the record shows its history", async ({ page, context, request }) => {
+    const person = await newPerson(request, "role");
     await signInAs(context, ADMIN);
-    await page.goto("/admin/people");
-    await page.getByRole("button", { name: "Open Sanne de Wit" }).click();
-    const panel = page.getByRole("region", { name: "Sanne de Wit" });
-    await panel.getByRole("radio", { name: "Admin" }).click();
-    await expect(page.getByText("Saved changes for Sanne de Wit")).toBeVisible();
-    await expect(panel.getByRole("radio", { name: "Admin" })).toBeChecked();
+    await page.goto(`/admin/people?q=${encodeURIComponent(person.email)}`);
+    await page.getByRole("button", { name: `Open ${person.email}` }).click();
+    const panel = page.getByRole("region", { name: person.email });
+    await expect(panel.getByText("Added: role set to member")).toBeVisible();
+
+    await panel.getByRole("button", { name: "Admin", exact: true }).click();
+    await expect(page.getByText(`Saved changes for ${person.email}`)).toBeVisible();
+    await expect(panel.getByRole("button", { name: "Admin", exact: true })).toHaveAttribute("aria-pressed", "true");
     await expect(panel.getByText("Changed: role from member to admin")).toBeVisible();
     await expect(panel.getByText(ADMIN).first()).toBeVisible();
 
-    await panel.getByRole("radio", { name: "Member" }).click();
+    await panel.getByRole("button", { name: "Member" }).click();
     await expect(panel.getByText("Changed: role from admin to member")).toBeVisible();
-    await panel.getByRole("radio", { name: "Switched off" }).click();
+    await panel.getByRole("button", { name: "Switched off" }).click();
     await expect(panel.getByText("Changed: access from yes to no")).toBeVisible();
 
-    await signInAs(context, "sanne@example.test");
+    await signInAs(context, person.email);
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "You no longer have access" })).toBeVisible();
   });
 
   test("F-2 the last active admin cannot be demoted or deactivated", async ({ page, context }) => {
     await signInAs(context, ADMIN);
-    await page.goto("/admin/people");
+    await page.goto("/admin/people?q=admin%40example.test");
     await page.getByRole("button", { name: "Open Alex Admin" }).click();
     const panel = page.getByRole("region", { name: "Alex Admin" });
-    await panel.getByRole("radio", { name: "Member" }).click();
+    await panel.getByRole("button", { name: "Member" }).click();
     await expect(panel.getByRole("alert")).toContainText("This is the last admin");
-    await expect(panel.getByRole("radio", { name: "Admin" })).toBeChecked();
-    await panel.getByRole("radio", { name: "Switched off" }).click();
+    await expect(panel.getByRole("button", { name: "Admin", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await panel.getByRole("button", { name: "Switched off" }).click();
     await expect(panel.getByRole("alert")).toContainText("This is the last admin");
     await expect(page.getByTestId("me-role")).toHaveText("Admin");
   });
 });
 
 test.describe("F-3 audit trail", () => {
-  test("F-3 admins can browse the full log and filter by person, record type and date", async ({ page, context }) => {
+  test("F-3 admins can browse the full log and filter by person, record type and date", async ({ page, context, request }) => {
+    const person = await newPerson(request, "audit");
+    await setPerson(request, person.id, { role: "admin" });
+    await setPerson(request, person.id, { role: "member" });
     await signInAs(context, ADMIN);
     await page.goto("/admin/audit");
     const table = page.getByRole("table", { name: "Audit log" });
-    await expect(table.getByRole("row").filter({ hasText: "Changed user sanne@example.test" }).first()).toBeVisible();
-    await expect(table.getByRole("row").filter({ hasText: "Added user newcomer@example.test" })).toBeVisible();
+    await expect(
+      table
+        .getByRole("row")
+        .filter({ hasText: `Changed user ${person.email}` })
+        .first(),
+    ).toBeVisible();
+    await expect(table.getByRole("row").filter({ hasText: `Added user ${person.email}` })).toBeVisible();
 
-    await page.getByLabel("Person").fill("newcomer");
+    // By person: only the entry this person made themselves, their own first visit.
+    await page.getByLabel("Person").fill(person.email);
     await expect(table.getByRole("row")).toHaveCount(2);
     await expect(table).toContainText("role set to member");
     await page.reload();
-    await expect(page.getByLabel("Person")).toHaveValue("newcomer");
+    await expect(page.getByLabel("Person")).toHaveValue(person.email);
     await expect(table.getByRole("row")).toHaveCount(2);
 
+    // By record type.
     await page.getByLabel("Person").fill("");
     await page.getByLabel("Record type").selectOption("user");
-    await expect(table.getByRole("row").nth(1)).toBeVisible();
+    await expect(page).toHaveURL(/entityType=user/);
+    await expect(
+      table
+        .getByRole("row")
+        .filter({ hasText: `Changed user ${person.email}` })
+        .first(),
+    ).toBeVisible();
+
+    // By date: today includes the entries, a day long ago shows none.
+    const today = await page.evaluate(() => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Amsterdam" }).format(new Date()));
+    await page.getByLabel("From").fill(today);
+    await page.getByLabel("To", { exact: true }).fill(today);
+    await expect(table.getByRole("row").filter({ hasText: `Added user ${person.email}` })).toBeVisible();
+    await page.getByLabel("From").fill("");
     await page.getByLabel("To", { exact: true }).fill("2000-01-01");
     await expect(page.getByRole("heading", { name: "No entries match these filters" })).toBeVisible();
   });
@@ -141,44 +172,87 @@ test.describe("F-4 system check", () => {
 });
 
 test.describe("throughout", () => {
-  test("X-1 the people list can be worked with the keyboard alone", async ({ page, context }) => {
+  test("X-1 a person can be opened, changed and closed with the keyboard alone", async ({ page, context, request }) => {
+    const person = await newPerson(request, "keys");
     await signInAs(context, ADMIN);
-    await page.goto("/admin/people");
-    await page.getByRole("button", { name: "Open Jonas Brandt" }).focus();
+    await page.goto(`/admin/people?q=${encodeURIComponent(person.email)}`);
+    const row = page.getByRole("button", { name: `Open ${person.email}` });
+    await expect(row).toBeVisible();
+
+    // Tab from the top of the page until the row is reached; no mouse and no scripted focus.
+    for (let i = 0; i < 40 && !(await row.evaluate((el) => el === document.activeElement)); i++) await page.keyboard.press("Tab");
+    await expect(row).toBeFocused();
     await page.keyboard.press("Enter");
-    const panel = page.getByRole("region", { name: "Jonas Brandt" });
-    await expect(panel).toBeVisible();
-    await panel.getByRole("button", { name: "Close panel" }).focus();
-    await page.keyboard.press("Enter");
+
+    const panel = page.getByRole("region", { name: person.email });
+    await expect(panel.getByRole("heading", { name: person.email })).toBeFocused();
+    await page.keyboard.press("Tab"); // Close
+    await page.keyboard.press("Tab"); // Member
+    await page.keyboard.press("Tab"); // Admin
+    const admin = panel.getByRole("button", { name: "Admin", exact: true });
+    await expect(admin).toBeFocused();
+    await page.keyboard.press("Space");
+    await expect(admin).toHaveAttribute("aria-pressed", "true");
+    await expect(panel.getByText("Changed: role from member to admin")).toBeVisible();
+    // Focus stays where it was, so the next key continues from here.
+    await expect(admin).toBeFocused();
+
+    await page.keyboard.press("Escape");
     await expect(panel).toHaveCount(0);
+    await expect(row).toBeFocused();
   });
 
   test("X-1 pages pass automated accessibility checks in light and dark", async ({ page, context }) => {
     await signInAs(context, ADMIN);
     for (const mode of ["light", "dark"]) {
       await page.addInitScript((m) => localStorage.setItem("mode", m), mode);
-      for (const path of ["/", "/vendors", "/admin/people?open=none", "/admin/audit", "/admin/system-check"]) {
+      for (const path of ["/", "/vendors", "/admin/people", "/admin/audit", "/admin/system-check"]) {
         await page.goto(path);
         await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-        if (path.startsWith("/admin/people")) await page.getByRole("button", { name: "Open Mira Okafor" }).click();
+        if (path === "/admin/people") await page.getByRole("button", { name: "Open Mira Okafor" }).click();
         if (path.endsWith("system-check")) await expect(page.getByTestId("check-ai")).toBeVisible();
         await expectAccessible(page);
       }
     }
   });
 
-  test("V-1 pattern: filters, sorting and the open record survive a reload", async ({ page, context }) => {
+  test("list pattern: filters, sorting and the open record survive a reload, and Back closes the record", async ({ page, context }) => {
     await signInAs(context, ADMIN);
-    await page.goto("/admin/people");
-    await page.getByLabel("Access").selectOption("true");
-    await page.getByRole("button", { name: "Role" }).click();
+    await page.goto("/");
+    await page.getByRole("link", { name: "People" }).click();
+    await page.getByLabel("Access", { exact: true }).selectOption("true");
+    await page.getByRole("button", { name: "Role", exact: true }).click();
     await page.getByRole("button", { name: "Open Mira Okafor" }).click();
     await expect(page).toHaveURL(/active=true/);
     await expect(page).toHaveURL(/sort=role/);
     await page.reload();
-    await expect(page.getByLabel("Access")).toHaveValue("true");
+    await expect(page.getByLabel("Access", { exact: true })).toHaveValue("true");
     await expect(page.getByRole("region", { name: "Mira Okafor" })).toBeVisible();
     await expect(page.getByRole("table", { name: "People" })).not.toContainText("Former Colleague");
+
+    await page.evaluate(() => history.back());
+    await expect(page.getByRole("region", { name: "Mira Okafor" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "People", level: 1 })).toBeVisible();
+    await expect(page.getByLabel("Access", { exact: true })).toHaveValue("true");
+  });
+
+  test("list pattern: a shared link opens a record even when a filter hides it from the list", async ({ page, context, request }) => {
+    const person = await newPerson(request, "link");
+    await signInAs(context, ADMIN);
+    await page.goto(`/admin/people?q=alex&open=${person.id}`);
+    await expect(page.getByRole("region", { name: person.email })).toBeVisible();
+    await expect(page.getByRole("table", { name: "People" })).not.toContainText(person.email);
+  });
+
+  test("X-3 a failed save says what went wrong and leaves things as they were", async ({ page, context, request }) => {
+    const person = await newPerson(request, "fail");
+    await signInAs(context, ADMIN);
+    await page.goto(`/admin/people?open=${person.id}`);
+    const panel = page.getByRole("region", { name: person.email });
+    await page.route("**/api/admin/users/*", (route) => (route.request().method() === "PATCH" ? route.abort() : route.continue()));
+    await panel.getByRole("button", { name: "Admin", exact: true }).click();
+    await expect(panel.getByRole("alert")).toContainText("could not be reached");
+    await expect(panel.getByRole("button", { name: "Member" })).toHaveAttribute("aria-pressed", "true");
   });
 
   test("X-2 empty sections say what belongs there", async ({ page, context }) => {
@@ -197,5 +271,14 @@ test.describe("throughout", () => {
     await expect(page.locator("html")).toHaveAttribute("data-mode", "dark");
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("data-mode", "dark");
+  });
+
+  test("no request leaves the app for another site", async ({ page, context }) => {
+    const outside: string[] = [];
+    page.on("request", (r) => !r.url().startsWith("http://127.0.0.1:4173") && !r.url().startsWith("data:") && outside.push(r.url()));
+    await signInAs(context, ADMIN);
+    await page.goto("/admin/people");
+    await expect(page.getByRole("table", { name: "People" })).toBeVisible();
+    expect(outside).toEqual([]);
   });
 });

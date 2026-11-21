@@ -1,5 +1,5 @@
 import type { RequestHandler } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { users } from "../../db/schema";
 import type { Role, User } from "../../shared/types";
 import { audit } from "./audit";
@@ -25,7 +25,10 @@ export const toUser = (r: Row): User => ({
 /** Finds the person's record, creating it on their first visit. */
 export async function ensureUser(db: Db, identity: Identity, bootstrapAdminEmail: string): Promise<User> {
   const existing = await db.select().from(users).where(eq(users.email, identity.email));
-  if (existing[0]) return toUser(existing[0]);
+  if (existing[0]) {
+    if (identity.email === bootstrapAdminEmail && existing[0].role !== "admin") return rescueAdmin(db, existing[0]);
+    return toUser(existing[0]);
+  }
   const role: Role = identity.email === bootstrapAdminEmail ? "admin" : "member";
   return db.transaction(async (tx) => {
     const inserted = await tx
@@ -41,6 +44,32 @@ export async function ensureUser(db: Db, identity: Identity, bootstrapAdminEmail
     }
     await audit(tx, { userEmail: identity.email, action: "create", entityType: "user", entityId: row.id, summary: row.email, changes: { role: { from: null, to: role } } });
     return toUser(row);
+  });
+}
+
+/**
+ * The app must never be left without an admin. If the configured first admin exists as a
+ * member and nobody is an active admin (for example the setting was wrong on first use),
+ * that person is made admin.
+ */
+async function rescueAdmin(db: Db, row: Row): Promise<User> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(4201)`);
+    const admins = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(users)
+      .where(and(eq(users.role, "admin"), eq(users.active, true)));
+    if ((admins[0]?.n ?? 0) > 0) return toUser(row);
+    const updated = await tx.update(users).set({ role: "admin", active: true, updatedAt: new Date(), updatedBy: "system" }).where(eq(users.id, row.id)).returning();
+    await audit(tx, {
+      userEmail: "system",
+      action: "update",
+      entityType: "user",
+      entityId: row.id,
+      summary: row.email,
+      changes: { role: { from: row.role, to: "admin" }, ...(row.active ? {} : { active: { from: false, to: true } }) },
+    });
+    return toUser(updated[0]!);
   });
 }
 

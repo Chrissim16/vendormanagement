@@ -1,8 +1,11 @@
-import { and, asc, desc, eq, gte, ilike, lt, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, lte, ne, or, sql, type SQL } from "drizzle-orm";
 import { auditLog, users } from "../../../db/schema";
 import type { Queryable } from "../../platform/ports/types";
 
-const userSort = { email: users.email, displayName: users.displayName, role: users.role, active: users.active, createdAt: users.createdAt };
+/** Search text is matched literally: % and _ are not wildcards. */
+export const like = (text: string) => `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+
+const userSort = { name: sql`lower(coalesce(${users.displayName}, ${users.email}))`, email: users.email, role: users.role, active: users.active, createdAt: users.createdAt };
 export type UserSort = keyof typeof userSort;
 export const userSorts = Object.keys(userSort) as UserSort[];
 
@@ -18,7 +21,7 @@ export interface UserFilter {
 
 export async function listUsers(db: Queryable, f: UserFilter) {
   const where: SQL[] = [];
-  if (f.q) where.push(or(ilike(users.email, `%${f.q}%`), ilike(users.displayName, `%${f.q}%`))!);
+  if (f.q) where.push(or(ilike(users.email, like(f.q)), ilike(users.displayName, like(f.q)))!);
   if (f.role) where.push(eq(users.role, f.role));
   if (f.active !== undefined) where.push(eq(users.active, f.active));
   const cond = where.length ? and(...where) : undefined;
@@ -64,17 +67,20 @@ export interface AuditFilter {
   entityId?: string;
   from?: string;
   to?: string;
+  /** Day filters mean days in this time zone, the same one the screen shows times in. */
+  timeZone: string;
   page: number;
   pageSize: number;
 }
 
 export async function listAudit(db: Queryable, f: AuditFilter) {
   const where: SQL[] = [];
-  if (f.user) where.push(ilike(auditLog.userEmail, `%${f.user}%`));
+  if (f.user) where.push(ilike(auditLog.userEmail, like(f.user)));
   if (f.entityType) where.push(eq(auditLog.entityType, f.entityType));
   if (f.entityId) where.push(eq(auditLog.entityId, f.entityId));
-  if (f.from) where.push(gte(auditLog.at, new Date(`${f.from}T00:00:00Z`)));
-  if (f.to) where.push(lt(auditLog.at, new Date(new Date(`${f.to}T00:00:00Z`).getTime() + 86_400_000)));
+  const localDay = sql`(${auditLog.at} at time zone ${f.timeZone})::date`;
+  if (f.from) where.push(gte(localDay, sql`${f.from}::date`));
+  if (f.to) where.push(lte(localDay, sql`${f.to}::date`));
   const cond = where.length ? and(...where) : undefined;
   const [items, total] = await Promise.all([
     db

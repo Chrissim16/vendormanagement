@@ -55,7 +55,8 @@ body {
   background: var(--bg);
   color: var(--ink);
   font:
-    400 14px/1.5 "Inter",
+    400 14px/1.5 "Inter Variable",
+    "Inter",
     system-ui,
     -apple-system,
     "Segoe UI",

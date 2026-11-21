@@ -1,3 +1,4 @@
+import { explain, limit } from "./explain";
 import type { AiPort, AiRequest, AiResponse } from "./types";
 
 export type Script = (req: AiRequest) => string | undefined;
@@ -36,6 +37,7 @@ export function servingAi(host: string, endpoints: { strong: string; fast: strin
           ],
           max_tokens: req.maxTokens ?? 2000,
         }),
+        signal: limit(120_000),
       });
       if (!res.ok) throw Object.assign(new Error(`The model endpoint answered ${res.status} ${res.statusText}`), { status: res.status });
       const data = (await res.json()) as { choices?: { message?: { content?: unknown } }[]; model?: string };
@@ -51,9 +53,10 @@ export function servingAi(host: string, endpoints: { strong: string; fast: strin
         return { ok: true, detail: `Both models answered (${strong.model} and ${fast.model}).` };
       } catch (e) {
         const status = (e as { status?: number }).status;
+        console.error("AI check failed:", (e as Error).message);
         return {
           ok: false,
-          detail: `The AI model did not answer: ${(e as Error).message}`,
+          detail: `The AI model did not answer. ${explain(e).cause}`,
           fix:
             status === 403 || status === 401
               ? "Give the app permission to query the serving endpoints (add them as app resources with 'Can query')."

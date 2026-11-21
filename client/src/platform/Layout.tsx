@@ -1,13 +1,11 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import { Activity, Bell, Building2, Coins, FileText, House, type LucideIcon, MessageSquare, Moon, ScrollText, Search, TrendingUp, Users } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { NavLink, useLocation, useOutlet } from "react-router-dom";
-import { api } from "../lib/api";
 import { bouncy, page, spring } from "../lib/motion";
 import { toggleTheme } from "../lib/theme";
-import { useMe } from "./session";
+import { DevSwitcher, useMe } from "./session";
 import { IconButton } from "./ui";
 
 interface Item {
@@ -75,34 +73,6 @@ function SearchHint() {
   );
 }
 
-/** Local only: look at the app as someone else to try out roles. */
-function DevSwitcher() {
-  const me = useMe();
-  const qc = useQueryClient();
-  const config = useQuery({ queryKey: ["config"], queryFn: () => api<{ standInSignIn: boolean }>("/config"), staleTime: Infinity });
-  const people = useQuery({ queryKey: ["dev-users"], queryFn: () => api<{ email: string; role: string; active: boolean }[]>("/dev/users"), enabled: !!config.data?.standInSignIn });
-  if (!config.data?.standInSignIn || !people.data) return null;
-  return (
-    <label className="flex flex-col gap-1 px-2.5 text-[12px] font-medium text-ink-3">
-      Viewing as (local only)
-      <select
-        value={me.email}
-        onChange={async (e) => {
-          await api("/dev/switch", { method: "POST", body: { email: e.target.value } });
-          await qc.invalidateQueries();
-        }}
-        className="h-8 rounded-full border border-line-2 bg-surface px-2.5 text-[12.5px] text-ink"
-      >
-        {people.data.map((p) => (
-          <option key={p.email} value={p.email}>
-            {p.email} ({p.active ? p.role : "no access"})
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
 export function Layout() {
   const me = useMe();
   const location = useLocation();
@@ -141,7 +111,7 @@ export function Layout() {
           </nav>
         )}
         <div className="mt-auto flex flex-col gap-4">
-          <DevSwitcher />
+          <DevSwitcher current={me.email} />
           <div className="flex items-center gap-2.5 px-2.5 text-[13px] text-ink-2">
             <span aria-hidden className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary text-[11px] font-semibold text-primary-on">
               {initials}

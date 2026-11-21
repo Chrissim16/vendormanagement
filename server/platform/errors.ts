@@ -16,7 +16,8 @@ export class AppError extends Error {
 export const notFound = (what: string) => new AppError(404, "not_found", `${what} was not found.`);
 export const forbidden = () => new AppError(403, "forbidden", "Only an admin can do this.");
 
-export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
+export const errorHandler: ErrorRequestHandler = (err, _req, res, next) => {
+  if (res.headersSent) return next(err);
   let status = 500;
   let body: ApiErrorBody = { error: { code: "internal", message: "Something went wrong on our side. Try again." } };
   if (err instanceof AppError) {
@@ -27,6 +28,12 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     const fields: Record<string, string> = {};
     for (const issue of err.issues) fields[issue.path.join(".") || "_"] = issue.message;
     body = { error: { code: "invalid", message: "Some of what was entered is not valid.", fields } };
+  } else if (err?.type === "entity.too.large") {
+    status = 413;
+    body = { error: { code: "too_large", message: "That is too much to send at once." } };
+  } else if (err?.type === "entity.parse.failed" || (typeof err?.status === "number" && err.status >= 400 && err.status < 500)) {
+    status = err.status ?? 400;
+    body = { error: { code: "bad_request", message: "The request could not be read." } };
   } else {
     console.error(err);
   }

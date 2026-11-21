@@ -6,7 +6,7 @@ Newest entry first. Written for the owner, in plain language.
 
 | Milestone | State |
 |---|---|
-| M0 Foundation | Not started |
+| M0 Foundation | Done |
 | M1 Vendors and agreements | Not started |
 | M2 SOW delivery and money | Not started |
 | M3 Performance from Jira | Not started |
@@ -17,9 +17,29 @@ Newest entry first. Written for the owner, in plain language.
 | M8 Contract reading | Not started |
 | M9 Move to Databricks | Not started; done at work |
 
-**Next:** M0 Foundation.
+**Next:** M1 Vendors and agreements.
 
 ## Log
+
+### 2026-11-21 M0 Foundation done
+The app now exists and runs. What you can do in it:
+
+- Open it and be recognised straight away, with your name and role shown in the bottom left corner. Anyone opening it for the first time is added as a member; the first admin is whoever is named in the settings.
+- As an admin, see everyone who has signed in, make someone an admin or a member, and switch someone's access off and on. The app will not let the last admin be removed.
+- See the history of every change on a person's panel, and browse the full audit log, filtered by person, type of record and date.
+- Run the system check, which tests the five connections (sign-in, database, file storage, Jira, AI model) and says in plain words what is wrong and what to do when one fails.
+- Switch between light and dark, and move around all the sections. Vendors, Agreements, Money, Performance, RFPs and Ask each explain what will live there.
+
+How it was checked: an independent tester used the running app against every requirement, and an independent reviewer read all the code. Between them they raised two serious problems and about twenty smaller ones; all were fixed and re-tested. The two serious ones were that a wrong "first admin" setting at deployment would have locked you out for good, and that a dropped database connection could have stopped the app.
+
+Decided on your behalf (see `docs/open-questions.md`):
+
+- Times are shown in Amsterdam time (Q5).
+- The app does not use Databricks' AppKit framework, only its small database helper, so that it can run and be tested outside Databricks. Recorded in decision 0001.
+- While building, the database is built into the app, so nothing has to be installed to run it.
+- Forms, file upload and PDF export moved from this milestone to M1, where the first screens need them.
+
+What has not been proven: everything that only exists at work. The real sign-in, Lakebase, the document volume, Jira and the AI models are written from documentation and have never run. The system check page and `docs/runbook.md` are there to make that first deployment quick.
 
 ### 2026-11-21 PRD written, plan reworked
 After three rounds of questions the brief became a full product requirements document.
@@ -32,4 +52,8 @@ architecture and plan were rewritten to match. The plan now has ten milestones.
 First version of the brief, requirements, plan and agent workflow. No application code yet.
 
 ## Follow-ups
-None yet.
+- The database does not itself forbid an unknown role or an edit to the audit log; only the app's code does. Worth adding as database rules in M1.
+- A person's name is taken at first sign-in and not refreshed if it later changes in the company directory.
+- If two browser tabs are open, one can show a person's role up to 15 seconds out of date.
+- The date boxes in the audit log follow the browser's own date format, which may be month-first on some machines.
+- Deploy the empty app once at work as a rehearsal (open question Q3).

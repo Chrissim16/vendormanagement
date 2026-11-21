@@ -10,6 +10,7 @@ import { SystemCheckPage } from "./features/admin/SystemCheckPage";
 import { ComingSection, DashboardPage, NotFoundPage } from "./features/placeholders";
 import { Layout } from "./platform/Layout";
 import { Session, useMe } from "./platform/session";
+import "@fontsource-variable/inter";
 import "./styles.css";
 
 /** Admin pages do not exist for members. The server refuses them as well. */

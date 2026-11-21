@@ -14,6 +14,12 @@ export async function listUsers(db: Db, filter: repo.UserFilter): Promise<Page<U
   return { items: items.map(toUser), total };
 }
 
+export async function getUser(db: Db, id: string): Promise<User> {
+  const row = await repo.getUser(db, id);
+  if (!row) throw notFound("That person");
+  return toUser(row);
+}
+
 export async function changeUser(db: Db, id: string, change: UpdateUser, by: User): Promise<User> {
   return db.transaction(async (tx) => {
     // Serialise role changes so two admins cannot demote each other at the same moment.
@@ -38,8 +44,11 @@ export async function listAudit(db: Db, filter: repo.AuditFilter): Promise<Page<
   return { items: items.map(toEntry), total, entityTypes };
 }
 
-const withTimeout = <T>(p: Promise<T>, ms: number, what: string) =>
-  Promise.race([p, new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`${what} did not answer within ${ms / 1000} seconds`)), ms))]);
+function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: NodeJS.Timeout;
+  const late = new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error(`${what} did not answer within ${ms / 1000} seconds.`)), ms)));
+  return Promise.race([p, late]).finally(() => clearTimeout(timer));
+}
 
 /** Tests every connection and explains each failure in plain language. */
 export async function systemCheck(ports: Ports, req: Request, user: User): Promise<SystemCheckItem[]> {

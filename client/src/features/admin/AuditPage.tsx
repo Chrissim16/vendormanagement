@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { AuditEntry, Page } from "../../../../shared/types";
 import { api, messageOf } from "../../lib/api";
 import { formatDateTime } from "../../lib/format";
-import { useUrlState } from "../../lib/useUrlState";
+import { pageNumber, useUrlState } from "../../lib/useUrlState";
 import { DataTable, Pager, type Column } from "../../platform/DataTable";
 import { describeChanges } from "../../platform/History";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, Select, TextInput } from "../../platform/ui";
@@ -24,7 +24,7 @@ export function AuditPage() {
     const t = setTimeout(() => who !== url.user && setUrl({ user: who, page: "1" }), 250);
     return () => clearTimeout(t);
   }, [who, url.user, setUrl]);
-  const query = { ...url, pageSize: PAGE_SIZE };
+  const query = { ...url, page: pageNumber(url.page), pageSize: PAGE_SIZE };
   const log = useQuery({ queryKey: ["audit", query], queryFn: () => api<Page<AuditEntry> & { entityTypes: string[] }>("/admin/audit", { query }), placeholderData: (p) => p });
   const filtered = !!(url.user || url.entityType || url.from || url.to);
 
@@ -64,7 +64,7 @@ export function AuditPage() {
       ) : (
         <div>
           <DataTable label="Audit log" rows={log.data.items} columns={columns} rowId={(e) => e.id} rowLabel={(e) => e.summary ?? e.entityId} />
-          <Pager page={Number(url.page)} pageSize={PAGE_SIZE} total={log.data.total} onPage={(p) => setUrl({ page: String(p) })} />
+          <Pager page={pageNumber(url.page)} pageSize={PAGE_SIZE} total={log.data.total} onPage={(p) => setUrl({ page: String(p) })} />
         </div>
       )}
     </>

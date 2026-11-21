@@ -29,11 +29,13 @@ X-1 to X-6 apply to every milestone. M2 and M3 touch different features and may 
 - The five ports with their local implementations and contract tests. Deployed implementations are written here too, from documentation, and marked unproven.
 - Database, migrations, users, roles, audit.
 - Design tokens and motion presets from `docs/design/design-guide.md`, matching `docs/design/prototype.html`. Settle the AppKit component question noted there.
-- App shell with navigation for every section, and the reusable patterns: form, data table with URL-held filters, empty state, error state, file upload, PDF export.
+- App shell with navigation for every section, and the reusable patterns: data table with URL-held filters, list with side panel, empty state, error state, record history.
+- Moved to M1, where the first screens need them: the form pattern (with X-3, keeping what was typed after a failed save), file upload and PDF export.
 - System check page.
 - `npm run check`, CI on every push, seed script with invented data, `.env.example`.
 
 ## M1 Vendors and agreements
+Starts with the patterns moved from M0: the form pattern with field errors and kept input, the file upload component, and the PDF helper. Adds TanStack Table if the vendor list needs more than the M0 table offers.
 Vendors, contacts, the five agreement kinds with status, MSA to SOW structure, documents, subscriptions with renewals and decisions, warnings page and header count, Excel import.
 
 ## M2 SOW delivery and money

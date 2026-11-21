@@ -1,8 +1,9 @@
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, rmdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { AppError } from "../errors";
 import type { StoragePort } from "./types";
 import type { CheckResult } from "../../../shared/types";
+import { explain, limit } from "./explain";
 
 /** Keys are relative, forward-slashed, and may not climb out of the store. */
 export function safeKey(key: string): string {
@@ -22,7 +23,9 @@ async function probe(store: Pick<StoragePort, "put" | "get" | "remove">, where: 
     if (back.toString() !== "ok") return { ok: false, detail: `A test file came back changed from ${where}.`, fix };
     return { ok: true, detail: `Wrote, read and removed a test file in ${where}.` };
   } catch (e) {
-    return { ok: false, detail: `Could not store a test file in ${where}: ${(e as Error).message}`, fix };
+    const why = explain(e);
+    console.error(`Storage check failed for ${where}:`, (e as Error).message);
+    return { ok: false, detail: `Could not store a test file in ${where}. ${why.cause}`, fix: why.fix ?? fix };
   }
 }
 
@@ -43,6 +46,16 @@ export function diskStorage(root: string): StoragePort {
     },
     async remove(key) {
       await rm(file(key), { force: true });
+      // Tidy up folders this left empty, without ever climbing above the store.
+      let dir = path.dirname(file(key));
+      while (path.resolve(dir) !== path.resolve(root) && path.resolve(dir).startsWith(path.resolve(root))) {
+        try {
+          await rmdir(dir);
+        } catch {
+          break;
+        }
+        dir = path.dirname(dir);
+      }
     },
     check: () => probe(store, `the folder ${root}`, "Check that the app may write to that folder."),
   };
@@ -54,16 +67,18 @@ export function diskStorage(root: string): StoragePort {
  * `getToken` returns a workspace access token for the app's service principal.
  */
 export function volumeStorage(host: string, volumePath: string, getToken: () => Promise<string>): StoragePort {
+  if (!/^\/Volumes\/[^/]+\/[^/]+\/[^/]+/.test(volumePath)) throw new Error("VOLUME_PATH must look like /Volumes/<catalog>/<schema>/<volume>.");
   const url = (key: string) => `${host.replace(/\/$/, "")}/api/2.0/fs/files${volumePath.replace(/\/$/, "")}/${safeKey(key).split("/").map(encodeURIComponent).join("/")}`;
   const call = async (method: string, key: string, body?: Buffer) => {
     const res = await fetch(url(key) + (method === "PUT" ? "?overwrite=true" : ""), {
       method,
       headers: { Authorization: `Bearer ${await getToken()}`, ...(body ? { "Content-Type": "application/octet-stream" } : {}) },
       body: body ? new Uint8Array(body) : undefined,
+      signal: limit(60_000),
     });
     if (res.status === 404 && method === "GET") throw new AppError(404, "file_missing", "That file no longer exists.");
     if (!res.ok && !(method === "DELETE" && res.status === 404)) {
-      throw new Error(`Databricks answered ${res.status} ${res.statusText}`);
+      throw Object.assign(new Error(`Databricks answered ${res.status} ${res.statusText}`), { status: res.status });
     }
     return res;
   };

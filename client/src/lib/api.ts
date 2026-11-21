@@ -29,8 +29,12 @@ export async function api<T>(path: string, options: { method?: string; body?: un
     throw new ApiError(0, "offline", "The app could not be reached. Check your connection and try again.");
   }
   if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as ApiErrorBody | null;
-    throw new ApiError(res.status, body?.error.code ?? "unknown", body?.error.message ?? "Something went wrong. Try again.", body?.error.fields);
+    const body = (await res.json().catch(() => null)) as Partial<ApiErrorBody> | null;
+    throw new ApiError(res.status, body?.error?.code ?? "unknown", body?.error?.message ?? "Something went wrong. Try again.", body?.error?.fields);
+  }
+  // A sign-in page instead of data means the session ended and the request was redirected.
+  if (res.redirected || !res.headers.get("content-type")?.includes("application/json")) {
+    throw new ApiError(401, "signed_out", "Your sign-in has ended. Reload the page to sign in again.");
   }
   return res.json() as Promise<T>;
 }

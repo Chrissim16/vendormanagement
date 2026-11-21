@@ -18,7 +18,7 @@ You need, at work:
 ## Steps
 
 1. **Get the code.** Download the repository from GitHub as a ZIP and unpack it, or clone it.
-2. **Set the first admin.** Open `app.yaml` and replace `change-me@example.test` with your work email, and `change-me.atlassian.net` with your Jira address.
+2. **Set the first admin.** Open `app.yaml` and replace `change-me@example.test` with your work email, and `change-me.atlassian.net` with your Jira address. The app refuses to start while the placeholder email is still there, so this step cannot be skipped by accident.
 3. **Create the app.** In Databricks: Compute, Apps, Create app, Custom. Name it `vendorapp`.
 4. **Attach resources.** In the app's settings add these resources with exactly these keys:
 
@@ -42,6 +42,8 @@ You need, at work:
 |---|---|
 | The app does not start; the log says a setting is missing | A resource key in step 4 is misspelled or not attached. |
 | The app does not start; the log mentions `vite` or `esbuild` | The build tools were not installed. Tell the agent; the fix is in `package.json`. |
+| The log says `BOOTSTRAP_ADMIN_EMAIL` must be a real work email | Step 2 was skipped. |
+| You are a member, not an admin | The email in step 2 does not match your sign-in address. Correct it and deploy again; you become admin at your next visit as long as nobody else is one. |
 | "We could not sign you in" | The app was opened by a direct server link. Use the app's address from the Apps page. |
 | Database row not working | The app's service principal lacks permission on the Lakebase database, or the workspace has Lakebase Provisioned: remove `LAKEBASE_ENDPOINT` from `app.yaml` and add `LAKEBASE_INSTANCE` with the instance name. |
 | Jira row not working, "could not reach" | Databricks Apps may not be allowed to connect out to Atlassian. Ask IT. |

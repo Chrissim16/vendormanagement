@@ -26,7 +26,7 @@ two implementations chosen by configuration.
 
 | Port | Local and test implementation | Deployed implementation |
 |---|---|---|
-| Identity | `DEV_USER_EMAIL` | `X-Forwarded-Email` from the Databricks Apps proxy |
+| Identity | `DEV_USER_EMAIL`, or the `dev_user` cookie or `x-dev-user` header to act as someone else; `/api/dev/*` lists and switches people. Only on this machine | `X-Forwarded-Email` from the Databricks Apps proxy, and nothing else |
 | Database | Built-in Postgres in `.data/pg` (in memory for tests), or `DATABASE_URL` | Lakebase app resource |
 | File storage | Folder on disk | Unity Catalog volume |
 | Jira | Fake Jira serving invented tickets in the real API's shape | Jira Cloud REST API with a service account |
@@ -88,7 +88,11 @@ safe to run twice.
 - Business rules live in `service.ts` or as pure functions in `shared/` with unit tests, never in routes or components.
 - List endpoints take `q`, filters, `sort`, `page`, `pageSize` and return `{ items, total }`. Filtering and sorting happen in SQL. The client keeps filters in the URL.
 - Exports are produced on the server from the same query as the screen they belong to.
-- Timestamps are stored in UTC. Date-only fields use the Postgres `date` type.
+- Timestamps are stored in UTC and shown in the team's time zone (`APP_TIME_ZONE`, default Europe/Amsterdam). "A day" in a filter means a day in that zone.
+- Date-only fields use the Postgres `date` type.
+- Search text is matched literally (`like()` in a repo escapes `%` and `_`), and free text from the address is validated with the shared `text` schema.
+- Every call to an outside service has a time limit (`limit()`), and failures shown to people go through `explain()` so they read as plain language and never carry internal detail.
+- A record opened from a list is fetched by its id, so a shared link works whatever the list's page or filters. Opening a record adds a Back step; filter changes do not.
 
 ## Testing
 
@@ -96,4 +100,6 @@ safe to run twice.
 - Each endpoint has API tests for the happy path, validation failure and each role.
 - Each acceptance criterion has a Playwright test named with its requirement ID, for example `A-6 decided subscription leaves the list`.
 - Tests use the built-in Postgres, the fake Jira and the scripted AI. The database is not mocked. CI also runs the database contract against a Postgres 16 server.
-- Browser tests run against the built app on a fresh in-memory database with the sample people, signed in through the local stand-in (`dev_user` cookie).
+- Every browser test creates the people it needs, so any test can run alone.
+- All server tests also run on a Postgres 16 server in CI (`TEST_DATABASE_URL`), each on a database of its own.
+- Browser tests run against the bundled server (`dist/server/main.js`, as deployed) on a fresh in-memory database with the sample people, signed in through the local stand-in (`dev_user` cookie).
