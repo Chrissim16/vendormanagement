@@ -11,15 +11,54 @@ Newest entry first. Written for the owner, in plain language.
 | M2 SOW delivery and money | Done |
 | M3 Performance from Jira | Done here; the real Jira connection is unproven until tried at work |
 | M4 Scorecards and AI scoring | Done here; the AI proposals are unproven until tried with the company's model |
-| M5 Briefings, risk flags, dashboard, report | Not started |
+| M5 Briefings, risk flags, dashboard, report | Done here; the AI-written text is unproven until tried with the company's model |
 | M6 RFP | Not started |
 | M7 Ask a question | Not started |
 | M8 Contract reading | Not started |
 | M9 Move to Databricks | Not started; done at work |
 
-**Next:** M5 Briefings, risk flags, dashboard, report.
+**Next:** M6 RFP.
 
 ## Log
+
+### 2026-11-21 M5 Briefings, risk flags, dashboard and monthly report done
+The app now opens on a real dashboard, warns about things that are heading the wrong way, prepares you for a vendor meeting and makes the monthly report for the IT management team. As before, the AI part runs on a stand-in that writes by simple rules, because the company's model cannot be reached from here (see "Needs your attention").
+
+What you can do in it:
+
+- **See risk flags.** The Warnings page now has a second list, Risk flags, for things that are not wrong yet. There are three kinds: a SOW that is being invoiced faster than its budget allows, a SOW about to end while milestones are still open, and a helpdesk figure that got worse three months in a row. Every flag says which figures set it off, for example how much was invoiced in how many days and on which day the budget would run out. A "Show" box narrows the page to one kind. The bell in the header counts the flags too.
+- **Start from the dashboard.** The landing page shows three counts (warnings, risk flags, scorecards still to finalise), then what needs attention counted per kind, every active SOW with how much of its budget is used, spend for the last twelve months, each vendor's latest score and whether it went up or down, the scorecards due for last quarter, and open RFPs. Everything on it is a link to the page behind it.
+- **Prepare a briefing for a vendor meeting.** Open a vendor, choose the new Briefings tab and press "Prepare a briefing". You get a page with the vendor's agreements and upcoming dates, spend against budget, the last three months of helpdesk figures with their trend, missed targets, open milestones, change requests waiting for a decision, and its warnings and risk flags. The AI suggests a summary and talking points. They become part of the briefing only when you press "Use this text"; you can change them, write your own, or reject them. "Download PDF" gives the briefing as a file.
+- **A briefing keeps its figures.** It shows the facts of the day it was prepared and does not change afterwards. For a later meeting you prepare a new one; the vendor's tab lists them all.
+- **Make the monthly management report.** The "Monthly report" button on the dashboard opens the report for last month; any of the last two years can be chosen. It shows spend against budgets, agreements ending within 90 days, vendor scores with their trend, missed helpdesk targets and open RFPs. The AI can write the summary paragraph; you use it, change it or write your own, and "Download PDF" gives one or two pages for the management team.
+- **Nothing the AI wrote is printed unseen.** A summary or talking point appears in a PDF only after a person used or wrote it. If the AI cannot answer, the page says so and everything can still be typed by hand.
+
+The sample data has one example of each kind of risk flag, a briefing for a consultancy with AI text waiting to be looked at, and September's report with a summary already taken over. October's report is untouched, to try from the start.
+
+How it was checked: an independent tester used the running app against all four requirements and the general ones, and recalculated the figures of briefings, the dashboard and the report from the pages they come from; everything passed. An independent reviewer read all the code and found two things that had to be fixed and eight that should be; all are fixed, each with a test. The two that mattered most:
+
+- If a colleague pressed "Ask again" while you were reading the AI's text, your "Use this text" would have taken over the new text, which nobody had read. Now the app notices, changes nothing and asks you to read the new text first.
+- A report summary is saved text, while the figures under it are worked out afresh each time. An invoice keyed in later could leave the summary quoting an old amount. The page now marks such a summary "Figures changed" and the PDF says so under it, until someone has read it again and saved it.
+
+Other fixes worth knowing: the check that stops the AI from mentioning figures of its own was made stricter in one way (a number hidden in a SOW title no longer counts as a figure) and more lenient in another (it no longer refuses "the next 90 days"); a helpdesk vendor that has been offboarded no longer raises flags; and after pressing "Use this text" with the keyboard you keep your place on the page.
+
+Needs your attention:
+
+- **No real AI model has been tried, again.** No key for a real model was available in this build environment. The summaries and talking points you see come from the stand-in, which only strings the facts together, so they read stiffly. There are now ten invented test cases for the monthly proposals, the report summary and the briefing; they pass against the stand-in, which proves the checks work and nothing about a real model's writing. At work, run them once against the company's model (the runbook says how) before relying on the text.
+- **The AI is not allowed to mention a number the app did not give it.** If a real model rounds an amount or works out a difference by itself, its answer is thrown away and asked for once more, and after that the page says the AI could not answer. This is deliberate, but with a real model it may happen more often than you like. If it does, say so; the rule can be loosened.
+- **"Heading over budget" also applies to fixed-price SOWs**, as the requirement says "a SOW". On a fixed-price SOW one large milestone invoiced early can raise the flag although nothing is wrong. The sample SOW 07 shows what that looks like. Say if fixed-price SOWs should be left out.
+- **"Got worse three months in a row" is taken literally.** A figure that slipped a little three times, and still meets its target, is flagged (the sample has one: 2.3%, 2.5%, 2.7%, 4.7% against a target of 5%). Say if a flag should only appear once the target is missed.
+- **Open RFPs are an empty section for now** on the dashboard and in the report. They fill once the RFP part (next) is built.
+- **Three requirements were reworded slightly** to match what was built: a briefing keeps the figures of the day it was prepared, and the AI's text becomes part of it when someone uses it (B-1); the "SOW ending" flag follows the number of days you set in Settings (R-1); the summary is printed only once someone has used or written it, and the report says when the figures changed since (D-2).
+
+Decided on your behalf (see `docs/open-questions.md`, Q41 to Q54):
+
+- The pace of invoicing is what has been invoiced so far, spread evenly over the days since the start date. A SOW is only judged once it has run 30 days.
+- "Scorecards due" are those for the quarter that has just ended, for every scored vendor in use.
+- For a past month the report shows invoices up to the month's last day, against budgets, targets and agreements as they are today.
+- When there is more than fits on two pages, the report's tables are shortened and each says how many rows it leaves out.
+- A briefing looks 180 days ahead for dates, three months back for helpdesk figures and twelve months back for spend.
+- Any team member may prepare, change and remove a briefing and write the report's summary; the history shows who did.
 
 ### 2026-11-21 M4 Scorecards and AI scoring done
 The app now scores vendors. Each month the AI proposes scores for the helpdesk vendors, and each quarter a team member turns that, together with their own judgement, into a scorecard that can be sent to the vendor. Because the company's AI model cannot be reached from here, a stand-in writes the proposals by simple rules; it proves that everything around the AI works, not how good a real model's proposals will be (see "Needs your attention").
@@ -188,6 +227,18 @@ architecture and plan were rewritten to match. The plan now has ten milestones.
 First version of the brief, requirements, plan and agent workflow. No application code yet.
 
 ## Follow-ups
+- Numbers written out in words ("sixty thousand") are not caught by the check on the AI's text; only digits are. A person reads the text before it counts.
+- For an earlier month the report lists agreements as they are today: one that has since been renewed or ended is not shown as "ending" in that month's report.
+- The bell and the Warnings page are worked out afresh on every page, including the helpdesk figures of four months. Fine with the sample data (pages load in under a second); to be measured at work with real ticket numbers, and kept for a few minutes if slow.
+- Two people typing a report summary or a briefing at the same moment: the last save wins, and text being typed is replaced if a colleague's save arrives first.
+- Reloading the page while typing a summary or talking points loses what was not saved, without a warning.
+- Clearing the summary after taking over the AI's text leaves it marked "accepted with changes".
+- "Scorecards due" also lists a vendor added after the quarter ended.
+- Asking the AI again after its summary was taken over no longer shows which AI text the saved summary came from; the history still does.
+- A very long vendor name can run into the page number at the foot of a PDF.
+- The greeting on the dashboard follows the real clock even when the date is pinned for a demo.
+- The app has no icon in the browser tab.
+- The bell's label still says "warnings" although it counts risk flags as well.
 - The AI's proposals have only been written by the stand-in. Run the invented test cases against the company's model at work before relying on them (runbook, "After the first deployment: AI proposals").
 - The AI's written reason is not checked sentence by sentence against the figures. The figures the app worked out are always shown right under it, and a score that flatly contradicts them is refused, but a reason could still misquote a number.
 - "Ask again" can be pressed as often as anyone likes, and each press is one call to the AI model. Fine for five people; add a limit if the model turns out to be costly.
