@@ -607,6 +607,36 @@ function contractFieldsAnswer(ask: ContractFieldsAsk): string {
   });
 }
 
+interface SectionRewriteAsk {
+  task: "rfp_section_rewrite";
+  currentText: string;
+  instruction: string | null;
+  remarks: { reviewer: string; comment: string | null; onWords: string | null; removes: string | null; adds: string | null }[];
+}
+
+/**
+ * A section rewritten by simple rules: a reviewer's suggested edit is made where its words
+ * stand; "list" or "bullet" in the instruction turns the sentences into a list, "short"
+ * keeps the first sentence of each paragraph. What the rules cannot do is said in square
+ * brackets at the end, as a real model would leave a gap for the team to fill.
+ */
+function sectionRewrite(ask: SectionRewriteAsk): string {
+  let body = ask.currentText;
+  const todo: string[] = [];
+  for (const r of ask.remarks) {
+    if (r.removes && body.includes(r.removes)) body = body.replace(r.removes, r.adds ?? "");
+    else if (r.comment) todo.push(`${r.reviewer} asked: ${r.comment}`);
+  }
+  const how = (ask.instruction ?? "").toLowerCase();
+  const paragraphs = body.split(/\n{2,}/);
+  if (/\b(list|bullet)/.test(how))
+    body = paragraphs.map((p) => (/^(#|-|\d+\.|\|)/.test(p) ? p : (p.match(/[^.!?]+[.!?]+/g) ?? [p]).map((x) => `- ${x.trim()}`).join("\n"))).join("\n\n");
+  else if (/\bshort/.test(how)) body = paragraphs.map((p) => (/^(#|-|\d+\.|\|)/.test(p) ? p : (/^[^.!?]+[.!?]/.exec(p)?.[0] ?? p))).join("\n\n");
+  else if (ask.instruction?.trim()) todo.push(`Asked: ${ask.instruction.trim()}`);
+  if (todo.length) body += `\n\n*[${todo.join(" ").replace(/[[\]*]/g, "")} The stand-in AI cannot write this; a real model would.]*`;
+  return JSON.stringify({ body });
+}
+
 /** Answers the prompts it knows; anything else gets the plain stand-in answer. */
 export function standInAnswer(req: AiRequest): string | undefined {
   if (!req.json) return undefined;
@@ -617,6 +647,7 @@ export function standInAnswer(req: AiRequest): string | undefined {
     if (ask.task === "briefing") return briefing(ask as BriefingAsk);
     if (ask.task === "rfp_draft") return rfpDraft(ask as RfpDraftAsk);
     if (ask.task === "rfp_comparison") return rfpComparison(ask as RfpComparisonAsk);
+    if (ask.task === "rfp_section_rewrite") return sectionRewrite(ask as SectionRewriteAsk);
     if (ask.task === "contract_fields") return contractFieldsAnswer(ask as ContractFieldsAsk);
     if (ask.task === "ask_plan") return askPlan(ask as AskPlanAsk);
     if (ask.task === "ask_answer") return askAnswer(ask as AskAnswerAsk);

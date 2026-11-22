@@ -28,3 +28,19 @@ describe("figures in AI writing must be figures the app provided", () => {
     expect(ungrounded("Roughly 54.5 thousand, or 33% left.", given)).toEqual(["54.5", "33"]);
   });
 });
+
+describe("Q-12 the AI's rewrite of a section quotes no figure it was not given", () => {
+  it("refuses a new figure, and lets through list numbers and what the section, instruction or remarks hold", async () => {
+    const { rfpSectionRewrite } = await import("./prompts/rfp-section-rewrite");
+    const input = {
+      title: "Tool 2027",
+      heading: "Scope",
+      body: "About 400 staff, from 1 March.",
+      instruction: "Mention 12 countries",
+      remarks: [{ reviewer: "A", comment: "Say 30 days", onWords: null, removes: null, adds: null }],
+    };
+    expect(rfpSectionRewrite.check!(input, { body: "1. About 400 staff\n2. From 1 March, in 12 countries, within 30 days." })).toBeNull();
+    expect(rfpSectionRewrite.check!(input, { body: "About 450 staff." })).toContain("450");
+    expect(rfpSectionRewrite.check!(input, { body: "From 2 March." })).toContain("2 mar");
+  });
+});

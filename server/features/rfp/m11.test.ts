@@ -59,6 +59,7 @@ const content = (_r: RfpDetail, sections: { id?: string; heading: string; body: 
   criteria: [{ key: "k", name: "Fit", weight: 100, part: "written" }],
   questions: [{ text: "Why?", criterionKey: "k" }],
 });
+const getRfp = async (id: string) => ok<RfpDetail>(await t.as(MEMBER).get(`/api/rfps/${id}`));
 const save = (id: string, body: object) => t.as(MEMBER).put(`/api/rfps/${id}/content`).send(body);
 /** The text of the RFP's review copy, downloaded the way the Review tab does: a round first, then its file. */
 const docText = async (rfpPath: string) => {
@@ -372,5 +373,106 @@ describe("Q-13 remarks from a returned Word file", () => {
     const gone = ok<RfpDetail>(await t.as(MEMBER).delete(`/api/rfp-review-files/${fileId}`));
     expect(gone.review.remarks).toEqual([]);
     expect(gone.review.rounds[0]!.files).toEqual([]);
+  });
+});
+
+// ---------- Q-12 the AI rewrites a section
+
+const rewriteOf = (rfp: RfpDetail, heading: string) => rfp.sections.find((s) => s.heading === heading)!;
+const askRewrite = (sectionId: string, body: object) => t.as(MEMBER).post(`/api/rfp-sections/${sectionId}/rewrite`).send(body);
+const reviewRewrite = (sectionId: string, body: object) => t.as(MEMBER).post(`/api/rfp-sections/${sectionId}/rewrite/review`).send(body);
+
+describe("Q-12 an AI rewrite of a section", () => {
+  it("is a suggestion next to the section, and changes nothing until it is used", async () => {
+    const r = await inReview();
+    const intro = rewriteOf(r, "Introduction");
+    expect((await askRewrite(intro.id, {})).body.error.fields.instruction).toContain("Say what to change");
+    const asked = ok<RfpDetail>(await askRewrite(intro.id, { instruction: "Make it shorter" }), 201);
+    const s = rewriteOf(asked, "Introduction");
+    expect(s.body).toBe(intro.body);
+    expect(s.rewrite).toMatchObject({ status: "proposed", instruction: "Make it shorter", outdated: false, remarkIds: [] });
+    expect(s.rewrite!.output.body).toBe("We invite you to respond by **1 March** at the latest.\n\n- Booking\n- Approval");
+
+    const used = ok<RfpDetail>(await reviewRewrite(intro.id, { action: "accept", suggestionId: s.rewrite!.id }));
+    expect(rewriteOf(used, "Introduction").rewrite!.status).toBe("accepted");
+    // Asked a second time, the first rewrite that nobody looked at is set aside by the new one.
+    const scope = rewriteOf(used, "Scope");
+    const first = ok<RfpDetail>(await askRewrite(scope.id, { instruction: "Turn it into a list" }), 201);
+    const second = ok<RfpDetail>(await askRewrite(scope.id, { instruction: "Turn it into a list" }), 201);
+    expect(rewriteOf(second, "Scope").rewrite!.id).not.toBe(rewriteOf(first, "Scope").rewrite!.id);
+    expect((await reviewRewrite(scope.id, { action: "accept", suggestionId: rewriteOf(first, "Scope").rewrite!.id })).body.error.code).toBe("suggestion_replaced");
+    const rejected = ok<RfpDetail>(await reviewRewrite(scope.id, { action: "reject", suggestionId: rewriteOf(second, "Scope").rewrite!.id }));
+    expect(rewriteOf(rejected, "Scope")).toMatchObject({ body: "The tool covers all travel.", rewrite: { status: "rejected" } });
+  });
+
+  it("is used as the member edited it, and then counts as edited", async () => {
+    const r = await inReview();
+    const scope = rewriteOf(r, "Scope");
+    const asked = ok<RfpDetail>(await askRewrite(scope.id, { instruction: "Turn it into a list" }), 201);
+    const rw = rewriteOf(asked, "Scope").rewrite!;
+    expect(rw.output.body).toBe("- The tool covers all travel.");
+    const used = ok<RfpDetail>(await reviewRewrite(scope.id, { action: "accept", suggestionId: rw.id, body: "- The tool covers all business travel." }));
+    expect(rewriteOf(used, "Scope")).toMatchObject({ body: "- The tool covers all business travel.", rewrite: { status: "edited" } });
+  });
+
+  it("is asked for reviewers' remarks, which are dealt with when the rewrite is used", async () => {
+    const r = await inReview();
+    const { roundId } = await round(r.id);
+    const up = ok<Uploaded>(
+      await upload(
+        roundId,
+        await annotate(await copyOf(roundId), [
+          { replace: "all travel", by: "business travel", author: "Ann Berg", under: "Scope" },
+          { comment: "Which countries?", on: "travel", author: "Chris Tanaka", under: "Scope" },
+        ]),
+      ),
+      201,
+    );
+    const scope = rewriteOf(up.rfp, "Scope");
+    const ids = up.rfp.review.remarks.map((m) => m.id);
+    // A remark of another section cannot be chosen.
+    expect((await askRewrite(rewriteOf(up.rfp, "Introduction").id, { remarkIds: [ids[0]] })).body.error.code).toBe("remark_not_open");
+    const asked = ok<RfpDetail>(await askRewrite(scope.id, { remarkIds: ids }), 201);
+    const rw = rewriteOf(asked, "Scope").rewrite!;
+    expect(rw.remarkIds).toEqual(ids);
+    expect(rw.output.body).toContain("The tool covers business travel.");
+    expect(rw.output.body).toContain("Chris Tanaka asked: Which countries?");
+    const used = ok<RfpDetail>(await reviewRewrite(scope.id, { action: "accept", suggestionId: rw.id }));
+    expect(used.review.remarks.map((m) => [m.status, m.resolution])).toEqual([
+      ["dealt_with", "ai_rewrite"],
+      ["dealt_with", "ai_rewrite"],
+    ]);
+  });
+
+  it("is not used when the section changed after it was written", async () => {
+    const r = await inReview();
+    const scope = rewriteOf(r, "Scope");
+    const asked = ok<RfpDetail>(await askRewrite(scope.id, { instruction: "Turn it into a list" }), 201);
+    const changed = asked.sections.map((s) => ({ id: s.id, heading: s.heading, body: s.heading === "Scope" ? "Changed by hand." : s.body }));
+    const saved = ok<RfpDetail>(
+      await save(r.id, {
+        sections: changed,
+        criteria: [{ key: r.criteria[0]!.id, name: "Fit", weight: 100, part: "written" }],
+        questions: [{ text: r.questions[0]!.text, criterionKey: r.criteria[0]!.id }],
+      }),
+    );
+    expect(rewriteOf(saved, "Scope").rewrite!.outdated).toBe(true);
+    expect((await reviewRewrite(scope.id, { action: "accept", suggestionId: rewriteOf(saved, "Scope").rewrite!.id })).body.error.code).toBe("rewrite_outdated");
+    expect(rewriteOf(await getRfp(r.id), "Scope").body).toBe("Changed by hand.");
+  });
+
+  it("follows the locks of editing, and leaves everything as it was when the AI fails", async () => {
+    const r = await inReview();
+    const intro = rewriteOf(r, "Introduction");
+    ok(await t.as(ADMIN).post("/api/dev/ai").send({ mode: "unavailable" }));
+    const failed = await askRewrite(intro.id, { instruction: "Shorter" });
+    ok(await t.as(ADMIN).post("/api/dev/ai").send({ mode: "nonsense" }));
+    const nonsense = await askRewrite(intro.id, { instruction: "Shorter" });
+    ok(await t.as(ADMIN).post("/api/dev/ai").send({ mode: "working" }));
+    expect([failed.status, nonsense.status]).toEqual([502, 502]);
+    expect(rewriteOf(await getRfp(r.id), "Introduction").rewrite).toBeNull();
+    ok(await t.as(MEMBER).post(`/api/rfps/${r.id}/signoffs`).send({ reviewerName: "Chris Tanaka", outcome: "approved", onDate: "2026-11-20" }), 201);
+    ok(await t.as(MEMBER).post(`/api/rfps/${r.id}/stage`).send({ to: "approved" }));
+    expect((await askRewrite(intro.id, { instruction: "Shorter" })).body.error.code).toBe("rfp_approved");
   });
 });

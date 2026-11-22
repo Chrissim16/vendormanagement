@@ -70,6 +70,9 @@ export function answersFingerprint(candidates: Pick<Candidate, "id" | "list" | "
   return createHash("sha256").update(lines.join("\n")).digest("hex");
 }
 
+/** What a section's text was when the AI rewrote it, so that using the rewrite can never overwrite a change made since (Q-12). */
+export const textPrint = (body: string | null) => createHash("sha256").update(normalise(body)).digest("hex");
+
 /** Everything about one RFP, as its page shows it. */
 export async function getRfp(db: Queryable, id: string, today: Day): Promise<RfpDetail> {
   const row = (await db.select({ rfp: rfps, ownerName: personName }).from(rfps).innerJoin(users, eq(users.id, rfps.ownerUserId)).where(eq(rfps.id, id)))[0];
@@ -140,6 +143,7 @@ export async function getRfp(db: Queryable, id: string, today: Day): Promise<Rfp
     suggestedScore: s.suggestedScore,
   }));
   const plainAnswers = answers.map((a) => ({ candidateId: a.candidateId, questionId: a.questionId, text: a.text }));
+  const rewrites = await Promise.all(sections.map((s) => readSuggestion<{ body: string }>(db, s.rewriteSuggestionId)));
   const [draft, comparison, review] = await Promise.all([
     readSuggestion<RfpDraft>(db, r.draftSuggestionId),
     readSuggestion<RfpComparison>(db, r.comparisonSuggestionId),
@@ -162,7 +166,23 @@ export async function getRfp(db: Queryable, id: string, today: Day): Promise<Rfp
     stage: r.stage,
     createdAt: r.createdAt.toISOString(),
     createdBy: r.createdBy,
-    sections: sections.map((s) => ({ id: s.id, heading: s.heading, body: s.bodyFormat === "plain" ? toMarkdown(plainBlocks(s.body)) || null : s.body })),
+    sections: sections.map((s, i) => {
+      const body = s.bodyFormat === "plain" ? toMarkdown(plainBlocks(s.body)) || null : s.body;
+      const rw = rewrites[i];
+      return {
+        id: s.id,
+        heading: s.heading,
+        body,
+        rewrite: rw
+          ? {
+              ...rw,
+              remarkIds: s.rewriteFor?.remarkIds ?? [],
+              instruction: s.rewriteFor?.instruction ?? null,
+              outdated: rw.status === "proposed" && s.rewriteFor?.basedOn !== textPrint(body),
+            }
+          : null,
+      };
+    }),
     criteria: criteria.map((c) => ({ id: c.id, name: c.name, weight: c.weight, part: c.part })),
     questions: questions.map((q) => ({ id: q.id, number: q.number, text: q.text, criterionId: q.criterionId })),
     signoffs: signoffs.map((s) => ({

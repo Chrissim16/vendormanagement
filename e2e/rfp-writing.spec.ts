@@ -333,3 +333,106 @@ test.describe("Q-13 review rounds with comments from Word", () => {
     await expect(page.getByText("1 open remark from reviewers on How to respond")).toHaveCount(0);
   });
 });
+
+test.describe("Q-12 the AI rewrites a section", () => {
+  test("Q-12 a rewrite asked in the member's own words is shown next to the text with the differences marked, and changes nothing until used", async ({
+    page,
+    context,
+    request,
+  }) => {
+    const rfp = await drafted(request);
+    await signInAs(context, MEMBER);
+    await open(page, rfp, "document");
+    const section = page.locator(`#section-${rfp.sections[5]!.id}`);
+    await section.getByRole("button", { name: "Rewrite with AI" }).click();
+    await expect(page.getByLabel("What should change in this section?")).toBeFocused();
+    // Nothing asked for: said in place.
+    await page.getByRole("button", { name: "Ask the AI" }).click();
+    await expect(page.getByText("Say what to change, or choose a reviewer's remark to rewrite for.")).toBeVisible();
+    await page.getByLabel("What should change in this section?").fill("Make it shorter");
+    await page.getByRole("button", { name: "Ask the AI" }).click();
+    const panel = page.getByRole("region", { name: "AI rewrite of Confidentiality and terms" });
+    await expect(panel).toContainText('for "Make it shorter"');
+    await expect(panel).toContainText("Not reviewed yet");
+    // The words the rewrite takes out are struck through on the left.
+    await expect(panel.locator("del").first()).toBeVisible();
+    // Nothing changed yet.
+    expect((await call(request, "get", `/rfps/${rfp.id}`)).sections[5]!.body).toBe(rfp.sections[5]!.body);
+
+    // Edit it first, then use it.
+    await panel.getByRole("button", { name: "Edit before using" }).click();
+    const box = page.getByRole("textbox", { name: "Edited rewrite of Confidentiality and terms" });
+    await box.click();
+    await page.keyboard.press("Control+End");
+    await page.keyboard.type(" Thank you.");
+    await panel.getByRole("button", { name: "Use the edited text" }).click();
+    await expect(page.getByText("Your edited version of the rewrite is now the section's text")).toBeVisible();
+    await expect(section.getByText(/AI rewrite of .*: accepted with changes by Mira Okafor\./)).toBeVisible();
+    const after = await call(request, "get", `/rfps/${rfp.id}`);
+    expect(after.sections[5]!.body).toMatch(/Thank you\.$/);
+    expect(after.sections[5]!.rewrite!.status).toBe("edited");
+    await expect(page.getByRole("textbox", { name: "Text of section 6" })).toContainText("Thank you.");
+  });
+
+  test("Q-12 Q-13 a rewrite for a reviewer's remark is asked from the Review tab, and using it deals with the remark", async ({ page, context, request }) => {
+    const rfp = await drafted(request);
+    await call(request, "post", `/rfps/${rfp.id}/stage`, { to: "in_review" });
+    const { roundId } = await call<{ roundId: string }>(request, "post", `/rfps/${rfp.id}/review-rounds`);
+    const copy = Buffer.from(await (await request.get(`${BASE}/api/rfp-review-rounds/${roundId}/review-copy.docx`, { headers: { "x-dev-user": MEMBER, cookie: "" } })).body());
+    const { annotate } = await import("../server/features/rfp/word/annotate");
+    const res = await request.post(`${BASE}/api/rfp-review-rounds/${roundId}/files`, {
+      headers: { "x-dev-user": MEMBER, cookie: "" },
+      multipart: {
+        file: {
+          name: "back.docx",
+          mimeType: "application/octet-stream",
+          buffer: await annotate(copy, [{ replace: "confidential", by: "strictly confidential", author: "Priya Raman", under: "Confidentiality and terms" }]),
+        },
+      },
+    });
+    expect(res.ok()).toBe(true);
+    await signInAs(context, MEMBER);
+    await open(page, rfp, "review");
+    await page.getByRole("list", { name: "Open remarks on Confidentiality and terms" }).getByRole("button", { name: "Ask the AI to rewrite for it" }).click();
+    // On the Document tab, the form is open with the remark ticked.
+    await expect(page.getByRole("tab", { name: "Document" })).toHaveAttribute("aria-selected", "true");
+    const form = page.getByRole("group", { name: "Ask the AI to rewrite Confidentiality and terms" });
+    await expect(form.getByRole("checkbox")).toBeChecked();
+    await form.getByRole("button", { name: "Ask the AI" }).click();
+    const panel = page.getByRole("region", { name: "AI rewrite of Confidentiality and terms" });
+    await expect(panel).toContainText("for a remark by Priya Raman");
+    await expect(panel.locator("ins")).toContainText(["strictly"]);
+    await expectAccessible(page);
+    await panel.getByRole("button", { name: "Use this text" }).click();
+    await expect(page.getByText("The rewrite is now the section's text")).toBeVisible();
+    const after = await call(request, "get", `/rfps/${rfp.id}`);
+    expect(after.sections[5]!.body).toContain("strictly confidential");
+    expect(after.review.remarks[0]).toMatchObject({ status: "dealt_with", resolution: "ai_rewrite" });
+  });
+
+  test("Q-12 AI-2 when the AI cannot answer, the page says so and the section stays as it was", async ({ page, context, request }) => {
+    const rfp = await drafted(request);
+    await request.post(`${BASE}/api/dev/ai`, { headers: { "x-dev-user": ADMIN, cookie: "" }, data: { mode: "unavailable" } });
+    await signInAs(context, MEMBER);
+    await open(page, rfp, "document");
+    const section = page.locator(`#section-${rfp.sections[0]!.id}`);
+    await section.getByRole("button", { name: "Rewrite with AI" }).click();
+    await page.getByLabel("What should change in this section?").fill("Shorter");
+    await page.getByRole("button", { name: "Ask the AI" }).click();
+    await expect(section.getByText("The AI could not rewrite this section just now.")).toBeVisible();
+    await expect(page.getByLabel("What should change in this section?")).toHaveValue("Shorter");
+    await request.post(`${BASE}/api/dev/ai`, { headers: { "x-dev-user": ADMIN, cookie: "" }, data: { mode: "working" } });
+  });
+
+  test("Q-12 no rewrite once the RFP is approved", async ({ page, context, request }) => {
+    const rfp = await drafted(request);
+    await call(request, "post", `/rfps/${rfp.id}/stage`, { to: "in_review" });
+    await call(request, "post", `/rfps/${rfp.id}/signoffs`, { reviewerName: "Chris Tanaka", outcome: "approved", onDate: "2026-11-21" });
+    await call(request, "post", `/rfps/${rfp.id}/stage`, { to: "approved" });
+    await signInAs(context, MEMBER);
+    await open(page, rfp, "document");
+    await expect(page.getByRole("button", { name: "Rewrite with AI" })).toHaveCount(0);
+    const res = await request.post(`${BASE}/api/rfp-sections/${rfp.sections[0]!.id}/rewrite`, { headers: { "x-dev-user": MEMBER, cookie: "" }, data: { instruction: "Shorter" } });
+    expect(res.status()).toBe(409);
+  });
+});

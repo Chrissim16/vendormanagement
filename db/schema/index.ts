@@ -690,7 +690,7 @@ export const rfpSections = pgTable(
       .default("markdown"),
     /** Q-12: the AI's latest rewrite of this section, and the reviewers' remarks it was asked for. It counts for nothing until a person uses it. */
     rewriteSuggestionId: uuid("rewrite_suggestion_id").references((): AnyPgColumn => aiSuggestions.id),
-    rewriteFor: jsonb("rewrite_for").$type<string[]>(),
+    rewriteFor: jsonb("rewrite_for").$type<{ remarkIds: string[]; basedOn: string; instruction: string | null }>(),
   },
   (t) => [index("rfp_sections_rfp_idx").on(t.rfpId), check("rfp_sections_format_check", sql`${t.bodyFormat} in ('plain', 'markdown')`)],
 );

@@ -197,6 +197,32 @@ its hints; focused ("/" from anywhere) it opens a list under it: the typed text 
 question to ask first, then matching vendors, agreements, RFPs and pages, each group under
 a small heading. Arrow keys move, Enter chooses, Escape closes the list and keeps the text.
 
+An AI rewrite of a piece of formatted text (an RFP section) sits right under that text, in
+the tinted panel labelled "AI rewrite", saying when it was written and for what (the
+instruction in quotes, the reviewers' remarks by name). Inside, two white boxes side by
+side: "Now", with the words the rewrite takes out struck through in red, and "AI rewrite",
+with the words it adds marked in green; a line under them says what the marks mean, or
+that only the formatting differs. The buttons are "Use this text" (primary), "Edit before
+using" (which turns the right-hand box into the editor, with "Use the edited text"),
+"Reject" and "Ask again". When the text changed after the AI wrote, the panel says so in
+red and cannot be used. Asking is a small form on the sunken fill: one box for what should
+change, and a tick box for each open reviewer's remark on that section. Nothing that
+changes a section can be pressed while the document has unsaved changes; the line says why.
+
+A reviewer's remark from Word is a white card with a hairline border: a pill for its kind
+(Comment on the brand tint, Suggested edit with the amber dot), the reviewer's name and the
+version, then for a comment "On:" the words it was made on in italic quotes and the comment
+itself, or for a suggested edit the words around it in grey, what it removes struck through
+in red and what it adds in green. Its buttons, in order: Take over this edit (primary,
+only when its words stand once in the section now; otherwise a red line says to do it by
+hand), Ask the AI to rewrite for it, Dealt with by hand, Set aside. A remark that is done
+sits on the sunken fill and says by whom and when, with "Open again". Open remarks are
+listed under their section's heading on the Review tab, and folded under the section on
+the Document tab; those the app could not place come last under "Not placed", with a
+section chooser. Review rounds are rows between hairlines, newest first: the version, when
+and by whom it was made, "Download version N" and "Upload a returned file", the files sent
+back on the sunken fill, and all of the round's remarks folded underneath.
+
 A score from 1 to 5 is chosen on a row of five squares on the sunken fill; the chosen one
 is filled with the primary colour and its thumb snaps over with a bounce. The same square,
 alone, shows a score that is not being edited: outlined while only the AI stands behind
@@ -225,6 +251,7 @@ with the fact ("Notice deadline passed 12 Nov"), not the system's term for it.
 | Charts | The app's own bars for now: a quiet tint with the latest month in the accent, growing from the baseline with a small bounce, always with the same figures in a table beside or below. Recharts when a chart needs more than bars |
 | Search and Ask bar | cmdk |
 | Formatted text editor | Tiptap (on ProseMirror), limited to what the app's formatted text holds |
+| Word differences in a rewrite | jsdiff (`diff`), word by word |
 | Icons | Lucide |
 | Toasts | Sonner |
 | Theme switch | The browser's View Transitions feature, no library |

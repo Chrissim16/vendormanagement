@@ -450,7 +450,29 @@ export interface RfpSection {
   heading: string;
   /** Formatted text (shared/richtext); text from before M11 is given as plain paragraphs in that form. */
   body: string | null;
+  /** Q-12: the AI's latest rewrite of this section, if one was asked for. */
+  rewrite?: SectionRewrite | null;
 }
+/** Q-12: an AI rewrite of a section, with the reviewers' remarks it was asked for. */
+export interface SectionRewrite extends TextSuggestion<{ body: string }> {
+  remarkIds: string[];
+  /** What the member asked for, as they typed it. */
+  instruction: string | null;
+  /** The section's text changed after the AI was asked, so the rewrite is of an earlier text. */
+  outdated: boolean;
+}
+export const rewriteAskSchema = z
+  .object({
+    instruction: optionalText(1000),
+    remarkIds: z.array(z.string().uuid()).max(20).default([]),
+  })
+  .refine((v) => v.instruction || v.remarkIds.length, { message: "Say what to change, or choose a reviewer's remark to rewrite for.", path: ["instruction"] });
+export const rewriteReviewSchema = z.object({
+  action: z.enum(["accept", "reject"]),
+  suggestionId: z.string().uuid(),
+  /** The rewrite as the member edited it before using it; absent when used as it is. */
+  body: z.string().max(20_000).optional(),
+});
 export interface RfpCriterion {
   id: string;
   name: string;

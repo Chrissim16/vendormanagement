@@ -109,6 +109,8 @@ wrong. Answered questions move to the bottom.
 | Q101 | When a new Word template is uploaded and the RFP has not changed, is the next review copy a new version? | Yes. The copy looks different, so it gets the next version number; a reviewer's version always matches the file they hold. | M11 |
 | Q102 | A reviewer sends back an older version. Is it refused? | No. It is put in the round of the version it is, and the page says so. Its remarks are placed against that version's text, and a suggested edit whose words have changed since is done by hand. | M11 |
 | Q103 | What happens to a reply to a comment in Word? | It becomes a remark of its own, by the person who replied, standing where the comment stands. Each is dealt with or set aside by itself. | M11 |
+| Q105 | Can the AI rewrite a section that has no text yet? | No. It rewrites; a first version of a whole RFP comes from the AI draft while drafting. | M11 |
+| Q106 | Can the AI rewrite for a comment that is not placed in a section? | No. Place it in its section first; the AI only ever changes one section. | M11 |
 | Q104 | Can a returned file uploaded by mistake be removed? | Yes, with its remarks, as long as none of them has been dealt with or set aside yet. | M11 |
 | Q27 | How long are tickets kept? | 24 months after they were resolved, as the data model says. Open tickets are kept however old. | M3 |
 

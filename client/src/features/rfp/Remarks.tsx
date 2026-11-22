@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { applySuggestedEdit, remarkKindLabels, resolutionLabels, type ReviewerRemark, type ReviewRound } from "../../../../shared/review";
 import { contentEditable, type RfpDetail } from "../../../../shared/rfp";
@@ -155,8 +156,10 @@ export function RemarkCard({
   );
 }
 
-/** Q-13: the open remarks next to the sections they are in, and those the app could not place. */
-export function OpenRemarks({ rfp, onRewrite }: { rfp: RfpDetail; onRewrite?: (m: ReviewerRemark) => void }) {
+/** Q-13: the open remarks next to the sections they are in, and those the app could not place. Asking the AI to rewrite for one opens its section on the Document tab. */
+export function OpenRemarks({ rfp }: { rfp: RfpDetail }) {
+  const navigate = useNavigate();
+  const onRewrite = (m: ReviewerRemark) => navigate(`?tab=document&rewrite=${m.sectionId}&remark=${m.id}`);
   const open = rfp.review.remarks.filter((m) => m.status === "open");
   const done = rfp.review.remarks.length - open.length;
   if (!rfp.review.remarks.length)

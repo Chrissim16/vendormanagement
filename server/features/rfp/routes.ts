@@ -8,6 +8,7 @@ import * as candidates from "./candidates";
 import * as evaluation from "./evaluation";
 import { answerSheet, decisionRecordPdf, rfpWord } from "./files";
 import * as review from "./review";
+import * as rewrite from "./rewrite";
 import * as template from "./template";
 import { templateInForce } from "./template";
 import { exampleTemplate } from "./word/example";
@@ -94,6 +95,9 @@ export function rfpRoutes(ctx: service.RfpContext) {
     download(res, f.name, "docx", f.data);
   });
   r.delete("/rfp-review-files/:id", async (req, res) => res.json(await review.removeReturned(ctx, id.parse(req.params.id), currentUser(req))));
+  // An AI rewrite of a section (Q-12)
+  r.post("/rfp-sections/:id/rewrite", async (req, res) => res.status(201).json(await rewrite.askRewrite(ctx, id.parse(req.params.id), body(req), currentUser(req))));
+  r.post("/rfp-sections/:id/rewrite/review", async (req, res) => res.json(await rewrite.reviewRewrite(ctx, id.parse(req.params.id), body(req), currentUser(req))));
   r.post("/rfp-remarks/:id", async (req, res) => res.json(await review.actOnRemark(ctx, id.parse(req.params.id), body(req), currentUser(req))));
 
   // The company's Word template (Q-14), admins only.
