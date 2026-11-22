@@ -139,6 +139,10 @@ These cannot be answered from outside the company. None block the build.
 
 | Date | Question | Answer |
 |---|---|---|
+| 2026-11-22 | Who carries out the move to Databricks (M9)? | The AI in Cursor on the owner's work laptop, through its Databricks connection to the company workspace, following `docs/deploy-with-cursor.md`; the owner watches and checks. |
+| 2026-11-22 | Who creates the database, the storage volume and the Jira secrets? | Cursor's AI, where the owner's account is allowed to; where it is not, it stops and says what to ask IT for. |
+| 2026-11-22 | What may Cursor's AI change when something does not work? | Only settings in `app.yaml` (names and values), then deploy again. No program code: anything else is written down and brought back to this project, where it is fixed, tested and pushed. |
+| 2026-11-22 | How does the Jira access key get into Databricks? | The owner types it into the secret in Databricks; Cursor's AI only creates the empty secret and says where to paste it. The key never passes through an AI chat. |
 | 2026-11-21 | The mockup's sample vendor names resembled real firms. | Replaced everywhere, in the mockup too, by the app's invented names. Every sample vendor's legal name says "(invented)". |
 | 2026-11-21 | Who is it for? | The VS Finance team, at most 5 users. |
 | 2026-11-21 | Roles? | Admin and member. No restricted role; everyone sees all contract values. |

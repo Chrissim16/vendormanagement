@@ -75,10 +75,11 @@ A formatting editor for RFP sections, the AI rewriting a section on request, rev
 Reworks what was built: the Document and Review tabs, the AI draft prompt (formatted output), the Word export for review and for candidates, the decision record PDF (formatted sections), and the review PDF, which is removed. The editor is a new pattern and goes into the design guide. The `docx` package's handling of an existing template, and reading comments and tracked changes from a Word file, are checked against current documentation before building. An invented example template is made for trying the app.
 
 ## M9 Move to Databricks
-Done at work, with limited AI assistance, so the preparation is done here first.
+Done at work by the AI in Cursor on the owner's work laptop, through its Databricks connection to the company workspace, with the owner watching (decided 22 Nov 2026). It follows `docs/deploy-with-cursor.md`, may change only `app.yaml` settings, and reports anything else back to this project. The preparation is done here first.
 
 Prepared before the move:
 - `docs/runbook.md`: step-by-step deployment for a non-developer, with what each step should show when it worked.
+- `docs/deploy-with-cursor.md`: the same steps written for Cursor's AI, with its rules (what it may create and change, the Jira key typed by the owner, stop and report), the checks after each step and the report to bring back.
 - `app.yaml`, resource definitions, a first-run script that migrates the database.
 - A final full run of `npm run check` and the acceptance tester over all milestones.
 
@@ -89,7 +90,7 @@ At work:
 4. Deploy and open the system check page. Fix whatever it reports.
 5. Upload the company's Word template on the settings page, with [Title], [Date] and [Version] typed on its cover page, and check one RFP review copy in Word.
 6. Link the real Jira boards, run the first sync, compare a month's metrics with Jira's own reports.
-6. Enter real vendors and agreements with the Excel import.
+7. Enter real vendors and agreements with the Excel import.
 
 Recommended: do steps 1 to 4 once straight after M0, with the empty app. It costs little,
 and it proves sign-in, database and deployment while there is almost nothing to go wrong.
