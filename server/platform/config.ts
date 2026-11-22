@@ -23,7 +23,12 @@ export interface Config {
   /** How often the app looks whether last month's AI proposals still have to be made. Zero switches that off. */
   proposalMinutes: number;
   ai: { strongEndpoint: string | null; fastEndpoint: string | null };
+  /** F-5: the one password of a sample version on a public address. Null everywhere else. */
+  demoPassword: string | null;
 }
+
+/** Long enough that it cannot be guessed by trying. */
+export const MIN_DEMO_PASSWORD = 12;
 
 function pinnedDay(value: string): string {
   const d = new Date(`${value}T00:00:00Z`);
@@ -54,9 +59,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (platform === "databricks" && (!bootstrap.includes("@") || bootstrap.endsWith("example.test"))) {
     throw new Error("BOOTSTRAP_ADMIN_EMAIL in app.yaml must be the first admin's real work email. It is still empty or the placeholder.");
   }
-  // The local stand-in lets anyone choose who they are, so it only listens on this machine.
-  if (platform === "local" && !["127.0.0.1", "localhost", "::1"].includes(host) && env.ALLOW_REMOTE_STAND_IN !== "1") {
-    throw new Error("With stand-in sign-in the app only listens on this machine. Remove HOST, or set PLATFORM=databricks.");
+  // F-5: a sample version on a public address is closed with one shared password. It is never for the real thing.
+  const demoPassword = env.DEMO_PASSWORD || null;
+  if (demoPassword && platform === "databricks")
+    throw new Error("DEMO_PASSWORD is for the sample version only. Remove it: inside Databricks people sign in with their company account.");
+  if (demoPassword && demoPassword.length < MIN_DEMO_PASSWORD) throw new Error(`DEMO_PASSWORD must be at least ${MIN_DEMO_PASSWORD} characters long.`);
+  // The local stand-in lets anyone choose who they are, so it only listens on this machine, unless the whole app is behind the sample version's password.
+  if (platform === "local" && !["127.0.0.1", "localhost", "::1"].includes(host) && env.ALLOW_REMOTE_STAND_IN !== "1" && !demoPassword) {
+    throw new Error("With stand-in sign-in the app only listens on this machine. Remove HOST, set DEMO_PASSWORD for a sample version, or set PLATFORM=databricks.");
   }
   return {
     platform,
@@ -78,5 +88,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     jiraSyncMinutes: everyMinutes("JIRA_SYNC_EVERY_MINUTES", env.JIRA_SYNC_EVERY_MINUTES, 60, "the automatic sync"),
     proposalMinutes: everyMinutes("AI_PROPOSALS_EVERY_MINUTES", env.AI_PROPOSALS_EVERY_MINUTES, 360, "the automatic monthly proposals"),
     ai: { strongEndpoint: env.AI_STRONG_ENDPOINT || null, fastEndpoint: env.AI_FAST_ENDPOINT || null },
+    demoPassword,
   };
 }

@@ -192,7 +192,12 @@ test.describe("A-5 documents", () => {
     await input.setInputFiles({ name: "Signed NDA.pdf", mimeType: "application/pdf", buffer: pdf });
     await expect(page.getByText("Attached Signed NDA.pdf")).toBeVisible();
     const link = page.getByRole("link", { name: "Signed NDA.pdf" });
-    await expect(page.getByRole("listitem").filter({ has: link })).toContainText("1 KB · added 21 Nov 2026 by mira@example.test");
+    // A document carries the real moment it was attached, not the pinned "today" of the sample data: the day here is the day the test runs, in the team's time zone.
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Amsterdam", day: "numeric", month: "short", year: "numeric" }).formatToParts(new Date()).map((p) => [p.type, p.value]),
+    );
+    const attachedOn = `${parts.day} ${parts.month!.replace("Sept", "Sep")} ${parts.year}`;
+    await expect(page.getByRole("listitem").filter({ has: link })).toContainText(`1 KB · added ${attachedOn} by mira@example.test`);
 
     const [download] = await Promise.all([page.waitForEvent("download"), link.click()]);
     const chunks: Buffer[] = [];

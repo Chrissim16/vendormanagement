@@ -25,6 +25,7 @@ in plain language, with no code or jargon they would have to look up.
 | Milestones and their done criteria | `docs/plan/implementation-plan.md` |
 | Current status, what happened last | `docs/plan/progress.md` |
 | Unanswered questions and working assumptions | `docs/open-questions.md` |
+| How the owner tries the app on their own computer | `docs/try-it.md` |
 
 Read `progress.md` first in every session. Read the other files when the task touches them.
 
@@ -74,6 +75,7 @@ Read `progress.md` first in every session. Read the other files when the task to
 
 ## Commands
 
+- `npm run try` starts the app with the invented sample data, fresh every time, for the owner to try on their own computer (see `docs/try-it.md`)
 - `npm run dev` starts the app locally (server on 3000, screens on http://localhost:5173) with a built-in database in `.data/`; no install beyond `npm install`
 - `npm run check` runs typecheck, lint, server tests, build and browser tests; must pass before any commit
 - `npm run db:seed` loads the invented sample data; `npm run db:generate` creates a migration after a schema change (migrations apply themselves at start)

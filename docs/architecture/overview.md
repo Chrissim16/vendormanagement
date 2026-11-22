@@ -38,6 +38,7 @@ Rules:
 - No Databricks, `pg` or PGlite import outside `server/platform`. ESLint enforces this.
 - Deployed implementations are written from documentation and marked UNPROVEN in the code until the first deployment.
 - The Jira port is one client on top of a small "transport" (one request to Jira). The deployed transport goes over the network; the stand-in answers the same paths from invented tickets. Reading SLAs, ratings and ticket history is therefore the same code in both, and is covered by the tests.
+- The stand-in sign-in lets anyone choose who they are, so with stand-ins the app listens on its own machine only. The one exception is a sample version (F-5): with `DEMO_PASSWORD` set, `server/platform/demo.ts` puts HTTP Basic in front of everything, pages, data and files alike, and `/api/config` tells the screens to show the sample-version notice. `/healthz` answers without the password for a hosting service's check. The setting is refused on Databricks. The built-in database needs 600 to 800 MB of memory; a small host needs `DATABASE_URL` to a Postgres server instead (under 200 MB).
 - Which set is used is decided by `PLATFORM` (`local` or `databricks`). The app refuses to start with stand-ins inside Databricks.
 
 ## Shape of the code

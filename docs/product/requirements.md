@@ -21,6 +21,13 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 - Every create, change and removal of a business record adds an entry with who, when and what changed.
 - Each record's page shows its history. Admins can browse and filter the full log.
 
+**F-5 Sample version.** The app can be tried with invented data only, without anything from the company.
+- On one's own computer, one command starts it with the sample data, fresh every time; nothing is kept when it stops.
+- It listens beyond that computer only when one shared password is set (at least 12 characters, set where the app runs, never stored in the project). Then nothing is served without the password: no page, no data, no file. Ten wrong passwords from one address close it for that address for ten minutes.
+- Behind the password every page says that this is a sample version with invented data and that real company data must not be entered.
+- The password setting is refused inside Databricks, where people sign in with their company account.
+- Not built: a hosted sample version on a link. Tried on 22 Nov 2026 for Render: with its built-in database the app needs 600 to 800 MB of memory, more than the free plan's 512 MB; with a separate Postgres database it needs under 200 MB. The owner chose to run it on their own computer instead.
+
 **F-4 System check.**
 - An admin page tests each connection (database, sign-in identity, file storage, Jira, AI model) and shows per connection: working or not, and if not, a plain-language cause and what to do.
 - It runs the same against the stand-ins used during the build and against the real services.

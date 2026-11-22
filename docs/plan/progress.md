@@ -21,6 +21,11 @@ Newest entry first. Written for the owner, in plain language.
 
 ## Log
 
+### 2026-11-22 Trying the app yourself
+You asked where you can try the app. There is no web address for it; it runs on your own computer with one command. The guide is `docs/try-it.md`: install two tools once, fetch the project, type `npm run try`, open http://localhost:5173. It starts with the invented sample data every time and keeps nothing when you stop it.
+
+A link you can simply open was looked into and not set up. On a hosting service's free plan the app would keep crashing, because its built-in database needs more memory than such a plan gives; it would need a separate database next to it, or a paid plan. You chose to run it on your own computer instead. What was built along the way stays in the project for later: a password gate that puts one shared password in front of everything, and a notice on every page that it is a sample version with invented data. Both are switched off unless a password is set, and cannot be switched on inside Databricks. This is written down as requirement F-5.
+
 ### 2026-11-21 M8 Contract reading done
 The app can now read a contract for you and propose what to fill in, with the sentence each value comes from. As before, the AI part runs on a stand-in that works by simple rules, because the company's model cannot be reached from here (see "Needs your attention").
 

@@ -16,6 +16,8 @@ export const useMe = () => {
 
 interface AppConfig {
   standInSignIn: boolean;
+  /** F-5: this is a sample version on a public address, behind one shared password. */
+  demo?: boolean;
   timeZone: string;
   /** Today's date in the team's time zone, as the server sees it. */
   today: string;
@@ -25,6 +27,12 @@ interface AppConfig {
 export function useToday(): string {
   const config = useQuery({ queryKey: ["config"], queryFn: () => api<AppConfig>("/config"), staleTime: 5 * 60_000 });
   return config.data?.today ?? new Date().toISOString().slice(0, 10);
+}
+
+/** F-5: whether this is the sample version on a link, which must say so on every page. */
+export function useDemo(): boolean {
+  const config = useQuery({ queryKey: ["config"], queryFn: () => api<AppConfig>("/config"), staleTime: 5 * 60_000 });
+  return !!config.data?.demo;
 }
 
 /** Local only: look at the app as someone else to try out roles. Never present when deployed. */

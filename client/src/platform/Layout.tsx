@@ -7,7 +7,7 @@ import { useWarnings } from "../lib/data";
 import { bouncy, page } from "../lib/motion";
 import { toggleTheme } from "../lib/theme";
 import { SearchBar } from "./SearchBar";
-import { DevSwitcher, useMe } from "./session";
+import { DevSwitcher, useDemo, useMe } from "./session";
 import { IconButton } from "./ui";
 
 interface Item {
@@ -56,6 +56,7 @@ function NavItem({ to, label, icon: Icon }: Item) {
 
 export function Layout() {
   const me = useMe();
+  const demo = useDemo();
   const location = useLocation();
   const outlet = useOutlet();
   const warnings = useWarnings().data?.length ?? 0;
@@ -111,6 +112,11 @@ export function Layout() {
       </aside>
 
       <div className="flex h-full min-w-0 flex-col">
+        {demo && (
+          <p role="note" className="border-b border-line bg-tint px-10 py-2 text-[13px] font-medium">
+            Sample version with invented data. Do not enter real company data here. Everything goes back to the sample data when the app restarts.
+          </p>
+        )}
         <header className="flex items-center gap-2.5 border-b border-line px-10 py-4">
           <SearchBar />
           <span className="flex-1" />

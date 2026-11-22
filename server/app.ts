@@ -26,6 +26,7 @@ import { vendorRoutes } from "./features/vendors/routes";
 import { listAttention } from "./features/warnings/service";
 import { authenticate, currentUser, requireRole } from "./platform/auth";
 import { clock, type Config } from "./platform/config";
+import { demoGate } from "./platform/demo";
 import { AppError, errorHandler } from "./platform/errors";
 import { aiModes, type Ports } from "./platform/ports/types";
 
@@ -82,6 +83,11 @@ export const rfpContext = (config: Config, ports: Ports): RfpContext => {
 export function createApp(config: Config, ports: Ports) {
   const app = express();
   app.disable("x-powered-by");
+  if (config.demoPassword) {
+    // F-5: behind one proxy of the hosting service; nothing is served before the password.
+    app.set("trust proxy", 1);
+    app.use(demoGate(config.demoPassword));
+  }
   app.use(express.json({ limit: "1mb" }));
   app.use(cookieParser());
 
@@ -111,7 +117,7 @@ export function createApp(config: Config, ports: Ports) {
 
   // "Today" is the date in the team's time zone. Tests may pin it with TODAY.
   const today = () => config.today ?? todayIn(config.timeZone);
-  api.get("/config", (_req, res) => res.json({ standInSignIn: ports.identity.kind === "stand-in", timeZone: config.timeZone, today: today() }));
+  api.get("/config", (_req, res) => res.json({ standInSignIn: ports.identity.kind === "stand-in", demo: !!config.demoPassword, timeZone: config.timeZone, today: today() }));
   api.use(authenticate(ports.database.db, ports.identity, config.bootstrapAdminEmail));
   api.use(adminRoutes(ports, config.timeZone));
   const db = ports.database.db;
