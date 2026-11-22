@@ -81,6 +81,15 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 - After importing past invoices, budget used on each SOW is correct, and a SOW at 80% or more appears on the warnings page.
 - Skipping, previewing, fixing and re-uploading work as in A-8.
 
+**A-9 Calendar.**
+- A calendar page shows, as a month grid that can be paged forwards and back, and as a list of the next 12 months grouped by month: subscription notice deadlines, subscription renewal dates, SOW end dates, and NDA and DPA valid-until dates.
+- Each entry shows the vendor, the agreement and the kind of date, is coloured by kind, and links to its record. Overdue entries are marked.
+- A SOW end date is its current one, including any approved change request.
+- A decided subscription (A-6) no longer shows its notice deadline for that term. Ended agreements and offboarded vendors do not appear.
+- Filters by vendor, owner ("mine only" is one click) and kind of date survive a reload. Everyone sees all entries.
+- A member can download the filtered entries as a calendar file (.ics) and open it in Outlook or Teams. It is a download only; there is no public or subscribable link.
+- Milestone due dates are not on the calendar.
+
 ## SOW delivery and money (M2)
 
 **M-1 Milestones.** A member can add, edit, deliver and cancel milestones on a SOW. Fixed-price milestones carry an amount, and the total may not exceed the budget. Late milestones are marked.

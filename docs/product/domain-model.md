@@ -50,6 +50,8 @@ Derived, not stored:
 - **SOW budget** = original `budget_minor` plus approved change requests. **Invoiced** = sum of its invoices. **Used %** = invoiced / budget.
 - **Compliance gap** (vendor): active vendor with `nda_required` and no NDA in place, or `dpa_required` and no DPA in place.
 
+**Calendar entries** (derived, not stored): subscription notice deadline and renewal date; SOW current end date; NDA and DPA `end_date`. Only for active agreements of vendors that are not offboarded. A subscription's notice deadline is left out once a renewal decision exists for the term.
+
 **Renewal decision**: `agreement_id*` (subscription), `decision*` (renew | renegotiate | terminate), `decided_on*`, `decided_by*`, `notes`. Clears the warning for that term. `renew` can roll the dates forward by the renewal term.
 
 **Document**: attached to an agreement or an RFP. `title*`, `file_name*`, `content_type*`, `size_bytes*`, `storage_key*`, `kind` (signed | draft | response | other), `extracted_text`. PDF, Word and Excel only, 25 MB at most.
