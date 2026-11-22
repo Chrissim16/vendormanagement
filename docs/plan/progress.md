@@ -15,11 +15,27 @@ Newest entry first. Written for the owner, in plain language.
 | M6 RFP | Done here; the AI draft and comparison are unproven until tried with the company's model |
 | M7 Ask a question | Done here; how well a real AI understands questions is unproven until tried with the company's model |
 | M8 Contract reading | Done here; how well a real AI reads a contract is unproven until tried with the company's model |
+| M10 Any currency | Written down 22 Nov 2026, not built yet; to be built before M9 |
 | M9 Move to Databricks | Not started; done at work |
 
-**Next:** M9 Move to Databricks, which is done at work and needs you. Everything that can be built outside the company is now built.
+**Next:** M10 Any currency, your change request of 22 Nov 2026. After that, M9 Move to Databricks, which is done at work and needs you.
 
 ## Log
+
+### 2026-11-22 Change request: any currency, euro as the main one
+You asked for the app to handle any currency, not only euros and pounds, with euro always the main one. After your answers it is written down as requirement M-8 and planned as M10, to be built before the move to Databricks.
+
+What it will do:
+
+- **A currency list in Settings.** It starts with euros, pounds, US dollars and Swedish, Norwegian and Danish kronor. An admin can add any other currency that uses cents, such as Swiss francs. Currencies without cents, such as the yen, are refused.
+- **One rate per currency, written as 1 euro = X**, the way banks publish it (1 EUR = 11.49 SEK). Settings shows who set each rate and when. Until someone enters the real rates, rough starting rates are used and every euro total says so.
+- **Euro totals first.** Every total that mixes currencies shows one euro amount, marked as converted, with a small line beneath naming the amount in each currency it contains. Lists show euros with the original amount in brackets.
+- **Unchanged:** an invoice is always in its agreement's currency, so a SOW's budget and what was invoiced against it are compared without conversion. Changing a rate never changes an invoice, only the euro totals.
+- Kronor are shown with their code (SEK, NOK, DKK) so they cannot be confused; the euro, the pound and the dollar keep their signs.
+
+What it costs: the change touches parts that are already built (Settings, the Money page and its exports, the dashboard, the monthly report, briefings, Ask, contract reading, the forms and the import), so it is a medium-sized piece of work rather than a small fix. Nothing else in the plan moves except that M9, the move to Databricks, waits until it is done; that is on purpose, so the move starts with the final database layout.
+
+Decided on your behalf (see `docs/open-questions.md`, Q87 to Q91): the starting rates; that kronor are shown by their code; that a contract amount written only as "kr" is left out because it does not say which kronor; that a currency can only be removed while nothing uses it; and that the pound rate already saved is carried over turned round.
 
 ### 2026-11-22 Three building blocks updated
 Installing the app reported eight known weaknesses, all rated moderate, in three of the outside building blocks it uses: the one that moves between pages, one used when making Excel files, and one used only by a tool for building. All three are now on versions without those weaknesses, and the install reports none. Nothing changes in how the app looks or works; the full set of automated checks passes. The notes about "deprecated" packages during install remain: those are old but working parts that other building blocks bring along, and are not weaknesses.

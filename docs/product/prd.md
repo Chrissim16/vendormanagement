@@ -57,8 +57,10 @@ ended) and can have its documents uploaded. The documents are stored inside Data
 Per SOW: fixed price or time and materials, budget, milestones (with payment amounts on
 fixed-price SOWs), change requests and extensions, named consultants, and invoices keyed in
 by hand against the SOW. The app shows budget versus invoiced. Day rates are held as a
-rate card per vendor and role. Subscriptions also receive invoices. Amounts are in EUR or
-GBP, with a EUR total using an exchange rate the admin sets. PO numbers are not tracked.
+rate card per vendor and role. Subscriptions also receive invoices. EUR is the main currency. Amounts can be in any
+currency on a list the admin keeps (GBP, USD, SEK, NOK and DKK to start with), and every
+total across currencies is shown in EUR, using one rate per currency that the admin sets.
+PO numbers are not tracked.
 
 ### 5.4 Performance from Jira
 Each helpdesk vendor has its own Jira Service Management board (Jira Cloud). The app

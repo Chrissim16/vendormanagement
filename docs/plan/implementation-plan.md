@@ -20,6 +20,7 @@ can click through. A milestone is done when:
 | M6 | RFP | Q-1 to Q-11 | M1; AI from M4 |
 | M7 | Ask a question | C-1 | M5, M6 |
 | M8 | Contract reading | E-1 | M1; AI from M4 |
+| M10 | Any currency (built before M9) | M-8, and the reworked M-6, M-7, E-1 | M2, M5, M7, M8 |
 | M9 | Move to Databricks | none new | all; needs the owner at work |
 
 X-1 to X-6 apply to every milestone. M2 and M3 touch different features and may be built in parallel.
@@ -59,6 +60,20 @@ Read-only query tools over the existing list queries, document text search, chat
 
 ## M8 Contract reading
 Field proposal from an uploaded document with source passages and confirm step.
+
+## M10 Any currency
+Change request of 22 Nov 2026. Built before M9, because the move to Databricks should start with the final database layout.
+Replaces the single pound rate with a currency list (M-8). What already built has to be reworked:
+- Database: a currencies table; every currency field (agreements, rate card lines, invoices, RFPs) refers to it instead of allowing only EUR and GBP; the pound rate moves out of settings, turned round to "1 EUR = X". One new migration.
+- Shared money code: amounts read, shown and totalled for any listed currency; one way of converting to euros used everywhere.
+- Settings page: the currency list with rates, adding and removing currencies, starting-rate notice.
+- Money page and its exports, invoice list totals: euro total first, the amounts per currency beneath it.
+- Dashboard, monthly report and its PDF, briefing and its PDF, and the AI prompts that receive these figures.
+- Agreement, rate card, RFP and import forms: choose from the list.
+- Ask: totals per currency and the figure check for every currency sign and code.
+- Contract reading: recognising amounts in every listed currency, and leaving "kr" alone out.
+- Sample data: a few vendors invoicing in USD, SEK, NOK and DKK, so the Money page shows the mix.
+- Tests and the acceptance checks for M-6, M-7, M-8, C-1 and E-1.
 
 ## M9 Move to Databricks
 Done at work, with limited AI assistance, so the preparation is done here first.

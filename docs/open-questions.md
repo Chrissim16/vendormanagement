@@ -24,7 +24,7 @@ wrong. Answered questions move to the bottom.
 | Q16 | After a change request is approved, can the SOW's budget or end date still be typed over directly? | No. From then on they change only through change requests, so "started at, now at" stays true. Before any approval they can be corrected freely. | M2 |
 | Q17 | Must every milestone on a fixed-price SOW have an amount? | No, the amount is optional. A milestone invoiced above its amount is marked rather than refused. | M2 |
 | Q18 | May a consultant's day rate be in pounds on a euro SOW? | Yes; the rate is shown in its own currency. Say if it should be refused instead. | M2 |
-| Q15 | The pound to euro rate starts at 1.17 until an admin sets it. | Fine as a starting value; set the real one on the Settings page. | M2 |
+| Q15 | The pound to euro rate starts at 1.17 until an admin sets it. | Replaced by Q87 (rough starting rates for every currency, flagged until an admin sets them). | M2 |
 | Q19 | How often should tickets be fetched from Jira? | Every hour while the app is running, plus "Sync now". One setting to change. | M3 |
 | Q20 | A ticket that never had any of the listed level 2 or level 3 statuses or labels: which level is it? | Level 1, solved by the first line. Level 1 values are therefore optional on the board link. | M3 |
 | Q21 | What exactly is the "backlog age" target, and the "SLA breaches" target? | Backlog: the oldest open ticket may be at most so many days old. SLA breaches: at most so many percent of the month's resolved tickets were late. | M3 |
@@ -93,6 +93,11 @@ wrong. Answered questions move to the bottom.
 | Q85 | Can the AI read the same document again? | Yes, at any time; the new reading takes the place of the old one on the page. A reading that was used or rejected cannot be used a second time. | M8 |
 | Q86 | Which documents can be read? | Those attached to an agreement, with real text in them (PDF, .docx, .xlsx). Not scans, not the old .doc and .xls formats, and not documents an RFP candidate sent. | M8 |
 | Q27 | How long are tickets kept? | 24 months after they were resolved, as the data model says. Open tickets are kept however old. | M3 |
+| Q87 | Which starting rates does each currency get? | Rough rates (1 EUR = 0.8550 GBP, 1.0800 USD, 11.5000 SEK, 11.7000 NOK, 7.4600 DKK), shown as "starting rate" until an admin saves the real one. | M10 |
+| Q88 | How is a currency without a single symbol shown? | € for euros, £ for pounds, $ for US dollars; every other currency by its code (SEK 85,000.00), so Swedish, Norwegian and Danish kronor cannot be mixed up. | M10 |
+| Q89 | In a contract, what if an amount says only "kr", or "$" when it could be another dollar? | "kr" alone is left out and named, since it does not say which kronor. "$" is read as US dollars. Say if your contracts write it differently. | M10 |
+| Q90 | Can a currency be removed from the list? | Only while nothing uses it (no agreement, rate card line or RFP). EUR can never be removed. | M10 |
+| Q91 | The pound rate already saved in Settings | Carried over the other way round (1 GBP = 1.17 EUR becomes 1 EUR = 0.8547 GBP), keeping who set it and when. | M10 |
 
 ## To check at work before M9
 
@@ -123,6 +128,7 @@ These cannot be answered from outside the company. None block the build.
 | 2026-11-21 | Contract lifecycle? | A light status only. |
 | 2026-11-21 | Spend? | Invoices keyed in by the owner against a SOW or subscription. No approval step. |
 | 2026-11-21 | Currency? | EUR mainly, some GBP. EUR total with an admin-set rate. |
+| 2026-11-22 | Currency, again? | Any currency, EUR always the main one. List starts with EUR, GBP, USD, SEK, NOK, DKK; an admin adds others (two-decimal ones only). One current rate each, typed as 1 EUR = X. Totals in euros first, the amount per currency beneath. An invoice stays in its agreement's currency. Rough starting rates, flagged. (M-8) |
 | 2026-11-21 | Jira? | Jira Cloud, Jira Service Management with SLAs. One board per vendor. Escalation by status or label. A service account exists. |
 | 2026-11-21 | Metrics? | First response time, first-line closure rate, SLA breaches, backlog age, satisfaction. Monthly, with quarterly review. |
 | 2026-11-21 | Service credits? | Flag only; calculation is on the backlog. |

@@ -11,7 +11,7 @@ Fields marked `*` are required. Every table also has `id`, `created_at`, `create
 - There is always at least one active admin. If the app is ever found without one, the `BOOTSTRAP_ADMIN_EMAIL` person is made admin at their next visit.
 - The deployed app refuses to start unless `BOOTSTRAP_ADMIN_EMAIL` is a real address.
 
-**Settings** (admin): `gbp_to_eur_rate*`, warning windows (`notice_days` 90, `sow_end_days` 30, `budget_warning_pct` 80), scorecard criteria.
+**Settings** (admin): the currency list with rates to euros (M-8), warning windows (`notice_days` 90, `sow_end_days` 30, `budget_warning_pct` 80), scorecard criteria.
 
 ## Vendors
 
@@ -35,7 +35,7 @@ One table, with a `kind`.
 
 **Agreement**: `vendor_id*`, `kind*` (msa | sow | subscription | nda | dpa), `title*`, `reference`,
 `status*` (draft | in_negotiation | out_for_signature | active | ended), `owner_user_id*`,
-`signed_on`, `start_date`, `end_date`, `currency*` (EUR | GBP), `notes`, and per kind:
+`signed_on`, `start_date`, `end_date`, `currency*` (a currency on the list, default EUR), `notes`, and per kind:
 
 | Kind | Extra fields | Rules |
 |---|---|---|
@@ -86,7 +86,16 @@ Warnings are sorted with what is already wrong first, then the soonest date. The
 
 ## SOW delivery and money
 
-**Settings** (admin, one set for the whole team): `gbp_to_eur_rate*` (up to four decimals, default 1.17), `notice_days*` (default 90), `sow_end_days*` (default 30), `budget_warning_pct*` (default 80). The defaults apply until an admin first saves. The Renewals page starts at `notice_days` and can be set to another window for a look further ahead. Changes are recorded in the audit log.
+**Settings** (admin, one set for the whole team): `notice_days*` (default 90), `sow_end_days*` (default 30), `budget_warning_pct*` (default 80). The defaults apply until an admin first saves. The Renewals page starts at `notice_days` and can be set to another window for a look further ahead. Changes are recorded in the audit log.
+
+**Currency** (admin, M-8): `code*` (three-letter ISO 4217 code, unique), `name*`, `units_per_eur*` (how many of this currency one euro buys, up to four decimals, above zero; stored as a whole number of ten-thousandths), `rate_set_at`, `rate_set_by` (empty while the starting rate is in use).
+- EUR is always on the list with `units_per_eur` 1 and cannot be changed or removed.
+- The list starts with EUR, GBP, USD, SEK, NOK and DKK, with rough starting rates (GBP 0.8550, USD 1.0800, SEK 11.5000, NOK 11.7000, DKK 7.4600). A rate is a starting rate until an admin first saves it, and every euro total that uses a starting rate says so.
+- An admin may add a currency from the standard ISO 4217 list only if it has two decimals. Its rate is required when it is added.
+- A currency can be removed only while no agreement, rate card line or RFP uses it.
+- Adding, changing the rate of and removing a currency are recorded in the audit log, with the old and new rate.
+- Every stored `currency` field (agreement, rate card line, RFP) refers to a currency on this list.
+- When the list replaced the single pound rate, a pound rate an admin had saved was carried over as its inverse (1 GBP = 1.17 EUR became 1 EUR = 0.8547 GBP), keeping who set it and when.
 
 **Milestone**: `sow_id*`, `title*`, `due_date*`, `status*` (open | delivered | cancelled), `delivered_on`, `amount_minor` (fixed-price SOWs only).
 - On a fixed-price SOW the amounts of the milestones that are not cancelled may not add up to more than the SOW budget. The budget may not be cut below that sum either.
@@ -120,9 +129,9 @@ Warnings are sorted with what is already wrong first, then the soonest date. The
 
 **Budget view** (worked out): invoiced = the sum of the SOW's invoices; remaining = budget minus invoiced; used % is rounded down, so 79.9% never reads as 80%. From `budget_warning_pct` the SOW is close to budget; above 100% it is over budget. The comparison is exact, in cents.
 
-**Money**: whole cents plus currency. Totals are shown per currency, plus a euro total using `gbp_to_eur_rate`, labelled as converted. The pounds are converted once, on their sum, and rounded to the cent. Changing the rate changes converted totals only; no stored amount changes.
+**Money**: whole cents plus a currency code from the currency list. A total across currencies is one euro total labelled as converted, with the amount per original currency beneath it. Each currency is converted once, on its own sum (`sum ÷ units_per_eur`), and rounded to the cent; the euro total is the sum of those. Changing a rate changes converted totals only; no stored amount changes. Shown with € (EUR), £ (GBP) or $ (USD) before the amount, and with the code for every other currency (SEK 85,000.00).
 
-**Spend** (worked out): invoiced amounts in a period by invoice date, per vendor and per month, per currency and as a euro total. Without dates the period is the last twelve months up to today, from the first of the month.
+**Spend** (worked out): invoiced amounts in a period by invoice date, per vendor and per month, as a euro total with the amount per original currency. Without dates the period is the last twelve months up to today, from the first of the month.
 
 ## Performance
 
@@ -253,7 +262,7 @@ per criterion a `score` 1 to 5, a `vendor_comment` and an `internal_note`, plus 
 
 ## RFP
 
-**RFP**: `title*`, `need*`, `budget_minor`, `currency`, `sponsor`, `demand_approved_on`, `target_decision_date`, `owner_user_id*`,
+**RFP**: `title*`, `need*`, `budget_minor`, `currency` (a currency on the list), `sponsor`, `demand_approved_on`, `target_decision_date`, `owner_user_id*`,
 `stage*` (drafting | in_review | approved | issued | evaluating | decided | cancelled), `written_weight*`, `demo_weight*` (sum 100; 70 and 30 to start with), `cancel_reason`.
 - Stages: a member moves an RFP between drafting, in review and approved. The first issue to a candidate makes it issued, the first answer or score makes it evaluating, the decision makes it decided. Any running RFP can be cancelled with a reason. A decided or cancelled RFP does not change any more.
 - It can go to review once it has a section, a question, criteria for every part that counts and weights that add up.
@@ -301,8 +310,8 @@ per criterion a `score` 1 to 5, a `vendor_comment` and an `internal_note`, plus 
 ## Contract reading
 
 A **reading** (E-1) is an AI suggestion about one document attached to an agreement (kind `contract_fields`, the document as its subject). It holds, for each of kind, title, signed on, start date, end or renewal date, notice period in days, amount and currency, either nothing or a value with the passage it was read from.
-- The model's answer is kept as given, but only what the document bears out is shown or can be used. A value is kept when its passage stands in the document word for word, beginning and ending at whole words and whole numbers, and itself states the value: a date as a whole date ("4 January 2027", "the 9th of March 2027", "2027-03-09", or "09/03/2027" read day first); an amount as a number with its currency right next to it (€, £, EUR, GBP, euros, pounds); a notice period as a number of days in a sentence about notice, cancelling or terminating (months and working days are not converted); a title that occurs in its own passage; a kind by the words the document uses for it ("statement of work", "subscription", "master services agreement"). A value that fails this is left out and named on the page as left out; the other values stand.
-- An amount is its number and its currency together. The currency of an amount is the one written next to it in its passage, whatever else the model answered; an amount in any other currency than euros or pounds is left out. The same number in another currency differs. Amount and currency are taken over together or not at all, and a currency read without an amount cannot replace the currency of an amount the agreement already holds.
+- The model's answer is kept as given, but only what the document bears out is shown or can be used. A value is kept when its passage stands in the document word for word, beginning and ending at whole words and whole numbers, and itself states the value: a date as a whole date ("4 January 2027", "the 9th of March 2027", "2027-03-09", or "09/03/2027" read day first); an amount as a number with its currency right next to it: the code of a currency on the list (EUR, GBP, USD, SEK, ...), the symbols €, £, $ or US$ ($ is read as US dollars), or the name (euros, pounds, dollars, Swedish kronor, Norwegian kroner, Danish kroner, and the name of any currency an admin added); "kr" alone says no country and is not an amount; a notice period as a number of days in a sentence about notice, cancelling or terminating (months and working days are not converted); a title that occurs in its own passage; a kind by the words the document uses for it ("statement of work", "subscription", "master services agreement"). A value that fails this is left out and named on the page as left out; the other values stand.
+- An amount is its number and its currency together. The currency of an amount is the one written next to it in its passage, whatever else the model answered; an amount in a currency that is not on the currency list is left out. The same number in another currency differs. Amount and currency are taken over together or not at all, and a currency read without an amount cannot replace the currency of an amount the agreement already holds.
 - Nothing is worked out from other values.
 - The first 30,000 characters of the document are read; the page says when a document is longer.
 - Where a value goes depends on the agreement's kind: the amount is a SOW's budget or a subscription's annual value; the notice period exists for subscriptions only; an MSA has no end date and an NDA or DPA no start date. The kind itself is compared and never changed.
