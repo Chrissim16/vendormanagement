@@ -10,6 +10,15 @@ export const DOCUMENT_EXTENSIONS = ["pdf", "doc", "docx", "xls", "xlsx"];
 
 const extensionOf = (file: File) => (file.name.includes(".") ? file.name.split(".").pop()!.toLowerCase() : "");
 
+export const STILL_SENDING = "Files are still being sent. Wait until they are done, then drop again.";
+export const ONE_AT_A_TIME = "Drop one file at a time.";
+
+/** Why the files for a place that takes one file cannot be sent, or null when the one file can. */
+export function oneFileProblem(files: File[], accept: string[]): string | null {
+  if (files.length !== 1) return ONE_AT_A_TIME;
+  return fileProblem(files[0]!, accept);
+}
+
 /** Why a file cannot be sent to a place that takes these extensions, or null when it can. The server checks again. */
 export function fileProblem(file: File, accept: string[]): string | null {
   const ext = extensionOf(file);
@@ -20,7 +29,9 @@ export function fileProblem(file: File, accept: string[]): string | null {
 }
 
 // X-7: whether a file from the computer is being dragged over the window. Counted over
-// enter and leave, because moving between elements fires both; reset by any drop.
+// enter and leave, because moving between elements fires both (the new element's enter
+// first); reset by any drop. Safari leaves relatedTarget empty on every leave, so an empty
+// one counts as leaving the window only when the pointer is at the window's edge.
 let depth = 0;
 const listeners = new Set<() => void>();
 const set = (n: number) => {
@@ -37,7 +48,11 @@ const carriesFiles = (e: DragEvent | React.DragEvent) => Array.from(e.dataTransf
  */
 export function installFileDropGuard() {
   window.addEventListener("dragenter", (e) => carriesFiles(e) && set(depth + 1));
-  window.addEventListener("dragleave", (e) => carriesFiles(e) && set(e.relatedTarget ? depth - 1 : 0));
+  window.addEventListener("dragleave", (e) => {
+    if (!carriesFiles(e)) return;
+    const atEdge = e.clientX <= 0 || e.clientY <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight;
+    set(!e.relatedTarget && atEdge ? 0 : depth - 1);
+  });
   window.addEventListener("dragover", (e) => {
     if (!carriesFiles(e) || e.defaultPrevented) return;
     // Not over a drop place: show that nothing happens here.
@@ -51,12 +66,12 @@ export function installFileDropGuard() {
   window.addEventListener("dragend", () => set(0));
 }
 
-/** True while a file is dragged anywhere over the window. */
 const subscribe = (l: () => void) => {
   listeners.add(l);
   return () => void listeners.delete(l);
 };
 const draggingNow = () => depth > 0;
+/** True while a file is dragged anywhere over the window. */
 export function useFileDragging() {
   return useSyncExternalStore(subscribe, draggingNow);
 }
@@ -108,8 +123,8 @@ export function DropZone({
         setOver(false);
         const files = Array.from(e.dataTransfer.files);
         if (!files.length) return;
-        if (busy) onProblem("Files are still being sent. Wait until they are done, then drop again.");
-        else if (!multiple && files.length > 1) onProblem("Drop one file at a time.");
+        if (busy) onProblem(STILL_SENDING);
+        else if (!multiple && files.length > 1) onProblem(ONE_AT_A_TIME);
         else onFiles(files);
       }}
     >
@@ -118,7 +133,7 @@ export function DropZone({
         aria-hidden="true"
         data-drop-zone={label}
         className={clsx(
-          "pointer-events-none absolute -inset-2 z-10 flex items-center justify-center rounded-2xl border-2 border-dashed border-accent transition-[opacity,visibility] duration-150 ease-out",
+          "pointer-events-none absolute -inset-2 z-10 flex items-start justify-center rounded-2xl pt-2 border-2 border-dashed border-accent transition-[opacity,visibility] duration-150 ease-out",
           shown ? "visible opacity-100" : "invisible opacity-0",
         )}
       >
@@ -134,7 +149,8 @@ export function DropZone({
  * own; the fine ones are sent, each refused one is named with its reason, and a message says
  * how many were attached. One file refused on its own keeps its plain message.
  */
-export function useAttachEach(send: (file: File) => Promise<unknown>, accept: string[] = DOCUMENT_EXTENSIONS) {
+export function useAttachEach(send: (file: File) => Promise<unknown>, options: { accept?: string[]; after?: () => unknown } = {}) {
+  const accept = options.accept ?? DOCUMENT_EXTENSIONS;
   const [busy, setBusy] = useState(false);
   const [problems, setProblems] = useState<string[]>([]);
   const running = useRef(false);
@@ -162,6 +178,8 @@ export function useAttachEach(send: (file: File) => Promise<unknown>, accept: st
     }
     running.current = false;
     setBusy(false);
+    // Lists and counts elsewhere are fetched once, after the last file, not after each one.
+    if (attached) void options.after?.();
     if (attached) toast.success(attached === 1 ? `Attached ${only}` : `Attached ${attached} documents`);
     setProblems(files.length === 1 ? refused.map((r) => r.why) : refused.map((r) => `${r.name}: ${r.why}`));
   };

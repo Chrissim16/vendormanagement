@@ -6,7 +6,7 @@ import { formatDate, formatDateTime } from "../../lib/format";
 import { Button, ConfirmButton, ErrorState, Pill, Segmented, Select } from "../../platform/ui";
 import { linkClass, Nothing, Section } from "../overview/parts";
 import { AiLabel } from "../scorecards/parts";
-import { DOCUMENT_EXTENSIONS, DropZone, FileButton, FileProblems, fileProblem, useAttachEach } from "../../platform/files";
+import { DOCUMENT_EXTENSIONS, DropZone, FileButton, FileProblems, oneFileProblem, STILL_SENDING, useAttachEach } from "../../platform/files";
 import { kb, textareaClass, useAdoptRfp, useChoice, useRfpChange } from "./parts";
 
 interface UploadAnswer {
@@ -113,21 +113,18 @@ function CandidateResponse({ rfp, candidate: c }: { rfp: RfpDetail; candidate: C
   // Q-6, X-7: the answer sheet is one file; other documents may be several, each sent in turn.
   const docs = useAttachEach(async (file) => adopt(await api<RfpDetail>(`/rfp-candidates/${c.id}/documents`, { file })));
   const busy = sheetBusy || docs.busy;
-  const show = (message: string) => {
-    docs.setProblems([]);
+  // The sheet's problems show under its row; the documents' with the Documents section, where they were dropped.
+  const showSheet = (message: string) => {
     setResult(null);
     setProblem(message);
   };
   const sendSheet = async (files: File[]) => {
-    if (busy) return show("Files are still being sent. Wait until they are done, then drop again.");
-    if (files.length > 1) return show("Drop one file at a time.");
-    const [file] = files;
-    if (!file) return;
-    const why = fileProblem(file, ["xlsx"]);
-    if (why) return show(why);
+    if (busy) return showSheet(STILL_SENDING);
+    const why = oneFileProblem(files, ["xlsx"]);
+    if (why) return showSheet(why);
+    const file = files[0]!;
     setSheetBusy(true);
     setProblem(null);
-    docs.setProblems([]);
     setResult(null);
     try {
       const up = await api<UploadAnswer>(`/rfp-candidates/${c.id}/response`, { file });
@@ -140,15 +137,20 @@ function CandidateResponse({ rfp, candidate: c }: { rfp: RfpDetail; candidate: C
     }
   };
   const attach = (files: File[]) => {
-    if (sheetBusy) return show("Files are still being sent. Wait until they are done, then drop again.");
-    setProblem(null);
-    setResult(null);
+    if (sheetBusy) return docs.setProblems([STILL_SENDING]);
     void docs.attach(files);
   };
   const removeDoc = useRfpChange(rfp.id, (id: string) => api<RfpDetail>(`/rfp-documents/${id}`, { method: "DELETE" }), { done: "Document removed" });
   return (
     <>
-      <DropZone enabled={open} label="Drop the answer sheet here" busy={busy} onFiles={(f) => void sendSheet(f)} onProblem={show} className="flex flex-wrap items-center gap-2.5">
+      <DropZone
+        enabled={open}
+        label="Drop the answer sheet here"
+        busy={busy}
+        onFiles={(f) => void sendSheet(f)}
+        onProblem={showSheet}
+        className="flex flex-wrap items-center gap-2.5"
+      >
         <p className="min-w-0 flex-1 text-ink-2">
           <span className="font-semibold text-ink">
             {c.answered} of {rfp.questions.length} questions answered.
@@ -156,29 +158,18 @@ function CandidateResponse({ rfp, candidate: c }: { rfp: RfpDetail; candidate: C
           {c.responseReceivedOn ? `Response received on ${formatDate(c.responseReceivedOn)}.` : `Issued on ${formatDate(c.issuedOn!)}; no response yet.`}
         </p>
         {open && (
-          <>
-            <FileButton
-              label={c.answered ? "Upload the answer sheet again" : "Upload answer sheet"}
-              busyLabel="Reading the sheet"
-              chooserLabel={`Choose the answer sheet of ${c.vendorName}`}
-              accept={["xlsx"]}
-              busy={sheetBusy}
-              primary={!c.answered}
-              onFiles={(f) => void sendSheet(f)}
-            />
-            <FileButton
-              label="Attach document"
-              chooserLabel={`Choose a document of ${c.vendorName} to attach`}
-              accept={DOCUMENT_EXTENSIONS}
-              multiple
-              busy={docs.busy}
-              onFiles={attach}
-            />
-          </>
+          <FileButton
+            label={c.answered ? "Upload the answer sheet again" : "Upload answer sheet"}
+            busyLabel="Reading the sheet"
+            chooserLabel={`Choose the answer sheet of ${c.vendorName}`}
+            accept={["xlsx"]}
+            busy={sheetBusy}
+            primary={!c.answered}
+            onFiles={(f) => void sendSheet(f)}
+          />
         )}
       </DropZone>
       {problem && <ErrorState message={problem} />}
-      <FileProblems problems={docs.problems} />
       {result && (
         <p role="status" className="rounded-2xl bg-sunk px-5 py-4">
           <span className="font-semibold">
@@ -206,8 +197,23 @@ function CandidateResponse({ rfp, candidate: c }: { rfp: RfpDetail; candidate: C
         </Section>
       )}
 
-      <DropZone enabled={open} label="Drop to attach" multiple busy={busy} onFiles={attach} onProblem={show}>
-        <Section title="Documents">
+      <DropZone enabled={open} label="Drop to attach" multiple busy={busy} onFiles={attach} onProblem={(m) => docs.setProblems([m])}>
+        <Section
+          title="Documents"
+          more={
+            open && (
+              <FileButton
+                label="Attach document"
+                chooserLabel={`Choose a document of ${c.vendorName} to attach`}
+                accept={DOCUMENT_EXTENSIONS}
+                multiple
+                busy={docs.busy}
+                onFiles={attach}
+              />
+            )
+          }
+        >
+          <FileProblems problems={docs.problems} />
           {c.documents.length === 0 ? (
             <Nothing>No documents. The uploaded answer sheet is kept here, and anything else the candidate sent (PDF, Word or Excel up to 25 MB) can be attached.</Nothing>
           ) : (

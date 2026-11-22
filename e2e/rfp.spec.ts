@@ -508,6 +508,10 @@ test.describe("X-7 dropping files on a response", () => {
     await expect(page.getByText("Attached 2 documents")).toBeVisible();
     await expect(docs.getByRole("listitem")).toHaveCount(3);
     await expect(page.getByRole("alert")).toContainText("logo.png: Only PDF, Word and Excel files can be attached.");
+    // The "Attach document" button is part of the documents' drop place, not the answer sheet's.
+    await dropFiles(page, page.getByRole("button", { name: "Attach document" }), [pdf("Terms.pdf"), pdf("Brochure.pdf")]);
+    await expect(page.getByText("Attached 2 documents")).toBeVisible();
+    await expect(docs.getByRole("listitem")).toHaveCount(5);
     await expectAccessible(page);
 
     // Once the RFP is closed nothing can be dropped on it.
@@ -517,11 +521,11 @@ test.describe("X-7 dropping files on a response", () => {
       .getByRole("group", { name: "Candidate" })
       .getByRole("button", { name: new RegExp(a.vendorName) })
       .click();
-    await expect(docs.getByRole("listitem")).toHaveCount(3);
+    await expect(docs.getByRole("listitem")).toHaveCount(5);
     await page.locator("body").dispatchEvent("dragenter", { dataTransfer: await dragFiles(page, [sheet]) });
     await expect(page.locator("[data-drop-zone]")).toHaveCount(0);
     await dropFiles(page, page.getByRole("heading", { name: "Documents", exact: true }), [pdf("Late.pdf")]);
-    await expect(docs.getByRole("listitem")).toHaveCount(3);
+    await expect(docs.getByRole("listitem")).toHaveCount(5);
   });
 });
 

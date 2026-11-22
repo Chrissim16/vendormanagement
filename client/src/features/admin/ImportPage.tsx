@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api, messageOf } from "../../lib/api";
-import { DropZone, FileButton, fileProblem } from "../../platform/files";
+import { DropZone, FileButton, oneFileProblem } from "../../platform/files";
 import { Button, EmptyState, ErrorState, PageHeader, Pill } from "../../platform/ui";
 
 interface Row {
@@ -38,16 +38,13 @@ export function ImportPage() {
   };
   // A-8, X-7: one file, picked or dropped, checked before it is sent.
   const choose = (files: File[]) => {
-    if (run.isPending) return setProblem("The file is still being sent. Wait until it is done, then drop again.");
-    if (files.length > 1) return setProblem("Drop one file at a time.");
-    const [f] = files;
-    if (!f) return;
-    const why = fileProblem(f, ["xlsx"]);
+    const why = oneFileProblem(files, ["xlsx"]);
     if (why) return setProblem(why);
     setProblem(null);
-    setFile(f);
-    run.mutate({ f, apply: false });
+    setFile(files[0]!);
+    run.mutate({ f: files[0]!, apply: false });
   };
+
   return (
     <>
       <PageHeader context="Bring in vendors and agreements from Excel" title="Import">

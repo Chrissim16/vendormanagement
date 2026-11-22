@@ -49,13 +49,11 @@ function Documents({ a }: { a: AgreementDetail }) {
   const [problem, setProblem] = useState<string | null>(null);
   const done = () => qc.invalidateQueries();
   // A-5, X-7: one or several files, picked or dropped, each checked and sent in turn.
-  const upload = useAttachEach(async (file) => {
-    await api<DocumentInfo>(`/agreements/${a.id}/documents`, { file });
-    await done();
-  });
+  const upload = useAttachEach((file) => api<DocumentInfo>(`/agreements/${a.id}/documents`, { file }), { after: done });
+  // A refused drop is listed with the refused files, and gives way to the next attach's outcome.
   const show = (message: string) => {
-    upload.setProblems([]);
-    setProblem(message);
+    setProblem(null);
+    upload.setProblems([message]);
   };
   const attach = (files: File[]) => {
     setProblem(null);
@@ -265,7 +263,7 @@ export function AgreementPage() {
       <div className="grid grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] gap-14">
         <div className="flex min-w-0 flex-col gap-10">
           {(a.kind === "sow" || a.kind === "subscription") && <InvoicesSection agreement={a} />}
-          <Documents a={a} />
+          <Documents key={a.id} a={a} />
           {a.notes && (
             <Section title="Notes">
               <p className="whitespace-pre-wrap text-ink-2">{a.notes}</p>

@@ -23,7 +23,7 @@ can click through. A milestone is done when:
 | M8a | Dropping files | X-7 | M1, M6 |
 | M9 | Move to Databricks | none new | all; needs the owner at work |
 
-X-1 to X-6 apply to every milestone. M2 and M3 touch different features and may be built in parallel.
+X-1 to X-7 apply to every milestone. M2 and M3 touch different features and may be built in parallel.
 
 ## M0 Foundation
 - Check current Databricks Apps and AppKit docs, scaffold the app, update `architecture/overview.md` to the real layout.

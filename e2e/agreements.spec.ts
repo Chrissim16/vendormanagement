@@ -503,6 +503,40 @@ test.describe("X-7 dropping files", () => {
     });
     await page.locator("body").dispatchEvent("dragenter", { dataTransfer: text });
     await expect(outline).toBeHidden();
+    // …and dragging text into a field is left to the browser.
+    const textPrevented = await page.getByRole("combobox", { name: "Find anything, or ask a question" }).evaluate((field) => {
+      const dt = new DataTransfer();
+      dt.setData("text/plain", "some words");
+      const over = new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: dt });
+      field.dispatchEvent(over);
+      return over.defaultPrevented;
+    });
+    expect(textPrevented).toBe(false);
+
+    // Moving from one part of the page into another keeps the outline, also when the browser
+    // leaves out where the pointer went (as Safari does); leaving at the window's edge ends it.
+    const move = (step: "in" | "across" | "out") =>
+      page.evaluate((step) => {
+        const dt = new DataTransfer();
+        dt.items.add(new File(["%PDF-1.4"], "Moving.pdf", { type: "application/pdf" }));
+        const h1 = document.querySelector("h1")!;
+        const fire = (el: Element, type: string, relatedTarget: Element | null, at = 300) =>
+          el.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt, relatedTarget, clientX: at, clientY: at }));
+        if (step === "in") fire(document.body, "dragenter", null);
+        if (step === "across") {
+          fire(h1, "dragenter", document.body);
+          fire(document.body, "dragleave", h1);
+          fire(document.body, "dragenter", h1);
+          fire(h1, "dragleave", null);
+        }
+        if (step === "out") fire(document.body, "dragleave", null, 0);
+      }, step);
+    await move("in");
+    await expect(outline).toBeVisible();
+    await move("across");
+    await expect(outline).toBeVisible();
+    await move("out");
+    await expect(outline).toBeHidden();
 
     const section = page.getByRole("heading", { name: "Documents", exact: true });
     await dropFiles(page, section, [

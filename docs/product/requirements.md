@@ -138,7 +138,7 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 
 **Q-5 Issue.** For each shortlisted candidate the app exports the RFP as Word and the question list as an Excel answer sheet; neither holds the budget or the sponsor. Issuing to a candidate without an NDA in place shows a warning that must be acknowledged. Once issued, questions, criteria and the weights of the two parts are locked for good.
 
-**Q-6 Responses.** A member uploads a candidate's filled answer sheet. The app matches answers to questions by number and wording, never onto a question the row was not written for, and shows any it could not match for manual entry. Other response documents can be attached.
+**Q-6 Responses.** A member uploads a candidate's filled answer sheet. The app matches answers to questions by number and wording, never onto a question the row was not written for, and shows any it could not match for manual entry. Other response documents can be attached, several at once (X-7).
 
 **Q-7 AI comparison.** Per question the AI summarises each candidate's answer and the differences between them, and proposes a score per candidate and criterion with a reason that quotes the answer. The proposal gives no score by itself, and the page says when an answer has changed since.
 

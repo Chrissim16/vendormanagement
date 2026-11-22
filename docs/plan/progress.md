@@ -33,6 +33,13 @@ What you can do now:
 - **One file only where one is meant.** The answer sheet and the Excel import take one file. Dropping several there says "Drop one file at a time", and nothing is sent.
 - **Missing the spot does no harm.** A file dropped anywhere else on a page is ignored. Before, the browser would open the file itself and take you out of the app. A drop while files are still being sent is refused with a request to wait. Once an RFP is decided or cancelled, its responses take no drop.
 
+How it was checked: an independent tester used the app in a browser. It dropped mixes of good, wrong-type, fake and too-large files, accented file names, files dropped beside the drop places and onto a half-typed answer, two drops in quick succession, a closed RFP, the keyboard alone, dark mode and a narrow window. Every point passed. An independent reviewer read the code and found nothing that had to be fixed and six things that should be; all six are fixed. The two that mattered:
+
+- **On an RFP's responses, "Attach document" sat inside the answer sheet's drop place.** Dropping PDFs on that button was treated as an answer sheet and refused. The button now sits with the documents, in their own drop place, and refused files are listed there too.
+- **In Safari the outline could vanish as soon as the pointer moved.** Safari reports moving across the page differently from Chrome. The app now only takes it as leaving the window when the pointer is really at the edge. Safari and Firefox could not be tried here; Chrome and Edge were.
+
+The words "Drop to attach" now sit at the top of the outline, so they stay in sight on a long list of documents.
+
 Also fixed along the way: on an RFP, a button pressed right after another one could be quietly ignored for a moment while the app refreshed other lists in the background. Buttons now work again as soon as the RFP is saved. This showed up as an automated check that failed now and then.
 
 Decided on your behalf (see `docs/open-questions.md`, Q87 and Q88): several files are sent one after another, and one refused file does not stop the others. A file dropped on the answer sheet is checked exactly as one chosen with the button.
@@ -442,3 +449,6 @@ First version of the brief, requirements, plan and agent workflow. No applicatio
 - One older check (two admins demoting each other at the same instant) failed once in seven runs on the real database while the machine was busy, and passed every other time. To be watched; if it recurs it needs a proper look.
 - Two people changing the same SOW at the very same moment has been reasoned through and guarded, but not tried with two real people.
 - Deploy the app once at work as a rehearsal (open question Q3). With M1 done there is now something real to try there.
+- Two automated checks failed once each while the whole set ran, and passed on their own and in the next full run: choosing "Ask: …" with the keyboard in the top search field, and searching the RFP list by title. Both look like timing when the computer is busy; to be looked into if they fail again. (Found during M8a.)
+- A workbook for the Excel import or an answer sheet is checked against 25 MB before sending, but the app refuses workbooks over 10 MB. A file between the two is sent and then refused in plain words. (Found during M8a.)
+- Dropping or picking several documents refreshes the page once at the end; if one file of many is refused by the app, the others are still attached.
