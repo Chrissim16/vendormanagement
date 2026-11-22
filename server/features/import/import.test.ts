@@ -172,7 +172,7 @@ describe("A-8 import", () => {
 
   it("imports the valid rows, and importing the same file again adds nothing", async () => {
     const file = await workbook(
-      [v("Import Delta", "consultancy", "prospect", MEMBER, "Delta B.V.", "https://delta.example.test", "Deltaweg 1", "", "2611 AA", "Delft", "nl", "nl 000.222.333 b01", "no", "yes", "no")],
+      [v("Import Delta", "consultancy", "prospect", MEMBER, "Delta B.V.", "https://delta.example.test", "Testweg 1", "", "2611 AA", "Delft", "nl", "nl 000.222.333 b01", "no", "yes", "no")],
       [
         a("Import Delta", "SOW", "Delta SOW", { 4: "active", 7: "2026-01-10", 8: "2026-02-01", 9: "2026-12-31", 10: "Delta MSA", 11: "time_and_materials", 12: 64000 }),
         a("Import Delta", "MSA", "Delta MSA", { 4: "active", 7: "2026-01-10" }),
@@ -188,7 +188,7 @@ describe("A-8 import", () => {
     expect(vendor).toMatchObject({
       type: "consultancy",
       status: "prospect",
-      addressLine1: "Deltaweg 1",
+      addressLine1: "Testweg 1",
       addressLine2: null,
       postalCode: "2611 AA",
       city: "Delft",

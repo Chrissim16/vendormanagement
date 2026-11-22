@@ -98,7 +98,7 @@ test.describe("V-5 address and VAT number", () => {
     const dialog = page.getByRole("dialog", { name: "Add vendor" });
     await dialog.getByLabel("Name", { exact: true }).fill(name);
     await dialog.getByLabel("Type").selectOption("software");
-    await dialog.getByLabel("Street and number").fill("Havenkade 3");
+    await dialog.getByLabel("Street and number").fill("Testkade 3");
     await dialog.getByLabel("Second street line").fill("Unit B");
     await dialog.getByLabel("Postal code").fill("2511 CV");
     await dialog.getByLabel("City").fill("The Hague");
@@ -111,7 +111,7 @@ test.describe("V-5 address and VAT number", () => {
     await dialog.getByRole("button", { name: "Add vendor" }).click();
     const panel = page.getByRole("region", { name });
     const address = panel.locator("address");
-    await expect(address).toHaveText(/Havenkade 3\s*Unit B\s*2511 CV The Hague\s*NL/);
+    await expect(address).toHaveText(/Testkade 3\s*Unit B\s*2511 CV The Hague\s*NL/);
     await expect(panel).toContainText("NL123456789B99");
 
     const bare = await newVendor(request, "No address");
@@ -294,6 +294,20 @@ test.describe("V-7 contact roles", () => {
     await dialog.getByLabel("Roles (optional)").press("Enter");
     await dialog.getByRole("button", { name: "Add contact" }).click();
     await expect(panel.getByRole("listitem").filter({ hasText: "Kim Wol" })).toContainText(fresh);
+
+    // Text typed but not confirmed with Enter is taken when the box is left; Tab moves on to the next control.
+    await panel.getByRole("button", { name: "Add contact" }).click();
+    dialog = page.getByRole("dialog", { name: "Add contact" });
+    await dialog.getByLabel("Name", { exact: true }).fill("Lee Ford");
+    await dialog.getByLabel("Roles (optional)").fill("technical contact");
+    await dialog.getByLabel("Roles (optional)").press("Tab");
+    await expect(dialog.getByLabel("Primary contact")).toBeFocused();
+    await expect(dialog.getByRole("list", { name: "Chosen roles" })).toContainText("Technical Contact");
+    // Enter in an untouched roles box sends the form, and adds no role.
+    await dialog.getByLabel("Roles (optional)").focus();
+    await dialog.getByLabel("Roles (optional)").press("Enter");
+    await expect(panel.getByRole("listitem").filter({ hasText: "Lee Ford" })).toContainText("Technical Contact");
+    await expect(panel.getByRole("listitem").filter({ hasText: "Lee Ford" })).not.toContainText("Account Manager");
     const roles = await (await request.get(`${BASE}/api/contact-roles`, { headers: { "x-dev-user": MEMBER, cookie: "" } })).json();
     expect(roles.filter((r: { name: string }) => r.name.toLowerCase() === fresh.toLowerCase())).toHaveLength(1);
     await expectAccessible(page);
@@ -341,5 +355,16 @@ test.describe("V-7 contact roles", () => {
     const some = roles[0];
     expect((await request.patch(`${BASE}/api/contact-roles/${some.id}`, { headers: { "x-dev-user": MEMBER, cookie: "" }, data: { name: "x" } })).status()).toBe(403);
     expect((await request.delete(`${BASE}/api/contact-roles/${some.id}`, { headers: { "x-dev-user": MEMBER, cookie: "" } })).status()).toBe(403);
+  });
+});
+
+test.describe("V-7 roles in Ask", () => {
+  test("V-7 Ask's vendor look-up shows each contact's roles", async ({ page, context }) => {
+    await signInAs(context, MEMBER);
+    await page.goto("/ask");
+    await page.getByLabel("Your question").fill("Tell me about Bluefinch");
+    await page.getByRole("button", { name: "Ask", exact: true }).click();
+    const answer = page.getByRole("article", { name: "Answer to: Tell me about Bluefinch" });
+    await expect(answer).toContainText("Joris Veld, Helpdesk and Support Manager");
   });
 });

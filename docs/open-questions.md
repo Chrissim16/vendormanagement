@@ -97,6 +97,11 @@ wrong. Answered questions move to the bottom.
 | Q89 | Who may add a contact role, and who may rename or remove one? | Any member adds one while filling in a contact; an admin renames and removes. One in use cannot be removed. | M10 |
 | Q90 | What does the owner need to do to the company's Word template? | Type [Title], [Date] and [Version] on its cover page where they should go, then upload it on the settings page once the app runs at work. The app reports what it found. The template stays at work; only an invented example is in the project. | M11, M9 |
 | Q91 | Should the rewrite and editor also cover briefings or other documents? | Not now. Only the RFP document. | M11 |
+| Q92 | How long may a contact role be, and how many may one contact have? | Up to 200 characters, as job titles were, so no title carried over can block a contact; at most 12 roles per contact. | M10 |
+| Q93 | Are "Help desk" and "Helpdesk" the same role? | No. Only capitals and extra spaces are ignored. An admin can rename one of them if both turn up, and remove the other once it is not in use. | M10 |
+| Q94 | Is the country a two-letter code? | Yes, as before (NL, GB, DE): the box is "Country code" and is shown as the last line of the address. | M10 |
+| Q95 | Do the twelve starting roles and the job titles carried over appear in the roles history? | No. They were put on the list by the change itself, not by a person. Roles added, renamed or removed from then on are in the history on the settings page. | M10 |
+| Q96 | When an admin renames a role, does each vendor's history say so? | No. The rename is in the roles history on the settings page; the vendors' contacts simply show the new name. | M10 |
 | Q27 | How long are tickets kept? | 24 months after they were resolved, as the data model says. Open tickets are kept however old. | M3 |
 
 ## To check at work before M9

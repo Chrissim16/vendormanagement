@@ -15,13 +15,42 @@ Newest entry first. Written for the owner, in plain language.
 | M6 RFP | Done here; the AI draft and comparison are unproven until tried with the company's model |
 | M7 Ask a question | Done here; how well a real AI understands questions is unproven until tried with the company's model |
 | M8 Contract reading | Done here; how well a real AI reads a contract is unproven until tried with the company's model |
-| M10 Vendor details, contact roles, history tabs | Not started; asked for on 22 Nov 2026 |
+| M10 Vendor details, contact roles, history tabs | Done |
 | M11 RFP editor, review rounds, company template | Not started; asked for on 22 Nov 2026 |
 | M9 Move to Databricks | Not started; done at work |
 
-**Next:** M10, then M11, both built here. After that M9 Move to Databricks, which is done at work and needs you.
+**Next:** M11 RFP editor, review rounds and company template, built here. After that M9 Move to Databricks, which is done at work and needs you.
 
 ## Log
+
+### 2026-11-22 M10 Vendor details, contact roles and history done
+What you can do now:
+
+- **Give a vendor an address and a VAT number.** The vendor form has boxes for street, a second street line, postal code, city and country code, and one for the "VAT or tax number". All are optional. The number is kept in capitals without spaces, dots or dashes, so "nl 123.456.789 b01" is stored as NL123456789B01. A number another vendor already has is refused, and the message names that vendor. The vendor's Overview shows the address as one block and the number, or "Not given".
+- **Add the main contact while adding a vendor.** The form for a new vendor has a "Main contact (optional)" part: name, email, phone and roles. Fill in a name and that person is saved with the vendor as its primary contact. If something about the contact is wrong (an email without an @, say), nothing is saved and everything you typed stays. Leave it empty and the vendor is saved without contacts, as before.
+- **Give contacts roles.** The job title is replaced by roles, chosen from one list for the whole team, A to Z. A person can have several. Start typing to find one; if it is not there, the list offers to add what you typed as a new role, and from then on everyone has it. "account manager" or "Account  Manager" picks the existing Account Manager instead of adding a second one. The job titles you had typed before are kept as roles.
+- **Look after the list of roles (admins).** At the bottom of Settings, an admin can rename a role (every contact then shows the new name) or remove one. A role somebody still has cannot be removed; the message says who has it.
+- **Find history without scrolling.** An RFP's history is now on its own tab, the last one, after Decision. Agreement, scorecard and briefing pages, which have no tabs, show the newest five changes with "Show all" under them.
+- **Import addresses and VAT numbers.** The Excel import template has the new columns. A template you downloaded earlier still works.
+
+The sample data has invented addresses (each street is named after its made-up vendor), VAT numbers and contacts with roles. Bluefinch Systems, for example, has three contacts.
+
+How it was checked: an independent tester went through every point of the five requirements in the running app, including awkward cases (numbers written in odd ways, two vendors with one number, a refused contact, roles typed in other capitals, a member trying the admin actions, old and new import templates, long histories, keyboard only, dark mode, a narrow window). Everything passed except one point: pressing Tab in the roles box left no field selected. That is fixed. An independent reviewer read the code and found nothing that had to be fixed and seven things that should be. All are fixed, each with a test:
+
+- **An Enter in the roles box could add a role nobody chose.** The list opened with its first role already highlighted, so Enter added "Account Manager" instead of saving. Now nothing is highlighted until you type or use the arrow keys, and the list closes after each choice so it never covers the buttons.
+- **A role typed but not confirmed was dropped without a word.** It is now taken as a role when you leave the box.
+- **Two people adding the same new role at once** could get "something went wrong". Now one role is added and both contacts get it. A role an admin removes while someone is saving gives a clear message.
+- **Long job titles could have blocked a contact.** Job titles could be 200 characters, roles only 60. Roles may now be 200 characters too.
+- **The sample addresses looked like real buildings.** They are now plainly invented.
+- **The country is still a two-letter code** (NL, GB), as before.
+
+Decided on your behalf (see `docs/open-questions.md`, Q92 to Q96):
+
+- At most 12 roles per contact.
+- "Help desk" and "Helpdesk" count as two different roles; only capitals and extra spaces are ignored.
+- The twelve starting roles do not show in the roles history.
+- Renaming a role is in the roles history, not in each vendor's history.
+- An email or role filled in for a main contact without a name is pointed out, not quietly dropped.
 
 ### 2026-11-22 Your four requests written down
 You asked for four changes. They are now part of the plan as two new parts, built here before the move to Databricks.
@@ -386,6 +415,11 @@ architecture and plan were rewritten to match. The plan now has ten milestones.
 First version of the brief, requirements, plan and agent workflow. No application code yet.
 
 ## Follow-ups
+- Pressing Tab past the last button of a dialog moves on to the browser itself before coming back. That is how the browser's own dialogs work and it predates M10, but the design guide says focus stays inside; to be looked at.
+- At a very narrow window (a phone) the vendor form is cramped and the vendor list scrolls sideways. The app is made for a laptop screen.
+- A VAT number typed into Excel as a plain number loses any zeros at its start before the app sees it; type it with its country letters.
+- The check that job titles became roles runs on the built-in database only, not on the server database the tests can also use.
+- A record with more than 200 changes shows the newest 200, and says so; an admin sees all of them on the Audit log page.
 - Contract reading compares, after values were taken over, the document with the agreement as it has become; which values were taken is in the history, not in the panel.
 - The time shown on an AI proposal follows the app's clock, which is pinned when "today" is pinned for testing, so in a test set-up it can differ from the time in the history. Not so in normal use.
 - Contract reading does not propose the reference, automatic renewal, the renewal term, fixed price or time and materials, or the MSA a SOW sits under.

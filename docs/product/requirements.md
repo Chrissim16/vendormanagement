@@ -52,12 +52,12 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 **V-6 Main contact when adding a vendor.** Added after M8; built in M10.
 - The form for a new vendor has an optional "Main contact" part: name, roles, email and phone.
 - When a name is given, the vendor and the contact are saved together and the contact is the vendor's primary contact. When the contact is refused (for example an invalid email), nothing is saved and the form keeps what was typed.
-- With no name given, the vendor is saved without contacts, as before. Further contacts are added on the vendor's page.
+- With nothing filled in, the vendor is saved without contacts, as before. An email, phone or role filled in without a name is pointed out under the name ("Give the contact a name.") and nothing is saved, so nothing typed is dropped without a word. Further contacts are added on the vendor's page.
 
 **V-7 Contact roles.** Added after M8; built in M10. Replaces the free-text job title.
 - A contact has any number of roles, chosen from one shared list, shown A to Z.
 - The list starts with Account Manager, Billing / Finance, Consultant, Delivery Manager, Developer, Executive Sponsor, Helpdesk, Legal / Contracts, Program Manager, Project Manager, Support Manager and Technical Contact.
-- While filling in a contact, a member can type a role that is not on the list and add it; it is then on the list for everyone. A role that differs from an existing one only in capitals or spaces is not added twice; the existing one is chosen.
+- While filling in a contact, a member can type a role that is not on the list and add it; it is then on the list for everyone. A role that differs from an existing one only in capitals or in extra spaces (before, after, or doubled between words) is not added twice; the existing one is chosen. "Help desk" and "Helpdesk" are different names. Text typed in the box but not confirmed with Enter is taken as a role when the box is left.
 - An admin can rename a role and remove one. A role in use cannot be removed; the page names the contacts that hold it. Renaming changes it on every contact.
 - Every job title held before becomes a role on the list and on its contact, so nothing typed earlier is lost.
 - The vendor's contacts show their roles, and so does Ask's vendor look-up.

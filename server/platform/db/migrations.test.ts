@@ -23,6 +23,8 @@ function migrationsBefore(tag: string) {
 const before = migrationsBefore("0014_parched_doctor_doom");
 afterAll(() => rmSync(before, { recursive: true, force: true }));
 
+const long = "Head of regional service delivery and continuous improvement for the Benelux".repeat(2);
+
 describe("V-7 job titles become roles", () => {
   it("keeps every job title typed before as a role on its contact, without doubles", async () => {
     const client = new PGlite();
@@ -35,7 +37,8 @@ describe("V-7 job titles become roles", () => {
         ('00000000-0000-4000-8000-0000000000a1', 'Ann', 'Service  Director ', true),
         ('00000000-0000-4000-8000-0000000000a1', 'Cas', 'account manager', false),
         ('00000000-0000-4000-8000-0000000000a1', 'Dee', '  ', false),
-        ('00000000-0000-4000-8000-0000000000a1', 'Eve', null, false);
+        ('00000000-0000-4000-8000-0000000000a1', 'Eve', null, false),
+        ('00000000-0000-4000-8000-0000000000a1', 'Fay', '${"Head of regional service delivery and continuous improvement for the Benelux".repeat(2)}', false);
       -- Typed later, in other capitals: the first spelling is the one kept.
       insert into contacts (vendor_id, name, job_title, is_primary, created_at) values ('00000000-0000-4000-8000-0000000000a1', 'Ben', 'service director', false, now() + interval '1 day');
     `);
@@ -44,7 +47,7 @@ describe("V-7 job titles become roles", () => {
     const names = roles.rows.map((r) => r.name);
     expect(names.filter((n) => n.toLowerCase() === "service director")).toEqual(["Service Director"]);
     expect(names.filter((n) => n.toLowerCase() === "account manager")).toEqual(["Account Manager"]);
-    expect(names).toHaveLength(13);
+    expect(names).toHaveLength(14);
     const held = await client.query<{ contact: string; role: string }>(
       `select c.name as contact, r.name as role from contact_role_links l join contacts c on c.id = l.contact_id join contact_roles r on r.id = l.role_id order by c.name`,
     );
@@ -52,7 +55,17 @@ describe("V-7 job titles become roles", () => {
       { contact: "Ann", role: "Service Director" },
       { contact: "Ben", role: "Service Director" },
       { contact: "Cas", role: "Account Manager" },
+      { contact: "Fay", role: long },
     ]);
     await client.close();
+  });
+});
+
+describe("V-7 a long job title carried over as a role", () => {
+  it("does not block changing that contact", async () => {
+    // Up to 200 characters, as job titles were, so a title from before stays valid.
+    const { contactSchema } = await import("../../../shared/vendors");
+    expect(contactSchema.safeParse({ name: "Fay", roles: [long] }).success).toBe(true);
+    expect(long.length).toBeGreaterThan(60);
   });
 });

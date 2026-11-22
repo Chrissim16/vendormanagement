@@ -70,8 +70,8 @@ export const vendorSchema = z.object({
 });
 export type VendorInput = z.infer<typeof vendorSchema>;
 
-/** A contact role's name (V-7), stored with extra spaces removed and compared ignoring case. */
-export const roleNameSchema = z.string().transform(cleanName).pipe(z.string().min(1, "Give the role a name.").max(60, "Keep the role to 60 characters."));
+/** A contact role's name (V-7), stored with extra spaces removed and compared ignoring case. Up to 200 characters, as job titles were, so no title carried over from before can block a contact. */
+export const roleNameSchema = z.string().transform(cleanName).pipe(z.string().min(1, "Give the role a name.").max(200, "Keep the role to 200 characters."));
 
 /** Role names as a contact holds them: each once (ignoring case), A to Z. */
 export function cleanRoles(names: string[]): string[] {

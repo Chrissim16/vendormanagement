@@ -156,26 +156,34 @@ export const listRoles = (db: Queryable): Promise<ContactRole[]> =>
     .from(contactRoles)
     .orderBy(sql`lower(${contactRoles.name})`);
 export const getRole = async (db: Queryable, id: string) => (await db.select().from(contactRoles).where(eq(contactRoles.id, id)))[0];
-/** The roles with these names, ignoring case. */
-export const rolesNamed = (db: Queryable, names: string[]) =>
-  names.length
+/** The role with this name, ignoring case. Both sides are lower-cased by the database, the same way its rule on role names does. */
+export const roleNamed = async (db: Queryable, name: string) =>
+  (
+    await db
+      .select({ id: contactRoles.id, name: contactRoles.name })
+      .from(contactRoles)
+      .where(sql`lower(${contactRoles.name}) = lower(${name})`)
+  )[0];
+/** The roles with these ids, A to Z. */
+export const rolesById = (db: Queryable, ids: string[]) =>
+  ids.length
     ? db
         .select({ id: contactRoles.id, name: contactRoles.name })
         .from(contactRoles)
-        .where(
-          inArray(
-            sql`lower(${contactRoles.name})`,
-            names.map((n) => n.toLowerCase()),
-          ),
-        )
+        .where(inArray(contactRoles.id, ids))
     : Promise.resolve([]);
+/**
+ * Adds a role unless one with this name (ignoring case) is there. When someone else is adding
+ * the same one at that moment, the database waits for them and then adds nothing.
+ */
 export const insertRole = async (db: Queryable, name: string, by: string) =>
   (
     await db
       .insert(contactRoles)
       .values({ name, createdBy: by, updatedBy: by })
+      .onConflictDoNothing()
       .returning({ id: contactRoles.id, name: contactRoles.name })
-  )[0]!;
+  )[0];
 export const renameRole = (db: Queryable, id: string, name: string, by: string) =>
   db.update(contactRoles).set({ name, updatedAt: new Date(), updatedBy: by }).where(eq(contactRoles.id, id));
 export const deleteRole = (db: Queryable, id: string) => db.delete(contactRoles).where(eq(contactRoles.id, id));

@@ -80,7 +80,7 @@ function sampleVendors(today: Day): SeedVendor[] {
   });
   return [
     {
-      vendor: { name: "Bluefinch Systems", type: "software", legalName: "Bluefinch Systems B.V. (invented)", country: "NL", website: "https://bluefinch.example.test", addressLine1: "Kanaalweg 12", addressLine2: "4th floor", postalCode: "3526 KL", city: "Utrecht", vatNumber: "NL000100001B01" },
+      vendor: { name: "Bluefinch Systems", type: "software", legalName: "Bluefinch Systems B.V. (invented)", country: "NL", website: "https://bluefinch.example.test", addressLine1: "Bluefinchplein 12", addressLine2: "4th floor", postalCode: "3500 AA", city: "Utrecht", vatNumber: "NL000100001B01" },
       owner: "mira@example.test",
       contacts: [
         ["Lena Hartog", ["Account Manager", "Executive Sponsor"]],
@@ -133,7 +133,7 @@ function sampleVendors(today: Day): SeedVendor[] {
       ],
     },
     {
-      vendor: { name: "Quillon Consulting", type: "consultancy", country: "NL", addressLine1: "Herengracht 401", postalCode: "1017 BP", city: "Amsterdam", vatNumber: "NL000100002B01" },
+      vendor: { name: "Quillon Consulting", type: "consultancy", country: "NL", addressLine1: "Quillonkade 8", postalCode: "1000 AB", city: "Amsterdam", vatNumber: "NL000100002B01" },
       owner: "sanne@example.test",
       contacts: [
         ["Pieter Aalto", ["Partner"]],
@@ -182,13 +182,13 @@ function sampleVendors(today: Day): SeedVendor[] {
       ],
     },
     {
-      vendor: { name: "Tarnwick Software", type: "software", country: "DE", addressLine1: "Lindenstraße 8", postalCode: "10969", city: "Berlin", vatNumber: "DE000100003" },
+      vendor: { name: "Tarnwick Software", type: "software", country: "DE", addressLine1: "Tarnwickstraße 3", postalCode: "10001", city: "Berlin", vatNumber: "DE000100003" },
       owner: "jonas@example.test",
       contacts: [["Ruth Emery", ["Account Manager"]]],
       agreements: [sub("Reporting suite", 81, 48_000_00), ...paper(-2000)],
     },
     {
-      vendor: { name: "Mossgate IT", type: "software", country: "NL", addressLine1: "Stationsplein 45", postalCode: "3013 AK", city: "Rotterdam", vatNumber: "NL000100004B01" },
+      vendor: { name: "Mossgate IT", type: "software", country: "NL", addressLine1: "Mossgatelaan 45", postalCode: "3000 AC", city: "Rotterdam", vatNumber: "NL000100004B01" },
       owner: "mira@example.test",
       contacts: [
         ["Dana Whitlow", ["Account Manager"]],
@@ -201,7 +201,7 @@ function sampleVendors(today: Day): SeedVendor[] {
       ],
     },
     {
-      vendor: { name: "Sedgewater Cloud", type: "software", country: "GB", addressLine1: "22 Wharf Road", postalCode: "N1 7GR", city: "London", vatNumber: "GB000100005" },
+      vendor: { name: "Sedgewater Cloud", type: "software", country: "GB", addressLine1: "22 Sedgewater Yard", postalCode: "E1 0AA", city: "London", vatNumber: "GB000100005" },
       owner: "jonas@example.test",
       contacts: [
         ["Sam Idris", ["Account Manager"]],
@@ -210,12 +210,12 @@ function sampleVendors(today: Day): SeedVendor[] {
       agreements: [sub("Data platform licence", 250, 31_500_00, { currency: "GBP", autoRenews: false }), ...paper(-740)],
     },
     {
-      vendor: { name: "Emberline Advisory", type: "advisory", scoringEnabled: false, dpaRequired: false, country: "GB", addressLine1: "3 Castle Street", postalCode: "EH2 3AH", city: "Edinburgh" },
+      vendor: { name: "Emberline Advisory", type: "advisory", scoringEnabled: false, dpaRequired: false, country: "GB", addressLine1: "3 Emberline Close", postalCode: "EH1 0AA", city: "Edinburgh" },
       owner: "sanne@example.test",
       agreements: [sub("Research membership", 300, 62_000_00, { noticePeriodDays: 60 }), { kind: "nda", title: "NDA", status: "active", signedOn: d(-2400) }],
     },
     {
-      vendor: { name: "Larkspur Data", type: "software", country: "NL", addressLine1: "Grote Markt 7", postalCode: "9711 LV", city: "Groningen", vatNumber: "NL000100007B01" },
+      vendor: { name: "Larkspur Data", type: "software", country: "NL", addressLine1: "Larkspurhof 7", postalCode: "9700 AD", city: "Groningen", vatNumber: "NL000100007B01" },
       owner: "jonas@example.test",
       agreements: [
         { kind: "dpa", title: "Data processing agreement", status: "active", signedOn: d(-200) },
@@ -606,6 +606,7 @@ async function seedCore(db: Db, today: Day) {
   for (const s of sampleVendors(today)) {
     // Every sample vendor says in its legal name that it is made up, so it can never be mistaken for a real firm.
     const vendor = await createVendor(db, { legalName: `${s.vendor.name} (invented)`, ...s.vendor, ownerUserId: idOf(s.owner) }, admin, today);
+    // Addresses are invented too: each street is named after its made-up vendor.
     for (const [i, [name, roles]] of (s.contacts ?? []).entries())
       await saveContact(
         db,

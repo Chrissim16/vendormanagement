@@ -20,7 +20,7 @@ import { VendorBriefingsTab } from "../briefings/VendorBriefingsTab";
 import { VendorPerformanceTab } from "../performance/VendorPerformanceTab";
 import { VendorMoney } from "../sow/RateCard";
 import { agreementTone } from "../agreements/display";
-import { RolesField, rolesError } from "./ContactRoles";
+import { roleErrorKeys, RolesField, rolesError } from "./ContactRoles";
 import { VendorForm } from "./VendorForm";
 
 const paper: Record<Paperwork, [Tone, string]> = { in_place: ["ok", "In place"], missing: ["bad", "Missing"], expired: ["bad", "Expired"], not_required: ["none", "Not required"] };
@@ -41,7 +41,7 @@ function ContactForm({ vendorId, contact, onClose, onSaved }: { vendorId: string
           <TextField form={form} name="email" label="Email (optional)" type="email" value={v.email} onChange={(e) => set("email", e.target.value)} />
           <TextField form={form} name="phone" label="Phone (optional)" value={v.phone} onChange={(e) => set("phone", e.target.value)} />
         </Grid>
-        <RolesField id="f-roles" chosen={v.roles} onChange={(next) => form.patch({ roles: next })} error={rolesError(form.errors)} />
+        <RolesField id="f-roles" chosen={v.roles} onChange={(next) => set("roles", next, roleErrorKeys(form.errors))} error={rolesError(form.errors)} />
         <CheckField id="f-isPrimary" label="Primary contact" hint="A vendor has one primary contact." checked={v.isPrimary} onChange={(x) => set("isPrimary", x)} />
         <FormFooter problem={form.problem} busy={form.busy} submitLabel={contact ? "Save changes" : "Add contact"} onCancel={onClose} />
       </form>

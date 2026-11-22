@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import { z } from "zod";
 import type { Day } from "../../../shared/dates";
 import type { Page, User } from "../../../shared/types";
 import { diff } from "../../../shared/users";
@@ -69,15 +70,18 @@ async function checkVat(tx: Tx, vatNumber: string | null, exceptId?: string) {
   if (other) failFields({ vatNumber: vatTaken(other.name) });
 }
 
-/** Two people saving at the same moment: the database's own rules catch the second. */
-async function uniqueProblem(db: Queryable, e: unknown, v: { vatNumber?: string | null }, exceptId?: string): Promise<never> {
+/** Two people saving at the same moment: the database's own rules catch the second. Anything else is passed on as it is. */
+async function uniqueProblem(db: Queryable, e: unknown, v: { vatNumber?: string | null }, exceptId?: string): Promise<void> {
+  if (isForeignKeyViolation(e)) throw ROLE_GONE;
+  if (!isUniqueViolation(e)) return;
   const err = e as { constraint?: string; cause?: { constraint?: string } };
   const constraint = err?.constraint ?? err?.cause?.constraint;
   if (constraint === "vendors_vat_unique" && v.vatNumber) {
     const other = await repo.findByVat(db, v.vatNumber, exceptId);
     failFields({ vatNumber: vatTaken(other?.name ?? "Another vendor") });
   }
-  failFields({ name: DUPLICATE });
+  // The only other rule a vendor save can break is the one on names.
+  if (!constraint || constraint === "vendors_name_unique") failFields({ name: DUPLICATE });
 }
 
 async function checkOwner(tx: Tx, ownerUserId: string) {
@@ -99,7 +103,7 @@ export async function createVendor(db: Db, input: unknown, by: User, today: Day,
       return getVendor(tx, row.id, today);
     });
   } catch (e) {
-    if (isUniqueViolation(e)) await uniqueProblem(db, e, v);
+    await uniqueProblem(db, e, v);
     throw e;
   }
 }
@@ -134,7 +138,7 @@ export async function updateVendor(db: Db, id: string, input: unknown, by: User,
       return getVendor(tx, id, today);
     });
   } catch (e) {
-    if (isUniqueViolation(e)) await uniqueProblem(db, e, patch, id);
+    await uniqueProblem(db, e, patch, id);
     throw e;
   }
 }
@@ -146,17 +150,27 @@ const ROLES = { entityType: "contact_roles", entityId: "list" } as const;
  * The ids of the roles with these names. A name not on the list yet is added to it, for
  * everyone (V-7); one that differs from an existing role only in capitals or spaces is that role.
  */
-async function resolveRoles(tx: Tx, names: string[], by: User): Promise<string[]> {
-  const found = await repo.rolesNamed(tx, names);
-  const ids = new Map(found.map((r) => [r.name.toLowerCase(), r.id]));
+async function resolveRoles(tx: Tx, names: string[], by: User): Promise<{ id: string; name: string }[]> {
+  const out = new Map<string, { id: string; name: string }>();
   for (const name of names) {
-    if (ids.has(name.toLowerCase())) continue;
-    const role = await repo.insertRole(tx, name, by.email);
-    await audit(tx, { userEmail: by.email, action: "create", ...ROLES, summary: role.name, changes: { [`role ${role.name}`]: { from: null, to: "added" } } });
-    ids.set(name.toLowerCase(), role.id);
+    let role = await repo.roleNamed(tx, name);
+    if (!role) {
+      const added = await repo.insertRole(tx, name, by.email);
+      if (added)
+        await audit(tx, { userEmail: by.email, action: "create", ...ROLES, summary: added.name, changes: { [`role ${added.name}`]: { from: null, to: "added" } } });
+      // Not added: a colleague added the same role a moment ago, and that one is used.
+      role = added ?? (await repo.roleNamed(tx, name));
+    }
+    if (!role) throw ROLE_GONE;
+    out.set(role.id, role);
   }
-  return names.map((n) => ids.get(n.toLowerCase())!);
+  return [...out.values()].sort((a, b) => byName(a.name, b.name));
 }
+const ROLE_GONE = new AppError(409, "role_gone", "One of the roles was just removed from the list. Choose the roles again and save.", { roles: "Choose the roles again." });
+const isForeignKeyViolation = (e: unknown) => {
+  const err = e as { code?: string; cause?: { code?: string } };
+  return err?.code === "23503" || err?.cause?.code === "23503";
+};
 const roleList = (roles: string[]) => (roles.length ? roles.join(", ") : null);
 
 /** Writes one contact and its roles; returns what changed for the vendor's history. */
@@ -167,9 +181,10 @@ async function writeContact(tx: Tx, vendorId: string, existing: Contact | undefi
     if (previous) changes[`${contactLabel(previous)} isPrimary`] = { from: true, to: false };
     await repo.clearPrimary(tx, vendorId);
   }
-  const roleIds = await resolveRoles(tx, c.roles, by);
+  const resolved = await resolveRoles(tx, c.roles, by);
+  const roleIds = resolved.map((r) => r.id);
   // The stored spelling of each role, which may differ in capitals from what was typed.
-  const roles = (await repo.rolesNamed(tx, c.roles)).map((r) => r.name).sort(byName);
+  const roles = resolved.map((r) => r.name);
   if (existing) {
     await repo.updateContact(tx, existing.id, c, by.email);
     const { roles: _before, ...rest } = existing;
@@ -190,6 +205,16 @@ async function writeContact(tx: Tx, vendorId: string, existing: Contact | undefi
  * Contact changes appear in the vendor's history.
  */
 export async function saveContact(db: Db, target: { vendorId: string } | { contactId: string }, input: unknown, by: User): Promise<Contact[]> {
+  try {
+    return await saveContactIn(db, target, input, by);
+  } catch (e) {
+    // An admin removed a chosen role while this was being saved.
+    if (isForeignKeyViolation(e)) throw ROLE_GONE;
+    throw e;
+  }
+}
+
+function saveContactIn(db: Db, target: { vendorId: string } | { contactId: string }, input: unknown, by: User): Promise<Contact[]> {
   return db.transaction(async (tx) => {
     const existing = "contactId" in target ? await repo.getContact(tx, target.contactId) : undefined;
     if ("contactId" in target && !existing) throw notFound("That contact");
@@ -226,13 +251,13 @@ async function lockRole(tx: Tx, id: string) {
 
 /** Admin: renames a role; every contact that holds it shows the new name. */
 export async function renameContactRole(db: Db, id: string, input: unknown, by: User): Promise<ContactRole[]> {
-  const name = roleNameSchema.parse((input as { name?: unknown } | null)?.name ?? "");
+  const { name } = z.object({ name: roleNameSchema }).parse(input ?? {});
   try {
     return await db.transaction(async (tx) => {
       const role = await lockRole(tx, id);
       if (role.name === name) return repo.listRoles(tx);
-      const same = (await repo.rolesNamed(tx, [name])).find((r) => r.id !== id);
-      if (same) failFields({ name: `There is already a role called ${same.name}.` });
+      const same = await repo.roleNamed(tx, name);
+      if (same && same.id !== id) failFields({ name: `There is already a role called ${same.name}.` });
       await repo.renameRole(tx, id, name, by.email);
       await audit(tx, { userEmail: by.email, action: "update", ...ROLES, summary: name, changes: { [`role ${role.name}`]: { from: role.name, to: name } } });
       return repo.listRoles(tx);

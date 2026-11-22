@@ -4,7 +4,7 @@ import { personName, usePeople } from "../../lib/data";
 import { Dialog } from "../../platform/Dialog";
 import { CheckField, FormFooter, Grid, SelectField, TextAreaField, TextField, useForm } from "../../platform/form";
 import { useMe } from "../../platform/session";
-import { RolesField, rolesError } from "./ContactRoles";
+import { roleErrorKeys, RolesField, rolesError } from "./ContactRoles";
 
 export function VendorForm({ vendor, onClose, onSaved }: { vendor?: VendorDetail; onClose: () => void; onSaved: (v: VendorDetail) => void }) {
   const me = useMe();
@@ -76,10 +76,11 @@ export function VendorForm({ vendor, onClose, onSaved }: { vendor?: VendorDetail
         </Grid>
         <TextField form={form} name="website" label="Website (optional)" placeholder="https://" value={v.website} onChange={(e) => set("website", e.target.value)} />
         <fieldset className="flex flex-col gap-4">
-          <legend className="mb-3 text-[13px] font-semibold">Address (optional)</legend>
+          <legend className="mb-1 text-[13px] font-semibold">Address (optional)</legend>
+          <p className="-mt-1 text-[13px] text-ink-2">Leave empty if you do not have it yet; the vendor page then says "Not given".</p>
           <TextField form={form} name="addressLine1" label="Street and number" autoComplete="off" value={v.addressLine1} onChange={(e) => set("addressLine1", e.target.value)} />
           <TextField form={form} name="addressLine2" label="Second street line" autoComplete="off" value={v.addressLine2} onChange={(e) => set("addressLine2", e.target.value)} />
-          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)] gap-x-4 gap-y-4">
+          <div className="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)]">
             <TextField form={form} name="postalCode" label="Postal code" autoComplete="off" value={v.postalCode} onChange={(e) => set("postalCode", e.target.value)} />
             <TextField form={form} name="city" label="City" autoComplete="off" value={v.city} onChange={(e) => set("city", e.target.value)} />
             <TextField form={form} name="country" label="Country code" placeholder="NL" maxLength={2} value={v.country} onChange={(e) => set("country", e.target.value)} />
@@ -102,7 +103,7 @@ export function VendorForm({ vendor, onClose, onSaved }: { vendor?: VendorDetail
               />
               <TextField form={form} name="mainContact.phone" label="Contact phone" autoComplete="off" value={v.contactPhone} onChange={(e) => set("contactPhone", e.target.value, ["mainContact.phone"])} />
             </Grid>
-            <RolesField id="f-mainContact.roles" chosen={v.contactRoles} onChange={(next) => set("contactRoles", next, ["mainContact.roles"])} error={rolesError(form.errors, "mainContact.roles")} />
+            <RolesField id="f-mainContact.roles" chosen={v.contactRoles} onChange={(next) => set("contactRoles", next, roleErrorKeys(form.errors, "mainContact.roles"))} error={rolesError(form.errors, "mainContact.roles")} />
           </fieldset>
         )}
         <TextAreaField form={form} name="description" label="What they do for us (optional)" value={v.description} onChange={(e) => set("description", e.target.value)} />

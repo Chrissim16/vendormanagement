@@ -27,6 +27,9 @@ export function RolesField({ id, chosen, onChange, error }: { id: string; chosen
   );
 }
 
+/** The keys of every role problem (the box, or one role in it), so changing the roles clears them all. */
+export const roleErrorKeys = (errors: Record<string, string>, prefix = "roles") => Object.keys(errors).filter((k) => k === prefix || k.startsWith(`${prefix}.`));
+
 /** A problem with any one role, shown under the roles box. */
 export const rolesError = (errors: Record<string, string>, prefix = "roles") => Object.entries(errors).find(([k, v]) => v && (k === prefix || k.startsWith(`${prefix}.`)))?.[1];
 
@@ -45,7 +48,7 @@ function RenameForm({ role, onClose }: { role: ContactRole; onClose: () => void 
         <p className="-mt-2 text-ink-2">
           {role.contacts === 0 ? "No contact holds this role yet." : `The ${role.contacts === 1 ? "contact" : `${role.contacts} contacts`} holding it will show the new name.`}
         </p>
-        <TextField form={form} name="name" label="Name" maxLength={60} value={form.values.name} onChange={(e) => form.set("name", e.target.value)} autoFocus />
+        <TextField form={form} name="name" label="Name" maxLength={200} value={form.values.name} onChange={(e) => form.set("name", e.target.value)} autoFocus />
         <FormFooter problem={form.problem} busy={form.busy} submitLabel="Rename" onCancel={onClose} />
       </form>
     </Dialog>

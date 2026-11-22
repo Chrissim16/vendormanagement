@@ -192,9 +192,9 @@ describe("V-4 offboarding", () => {
 describe("V-5 address and VAT number", () => {
   it("keeps an address and stores the number in capitals without spaces, dots or dashes", async () => {
     const v = (
-      await add({ addressLine1: " Dijkstraat 4 ", addressLine2: "", postalCode: "1011 AB", city: "Amsterdam", country: "nl", vatNumber: "nl 0001.2345-6b01" })
+      await add({ addressLine1: " Testlaan 4 ", addressLine2: "", postalCode: "1011 AB", city: "Amsterdam", country: "nl", vatNumber: "nl 0001.2345-6b01" })
     ).body;
-    expect(v).toMatchObject({ addressLine1: "Dijkstraat 4", addressLine2: null, postalCode: "1011 AB", city: "Amsterdam", country: "NL", vatNumber: "NL000123456B01" });
+    expect(v).toMatchObject({ addressLine1: "Testlaan 4", addressLine2: null, postalCode: "1011 AB", city: "Amsterdam", country: "NL", vatNumber: "NL000123456B01" });
   });
   it("leaves both optional, for every status", async () => {
     const res = await add({ status: "active" });
@@ -260,7 +260,7 @@ describe("V-7 contact roles", () => {
   it("refuses an empty or overlong role", async () => {
     const v = (await add()).body;
     expect((await t.as(MEMBER).post(`/api/vendors/${v.id}/contacts`).send({ name: "X", roles: [" "] })).status).toBe(400);
-    expect((await t.as(MEMBER).post(`/api/vendors/${v.id}/contacts`).send({ name: "X", roles: ["x".repeat(61)] })).status).toBe(400);
+    expect((await t.as(MEMBER).post(`/api/vendors/${v.id}/contacts`).send({ name: "X", roles: ["x".repeat(201)] })).status).toBe(400);
   });
   it("lets only an admin rename a role, which changes it on every contact", async () => {
     const v = (await add()).body;
@@ -269,6 +269,7 @@ describe("V-7 contact roles", () => {
     const role = (await roles()).find((r) => r.name === name)!;
     expect((await t.as(MEMBER).patch(`/api/contact-roles/${role.id}`).send({ name: "Nope" })).status).toBe(403);
     expect((await t.as(ADMIN).patch(`/api/contact-roles/${role.id}`).send({ name: "helpdesk" })).body.error.fields.name).toBe("There is already a role called Helpdesk.");
+    expect((await t.as(ADMIN).patch(`/api/contact-roles/${role.id}`).send({ name: "  " })).body.error.fields.name).toBe("Give the role a name.");
     const res = await t.as(ADMIN).patch(`/api/contact-roles/${role.id}`).send({ name: `${name} Lead` });
     expect(res.status).toBe(200);
     expect((await t.as(MEMBER).get(`/api/vendors/${v.id}`)).body.contacts[0].roles).toEqual([`${name} Lead`]);

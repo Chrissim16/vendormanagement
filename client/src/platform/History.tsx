@@ -119,7 +119,7 @@ export function History({ entityType, entityId, limit }: { entityType: string; e
       {hidden > 0 && (
         <div>
           <Button className="h-8 px-3.5 text-[12.5px]" onClick={() => setAll(true)}>
-            Show all {items.length}
+            {q.data && q.data.total > items.length ? `Show the newest ${items.length}` : `Show all ${items.length}`}
           </Button>
         </div>
       )}
@@ -130,7 +130,7 @@ export function History({ entityType, entityId, limit }: { entityType: string; e
           </Button>
         </div>
       )}
-      {q.data && q.data.total > items.length && (all || !limit) && (
+      {q.data && q.data.total > items.length && (
         <p className="text-[13px] text-ink-2">
           These are the newest {items.length} of {q.data.total} changes. An admin can see every one on the Audit log page.
         </p>

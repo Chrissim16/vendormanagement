@@ -741,8 +741,8 @@ test.describe("Q-11 overview", () => {
     const decided = list.items.find((r) => r.title === "Treasury reporting advice")!;
     await signInAs(context, MEMBER);
     for (const [rfp, tabs] of [
-      [sample, ["overview", "document", "review", "candidates", "responses", "scoring", "decision"]],
-      [decided, ["scoring", "decision"]],
+      [sample, ["overview", "document", "review", "candidates", "responses", "scoring", "decision", "history"]],
+      [decided, ["scoring", "decision", "history"]],
     ] as const)
       for (const tab of tabs) {
         const started = Date.now();
@@ -752,5 +752,21 @@ test.describe("Q-11 overview", () => {
         expect(Date.now() - started, `${rfp.title} ${tab}`).toBeLessThan(2000);
         await expectAccessible(page);
       }
+  });
+});
+
+test.describe("Q-11 history tab", () => {
+  test("Q-11 a decided RFP keeps its history on its own tab after Decision, not on the overview", async ({ page, context, request }) => {
+    const list = await call<{ items: { id: string; title: string }[] }>(request, "get", "/rfps?pageSize=200");
+    const decided = list.items.find((r) => r.title === "Treasury reporting advice")!;
+    await signInAs(context, MEMBER);
+    await page.goto(`/rfps/${decided.id}?tab=overview`);
+    const tabs = page.getByRole("tablist", { name: "Parts of this RFP" }).getByRole("tab");
+    await expect(tabs.last()).toHaveText("History");
+    await expect(tabs.nth(-2)).toHaveText("Decision");
+    await expect(page.getByRole("list", { name: "History" })).toHaveCount(0);
+    await tabs.last().click();
+    await expect(page.getByRole("list", { name: "History" }).getByRole("listitem").first()).toBeVisible();
+    await expectAccessible(page);
   });
 });

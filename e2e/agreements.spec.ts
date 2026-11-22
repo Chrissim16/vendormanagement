@@ -311,6 +311,39 @@ test.describe("A-7 warnings", () => {
   });
 });
 
+test.describe("V-5 import columns", () => {
+  test("V-5 the import template has the address and VAT or tax number columns, all optional, by the vendor form's rules", async ({ page, context, request }) => {
+    const tag = Date.now().toString(36);
+    const holder = await newVendor(request, "Import VAT holder", { vatNumber: `NL${tag.toUpperCase()}B01` });
+    await signInAs(context, ADMIN);
+    await page.goto("/admin/import");
+    const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: "Download the template" }).click()]);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.readFile(await download.path());
+    const vendors = wb.getWorksheet("Vendors")!;
+    const header = (vendors.getRow(1).values as string[]).slice(1);
+    for (const c of ["Street", "Second street line", "Postal code", "City", "Country", "VAT or tax number"]) expect(header).toContain(c);
+    const at = (name: string) => header.indexOf(name);
+    const row = (name: string, cells: Record<string, string>) => {
+      const r: string[] = header.map(() => "");
+      r[at("Name")] = name;
+      r[at("Type")] = "software";
+      for (const [k, v] of Object.entries(cells)) r[at(k)] = v;
+      return r;
+    };
+    vendors.spliceRows(2, 1);
+    vendors.addRow(row(`Addressed import ${tag}`, { Street: "Testplein 1", "Postal code": "1000 AA", City: "Amsterdam", Country: "nl", "VAT or tax number": "nl 111.222.333 b01" }));
+    vendors.addRow(row(`Bare import ${tag}`, {}));
+    vendors.addRow(row(`Taken import ${tag}`, { "VAT or tax number": holder.vatNumber!.toLowerCase() }));
+    wb.getWorksheet("Agreements")!.spliceRows(2, 1);
+    const file = { name: "filled.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: Buffer.from(await wb.xlsx.writeBuffer()) };
+    await page.getByLabel("Choose the filled-in template").setInputFiles(file);
+    const rows = page.getByRole("table", { name: "Rows in the file" }).getByRole("row");
+    await expect(rows.filter({ hasText: `Taken import ${tag}` })).toContainText(`VAT or tax number: ${holder.name} already has this number.`);
+    await expect(page.getByText("2 rows can be imported.")).toBeVisible();
+  });
+});
+
 test.describe("A-8 import", () => {
   test("A-8 an admin fills the template, previews what each row would do, imports, and can import again without duplicates", async ({ page, context }) => {
     const tag = Date.now().toString(36);
