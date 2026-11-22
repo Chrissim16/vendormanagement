@@ -72,7 +72,14 @@ export function VendorForm({ vendor, onClose, onSaved }: { vendor?: VendorDetail
               </option>
             ))}
           </SelectField>
-          <TextField form={form} name="vatNumber" label="VAT or tax number (optional)" placeholder="NL123456789B01" value={v.vatNumber} onChange={(e) => set("vatNumber", e.target.value)} />
+          <TextField
+            form={form}
+            name="vatNumber"
+            label="VAT or tax number (optional)"
+            placeholder="NL123456789B01"
+            value={v.vatNumber}
+            onChange={(e) => set("vatNumber", e.target.value)}
+          />
         </Grid>
         <TextField form={form} name="website" label="Website (optional)" placeholder="https://" value={v.website} onChange={(e) => set("website", e.target.value)} />
         <fieldset className="flex flex-col gap-4">
@@ -91,7 +98,14 @@ export function VendorForm({ vendor, onClose, onSaved }: { vendor?: VendorDetail
             <legend className="mb-1 text-[13px] font-semibold">Main contact (optional)</legend>
             <p className="-mt-1 text-[13px] text-ink-2">Leave empty to add contacts later. When a name is given, this person becomes the vendor's primary contact.</p>
             <Grid>
-              <TextField form={form} name="mainContact.name" label="Contact name" autoComplete="off" value={v.contactName} onChange={(e) => set("contactName", e.target.value, ["mainContact.name"])} />
+              <TextField
+                form={form}
+                name="mainContact.name"
+                label="Contact name"
+                autoComplete="off"
+                value={v.contactName}
+                onChange={(e) => set("contactName", e.target.value, ["mainContact.name"])}
+              />
               <TextField
                 form={form}
                 name="mainContact.email"
@@ -101,9 +115,21 @@ export function VendorForm({ vendor, onClose, onSaved }: { vendor?: VendorDetail
                 value={v.contactEmail}
                 onChange={(e) => set("contactEmail", e.target.value, ["mainContact.email"])}
               />
-              <TextField form={form} name="mainContact.phone" label="Contact phone" autoComplete="off" value={v.contactPhone} onChange={(e) => set("contactPhone", e.target.value, ["mainContact.phone"])} />
+              <TextField
+                form={form}
+                name="mainContact.phone"
+                label="Contact phone"
+                autoComplete="off"
+                value={v.contactPhone}
+                onChange={(e) => set("contactPhone", e.target.value, ["mainContact.phone"])}
+              />
             </Grid>
-            <RolesField id="f-mainContact.roles" chosen={v.contactRoles} onChange={(next) => set("contactRoles", next, roleErrorKeys(form.errors, "mainContact.roles"))} error={rolesError(form.errors, "mainContact.roles")} />
+            <RolesField
+              id="f-mainContact.roles"
+              chosen={v.contactRoles}
+              onChange={(next) => set("contactRoles", next, roleErrorKeys(form.errors, "mainContact.roles"))}
+              error={rolesError(form.errors, "mainContact.roles")}
+            />
           </fieldset>
         )}
         <TextAreaField form={form} name="description" label="What they do for us (optional)" value={v.description} onChange={(e) => set("description", e.target.value)} />

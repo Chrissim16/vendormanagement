@@ -24,7 +24,7 @@ function SignoffForm({ rfp, onClose, onSaved }: { rfp: RfpDetail; onClose: () =>
   return (
     <Dialog title="Record a sign-off" onClose={onClose}>
       <form onSubmit={form.submit} noValidate className="flex flex-col gap-5">
-        <p className="-mt-2 text-ink-2">Reviewers read the Word or PDF export; what each of them decided is recorded here by a team member.</p>
+        <p className="-mt-2 text-ink-2">Reviewers read the Word copy; what each of them decided is recorded here by a team member.</p>
         <Grid>
           <TextField form={form} name="reviewerName" label="Reviewer" value={v.reviewerName} maxLength={200} onChange={(e) => set("reviewerName", e.target.value)} />
           <TextField
@@ -81,9 +81,6 @@ export function ReviewTab({ rfp }: { rfp: RfpDetail }) {
         <div className="flex flex-wrap items-center gap-2.5">
           <a href={`/api/rfps/${rfp.id}/rfp.docx`} download className={downloadClass}>
             Download as Word
-          </a>
-          <a href={`/api/rfps/${rfp.id}/rfp.pdf`} download className={downloadClass}>
-            Download as PDF
           </a>
           <p className="min-w-0 flex-1 text-[13px] text-ink-2">The review copy holds the demand, the sections, the criteria with their weights and the questions, as last saved.</p>
         </div>

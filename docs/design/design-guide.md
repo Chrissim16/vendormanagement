@@ -105,6 +105,8 @@ Figures that line up use tabular numerals. Dates read `21 Nov 2026`. Money reads
 - Sections inside a panel are tabs with a sliding underline; arrow keys, Home and End move between them.
 - Several choices from a shared list (a contact's roles) are one box that holds the chosen ones as tinted chips, each with its own remove button, and a text field after them. Typing filters a list under the box, A to Z; the arrow keys move through it, Enter takes the highlighted one, Escape closes it, and Backspace in the empty field takes off the last chip. Where new choices are allowed, the last line of the list offers "Add "..." as a new role"; a name that differs from one on the list only in capitals or spaces is that one. The list closes after each pick so it never covers the form's buttons. The pattern is `ChoicePicker`.
 - A part of a form that is optional as a whole (the main contact of a new vendor, an address) is a group with its own small heading that says "(optional)", and a line saying what happens when it is left empty.
+- Formatted text (an RFP section) is edited in one box with a thin toolbar along its top: bold, italic, heading, smaller heading, bullet list, numbered list, and insert table; inside a table the table buttons become add a row, add a column, remove the row, the column or the table. A button that is on is filled with the brand tint. The toolbar is one stop for the Tab key and the arrow keys, Home and End move along it; every button also has its keyboard shortcut, named in its tooltip (Ctrl+B, Ctrl+I, Ctrl+Alt+2 and 3, Ctrl+Shift+8 and 7). Tab moves between table cells and otherwise leaves the box, so the keyboard is never caught in it. The text is shown in the box as it reads on paper, and the same `rich` look is used wherever such text is shown without the box. Lists have one level. The pattern is `RichTextEditor`, and `RichText` shows such text.
+- A report of what the app recognised in an uploaded file (the Word template) is a list between hairlines: what was looked for, a Found or Missing pill, and in a sentence what the app does with it, or what to do where something is missing.
 - A record's history is the last tab where the record has tabs. On a page without tabs it is the last section and shows the newest five changes, with "Show all" under them.
 
 ## Motion
@@ -222,6 +224,7 @@ with the fact ("Notice deadline passed 12 Nov"), not the system's term for it.
 | Tables | TanStack Table |
 | Charts | The app's own bars for now: a quiet tint with the latest month in the accent, growing from the baseline with a small bounce, always with the same figures in a table beside or below. Recharts when a chart needs more than bars |
 | Search and Ask bar | cmdk |
+| Formatted text editor | Tiptap (on ProseMirror), limited to what the app's formatted text holds |
 | Icons | Lucide |
 | Toasts | Sonner |
 | Theme switch | The browser's View Transitions feature, no library |

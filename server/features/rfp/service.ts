@@ -31,6 +31,7 @@ import {
   type RfpRow,
   type RfpStage,
 } from "../../../shared/rfp";
+import { normalise, parseBlocks, plainBlocks, plainText, toMarkdown } from "../../../shared/richtext";
 import { suggestionStatusLabels, type SuggestionStatus } from "../../../shared/scorecards";
 import type { Page, User } from "../../../shared/types";
 import { z } from "zod";
@@ -54,6 +55,8 @@ export type Changes = Record<string, { from: unknown; to: unknown }>;
 
 const personName = sql<string>`coalesce(${users.displayName}, ${users.email})`;
 const short = (s: string | null | undefined, max = 160) => (s == null ? null : s.length > max ? `${s.slice(0, max)}…` : s);
+/** A section's text as words, without its formatting, for the history. */
+const sectionWords = (md: string | null | undefined) => plainText(parseBlocks(md)).replace(/\n/g, " · ") || null;
 export const words = (s: SuggestionStatus) => suggestionStatusLabels[s].toLowerCase();
 
 /** What the comparison read: every answer of the candidates in the running. Changes whenever one of them does. */
@@ -154,7 +157,7 @@ export async function getRfp(db: Queryable, id: string, today: Day): Promise<Rfp
     stage: r.stage,
     createdAt: r.createdAt.toISOString(),
     createdBy: r.createdBy,
-    sections: sections.map((s) => ({ id: s.id, heading: s.heading, body: s.body })),
+    sections: sections.map((s) => ({ id: s.id, heading: s.heading, body: s.bodyFormat === "plain" ? toMarkdown(plainBlocks(s.body)) || null : s.body })),
     criteria: criteria.map((c) => ({ id: c.id, name: c.name, weight: c.weight, part: c.part })),
     questions: questions.map((q) => ({ id: q.id, number: q.number, text: q.text, criterionId: q.criterionId })),
     signoffs: signoffs.map((s) => ({
@@ -382,7 +385,8 @@ function contentChanges(before: RfpDetail, after: RfpContentInput): Changes {
   const newSections = new Map(after.sections.map((s) => [s.heading, s.body]));
   for (const [heading, body] of newSections) {
     if (!oldSections.has(heading)) changes[`section ${heading}`] = { from: null, to: "added" };
-    else if ((oldSections.get(heading) ?? null) !== (body ?? null)) changes[`section ${heading}`] = { from: short(oldSections.get(heading)), to: short(body) };
+    else if (normalise(oldSections.get(heading)) !== normalise(body))
+      changes[`section ${heading}`] = { from: short(sectionWords(oldSections.get(heading))), to: short(sectionWords(body)) };
   }
   for (const heading of oldSections.keys()) if (!newSections.has(heading)) changes[`section ${heading}`] = { from: "listed", to: "removed" };
   if (before.sections.map((s) => s.heading).join("\n") !== after.sections.map((s) => s.heading).join("\n") && !Object.keys(changes).length)
@@ -412,12 +416,22 @@ function contentChanges(before: RfpDetail, after: RfpContentInput): Changes {
   return changes;
 }
 
-/** Replaces the sections, criteria and questions with what was sent. Questions are numbered in the order given. */
-async function writeContent(tx: Tx, rfpId: string, c: RfpContentInput) {
+/**
+ * Replaces the sections, criteria and questions with what was sent. Questions are numbered
+ * in the order given. A section sent with its id is changed in place, so that reviewers'
+ * remarks and AI rewrites stay with it; a section left out is removed.
+ */
+export async function writeContent(tx: Tx, rfpId: string, c: RfpContentInput) {
   await tx.delete(rfpQuestions).where(eq(rfpQuestions.rfpId, rfpId));
   await tx.delete(rfpCriteria).where(eq(rfpCriteria.rfpId, rfpId));
-  await tx.delete(rfpSections).where(eq(rfpSections.rfpId, rfpId));
-  if (c.sections.length) await tx.insert(rfpSections).values(c.sections.map((s, i) => ({ rfpId, position: i + 1, heading: s.heading, body: s.body })));
+  const existing = new Set((await tx.select({ id: rfpSections.id }).from(rfpSections).where(eq(rfpSections.rfpId, rfpId))).map((x) => x.id));
+  const kept = c.sections.flatMap((s) => (s.id && existing.has(s.id) ? [s.id] : []));
+  await tx.delete(rfpSections).where(kept.length ? and(eq(rfpSections.rfpId, rfpId), notInArray(rfpSections.id, kept)) : eq(rfpSections.rfpId, rfpId));
+  for (const [i, s] of c.sections.entries()) {
+    const values = { rfpId, position: i + 1, heading: s.heading, body: normalise(s.body) || null, bodyFormat: "markdown" as const };
+    if (s.id && existing.has(s.id)) await tx.update(rfpSections).set(values).where(eq(rfpSections.id, s.id));
+    else await tx.insert(rfpSections).values(values);
+  }
   const ids = new Map<string, string>();
   if (c.criteria.length) {
     const rows = await tx

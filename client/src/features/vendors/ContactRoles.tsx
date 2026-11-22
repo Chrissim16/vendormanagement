@@ -13,18 +13,7 @@ import { Button, ConfirmButton, ErrorState, Loading } from "../../platform/ui";
 /** The roles box of a contact form: chosen from the shared list, or a new one typed in (V-7). */
 export function RolesField({ id, chosen, onChange, error }: { id: string; chosen: string[]; onChange: (next: string[]) => void; error?: string }) {
   const roles = useContactRoles();
-  return (
-    <ChoicePicker
-      id={id}
-      label="Roles (optional)"
-      noun="role"
-      options={(roles.data ?? []).map((r) => r.name)}
-      chosen={chosen}
-      onChange={onChange}
-      allowNew
-      error={error}
-    />
-  );
+  return <ChoicePicker id={id} label="Roles (optional)" noun="role" options={(roles.data ?? []).map((r) => r.name)} chosen={chosen} onChange={onChange} allowNew error={error} />;
 }
 
 /** The keys of every role problem (the box, or one role in it), so changing the roles clears them all. */

@@ -97,10 +97,7 @@ const blank = (v: unknown) => v === undefined || v === null || (typeof v === "st
  * saved without one. Anything filled in without a name is pointed out, not dropped.
  */
 export const newVendorSchema = vendorSchema.extend({
-  mainContact: z.preprocess(
-    (v) => (v && typeof v === "object" && Object.values(v).every(blank) ? undefined : v),
-    contactSchema.omit({ isPrimary: true }).optional(),
-  ),
+  mainContact: z.preprocess((v) => (v && typeof v === "object" && Object.values(v).every(blank) ? undefined : v), contactSchema.omit({ isPrimary: true }).optional()),
 });
 
 /** A vendor's address as the lines it is written on; the country is the last line. Empty when none is given. */

@@ -4,18 +4,21 @@ import { contentEditable, contentLocked, contentProblems, partLabels, parts, rev
 import { api, ApiError, messageOf } from "../../lib/api";
 import { burst } from "../../lib/burst";
 import { Button, ErrorState, IconButton, Select, TextInput } from "../../platform/ui";
+import { parseBlocks } from "../../../../shared/richtext";
+import { RichText } from "../../platform/RichText";
+import { RichTextEditor } from "../../platform/RichTextEditor";
 import { AiTextPanel, Nothing, Section } from "../overview/parts";
 import { textareaClass, useRfpChange } from "./parts";
 
 interface Editing {
-  sections: { heading: string; body: string }[];
+  sections: { id?: string; heading: string; body: string }[];
   criteria: { key: string; name: string; weight: string; part: Part }[];
   questions: { text: string; criterionKey: string }[];
 }
 /** Unsaved changes to the document, held by the RFP's page so that they outlive this tab. */
 export type Kept = MutableRefObject<{ v: Editing; base: string } | null>;
 const editingOf = (r: RfpDetail): Editing => ({
-  sections: r.sections.map((s) => ({ heading: s.heading, body: s.body ?? "" })),
+  sections: r.sections.map((s) => ({ id: s.id, heading: s.heading, body: s.body ?? "" })),
   criteria: r.criteria.map((c) => ({ key: c.id, name: c.name, weight: String(c.weight), part: c.part })),
   questions: r.questions.map((q) => ({ text: q.text, criterionKey: q.criterionId })),
 });
@@ -40,7 +43,7 @@ function ReadOnly({ rfp }: { rfp: RfpDetail }) {
         {rfp.sections.map((s) => (
           <div key={s.id} className="border-b border-line py-4">
             <h3 className="font-semibold">{s.heading}</h3>
-            <p className="mt-1 max-w-[78ch] whitespace-pre-line text-ink-2">{s.body ?? "Not written."}</p>
+            {s.body ? <RichText blocks={parseBlocks(s.body)} className="mt-1 text-ink-2" /> : <p className="mt-1 text-ink-2">Not written.</p>}
           </div>
         ))}
       </Section>
@@ -179,15 +182,14 @@ function Editor({ rfp, onDirty, keep }: { rfp: RfpDetail; onDirty: (dirty: boole
                   className="font-semibold"
                 />
                 <Problem id={`p-sections.${i}.heading`}>{errors[`sections.${i}.heading`]}</Problem>
-                <textarea
-                  aria-label={`Text of section ${i + 1}`}
-                  rows={Math.min(10, Math.max(3, Math.ceil(s.body.length / 110)))}
+                <RichTextEditor
+                  key={s.id ?? `new-${i}`}
+                  label={`Text of section ${i + 1}`}
                   value={s.body}
-                  maxLength={10000}
                   placeholder="The text of this section"
-                  {...invalid(`sections.${i}.body`)}
-                  onChange={(e) => set({ sections: v.sections.map((x, n) => (n === i ? { ...x, body: e.target.value } : x)) })}
-                  className={textareaClass}
+                  invalid={!!errors[`sections.${i}.body`]}
+                  describedBy={errors[`sections.${i}.body`] ? `p-sections.${i}.body` : undefined}
+                  onChange={(body) => setV((x) => ({ ...x, sections: x.sections.map((y, n) => (n === i ? { ...y, body } : y)) }))}
                 />
                 <Problem id={`p-sections.${i}.body`}>{errors[`sections.${i}.body`]}</Problem>
               </div>
@@ -482,7 +484,7 @@ export function DocumentTab({ rfp, keep }: { rfp: RfpDetail; keep: Kept }) {
                     {d.sections.map((s, i) => (
                       <div key={i}>
                         <h3 className="font-semibold">{s.heading}</h3>
-                        <p className="whitespace-pre-line">{s.body}</p>
+                        <RichText blocks={parseBlocks(s.body)} />
                       </div>
                     ))}
                     <div>

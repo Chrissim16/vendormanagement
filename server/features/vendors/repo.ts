@@ -152,7 +152,11 @@ export async function setContactRoles(db: Queryable, contactId: string, roleIds:
 
 export const listRoles = (db: Queryable): Promise<ContactRole[]> =>
   db
-    .select({ id: contactRoles.id, name: contactRoles.name, contacts: sql<number>`(select count(*)::int from ${contactRoleLinks} where ${contactRoleLinks.roleId} = ${contactRoles.id})` })
+    .select({
+      id: contactRoles.id,
+      name: contactRoles.name,
+      contacts: sql<number>`(select count(*)::int from ${contactRoleLinks} where ${contactRoleLinks.roleId} = ${contactRoles.id})`,
+    })
     .from(contactRoles)
     .orderBy(sql`lower(${contactRoles.name})`);
 export const getRole = async (db: Queryable, id: string) => (await db.select().from(contactRoles).where(eq(contactRoles.id, id)))[0];
@@ -166,24 +170,13 @@ export const roleNamed = async (db: Queryable, name: string) =>
   )[0];
 /** The roles with these ids, A to Z. */
 export const rolesById = (db: Queryable, ids: string[]) =>
-  ids.length
-    ? db
-        .select({ id: contactRoles.id, name: contactRoles.name })
-        .from(contactRoles)
-        .where(inArray(contactRoles.id, ids))
-    : Promise.resolve([]);
+  ids.length ? db.select({ id: contactRoles.id, name: contactRoles.name }).from(contactRoles).where(inArray(contactRoles.id, ids)) : Promise.resolve([]);
 /**
  * Adds a role unless one with this name (ignoring case) is there. When someone else is adding
  * the same one at that moment, the database waits for them and then adds nothing.
  */
 export const insertRole = async (db: Queryable, name: string, by: string) =>
-  (
-    await db
-      .insert(contactRoles)
-      .values({ name, createdBy: by, updatedBy: by })
-      .onConflictDoNothing()
-      .returning({ id: contactRoles.id, name: contactRoles.name })
-  )[0];
+  (await db.insert(contactRoles).values({ name, createdBy: by, updatedBy: by }).onConflictDoNothing().returning({ id: contactRoles.id, name: contactRoles.name }))[0];
 export const renameRole = (db: Queryable, id: string, name: string, by: string) =>
   db.update(contactRoles).set({ name, updatedAt: new Date(), updatedBy: by }).where(eq(contactRoles.id, id));
 export const deleteRole = (db: Queryable, id: string) => db.delete(contactRoles).where(eq(contactRoles.id, id));

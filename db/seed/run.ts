@@ -16,7 +16,9 @@ import { finaliseScorecard, saveScorecard, startScorecard, type ScorecardContext
 import { addMonth, monthOf } from "../../shared/performance";
 import { addQuarter, quarterBounds, quarterOf } from "../../shared/scorecards";
 import { createVendor, saveContact, updateVendor } from "../../server/features/vendors/service";
-import { briefings, jiraBoardLinks, rfps, scorecards } from "../schema";
+import { briefings, jiraBoardLinks, rfps, scorecards, wordTemplates } from "../schema";
+import { uploadTemplate } from "../../server/features/rfp/template";
+import { exampleTemplate } from "../../server/features/rfp/word/example";
 import { addCandidate, issueCandidate, moveCandidate, saveAnswer } from "../../server/features/rfp/candidates";
 import { compareAnswers, decide, saveScore } from "../../server/features/rfp/evaluation";
 import { addSignoff, changeSignoff, createRfp, getRfp, moveStage, reviewDraft, suggestDraft, type RfpContext } from "../../server/features/rfp/service";
@@ -80,7 +82,18 @@ function sampleVendors(today: Day): SeedVendor[] {
   });
   return [
     {
-      vendor: { name: "Bluefinch Systems", type: "software", legalName: "Bluefinch Systems B.V. (invented)", country: "NL", website: "https://bluefinch.example.test", addressLine1: "Bluefinchplein 12", addressLine2: "4th floor", postalCode: "3500 AA", city: "Utrecht", vatNumber: "NL000100001B01" },
+      vendor: {
+        name: "Bluefinch Systems",
+        type: "software",
+        legalName: "Bluefinch Systems B.V. (invented)",
+        country: "NL",
+        website: "https://bluefinch.example.test",
+        addressLine1: "Bluefinchplein 12",
+        addressLine2: "4th floor",
+        postalCode: "3500 AA",
+        city: "Utrecht",
+        vatNumber: "NL000100001B01",
+      },
       owner: "mira@example.test",
       contacts: [
         ["Lena Hartog", ["Account Manager", "Executive Sponsor"]],
@@ -133,7 +146,15 @@ function sampleVendors(today: Day): SeedVendor[] {
       ],
     },
     {
-      vendor: { name: "Quillon Consulting", type: "consultancy", country: "NL", addressLine1: "Quillonkade 8", postalCode: "1000 AB", city: "Amsterdam", vatNumber: "NL000100002B01" },
+      vendor: {
+        name: "Quillon Consulting",
+        type: "consultancy",
+        country: "NL",
+        addressLine1: "Quillonkade 8",
+        postalCode: "1000 AB",
+        city: "Amsterdam",
+        vatNumber: "NL000100002B01",
+      },
       owner: "sanne@example.test",
       contacts: [
         ["Pieter Aalto", ["Partner"]],
@@ -210,7 +231,16 @@ function sampleVendors(today: Day): SeedVendor[] {
       agreements: [sub("Data platform licence", 250, 31_500_00, { currency: "GBP", autoRenews: false }), ...paper(-740)],
     },
     {
-      vendor: { name: "Emberline Advisory", type: "advisory", scoringEnabled: false, dpaRequired: false, country: "GB", addressLine1: "3 Emberline Close", postalCode: "EH1 0AA", city: "Edinburgh" },
+      vendor: {
+        name: "Emberline Advisory",
+        type: "advisory",
+        scoringEnabled: false,
+        dpaRequired: false,
+        country: "GB",
+        addressLine1: "3 Emberline Close",
+        postalCode: "EH1 0AA",
+        city: "Edinburgh",
+      },
       owner: "sanne@example.test",
       agreements: [sub("Research membership", 300, 62_000_00, { noticePeriodDays: 60 }), { kind: "nda", title: "NDA", status: "active", signedOn: d(-2400) }],
     },
@@ -406,6 +436,9 @@ export async function seed(db: Db, today: Day, ctx?: ScorecardContext, storage?:
     const admin = (await db.select().from(users).where(eq(users.email, "admin@example.test")))[0];
     // Two invented contracts, when there is a place to keep files.
     if (admin && storage) await seedDocuments(db, storage, toUser(admin));
+    // Q-14: the invented example template in use, so the Word files look as they will with the company's.
+    if (admin && storage && !(await db.select({ id: wordTemplates.id }).from(wordTemplates)).length)
+      await uploadTemplate({ db, storage }, { name: "Larkspur & Vale RFP template (invented example).dotx", data: await exampleTemplate() }, toUser(admin));
     if (admin) await seedPerformance(ctx.perf, toUser(admin));
     await seedScorecards(ctx, today);
     await seedRfps(ctx, today);

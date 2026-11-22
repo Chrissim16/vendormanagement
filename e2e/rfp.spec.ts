@@ -162,7 +162,7 @@ test.describe("Q-2 draft", () => {
     await page.getByLabel("Criterion of question 14").selectOption({ label: "Commercial terms" });
     await page.getByRole("button", { name: "Add section" }).click();
     await page.getByLabel("Heading of section 7").fill("Annex: our systems");
-    await page.getByLabel("Text of section 7").fill("A list of the systems the tool has to work with.");
+    await page.getByRole("textbox", { name: "Text of section 7" }).fill("A list of the systems the tool has to work with.");
     await page.getByRole("button", { name: "Save document" }).click();
     await expect(page.getByText("Document saved")).toBeVisible();
     await expect(panel).toContainText("Accepted with changes");
@@ -195,18 +195,14 @@ test.describe("Q-2 draft", () => {
 });
 
 test.describe("Q-3 review", () => {
-  test("Q-3 exports as Word and PDF; approved needs at least one approval and no open change request", async ({ page, context, request }) => {
+  test("Q-3 exports as Word, no longer as PDF; approved needs at least one approval and no open change request", async ({ page, context, request }) => {
     const rfp = await drafted(request);
     await signInAs(context, MEMBER);
     await open(page, rfp, "review");
-    for (const [name, ext] of [
-      ["Download as Word", ".docx"],
-      ["Download as PDF", ".pdf"],
-    ] as const) {
-      const download = page.waitForEvent("download");
-      await page.getByRole("link", { name }).click();
-      expect((await download).suggestedFilename()).toBe(`${rfp.title} RFP review copy${ext}`);
-    }
+    const download = page.waitForEvent("download");
+    await page.getByRole("link", { name: "Download as Word" }).click();
+    expect((await download).suggestedFilename()).toBe(`${rfp.title} RFP review copy.docx`);
+    await expect(page.getByRole("link", { name: "Download as PDF" })).toHaveCount(0);
     await expect(page.getByText("No sign-offs yet. They are recorded once the draft has been sent for review.")).toBeVisible();
     await page.getByRole("button", { name: "Send for review" }).click();
     await expect(currentStage(page)).toContainText("In review");

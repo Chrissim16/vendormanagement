@@ -172,7 +172,25 @@ describe("A-8 import", () => {
 
   it("imports the valid rows, and importing the same file again adds nothing", async () => {
     const file = await workbook(
-      [v("Import Delta", "consultancy", "prospect", MEMBER, "Delta B.V.", "https://delta.example.test", "Testweg 1", "", "2611 AA", "Delft", "nl", "nl 000.222.333 b01", "no", "yes", "no")],
+      [
+        v(
+          "Import Delta",
+          "consultancy",
+          "prospect",
+          MEMBER,
+          "Delta B.V.",
+          "https://delta.example.test",
+          "Testweg 1",
+          "",
+          "2611 AA",
+          "Delft",
+          "nl",
+          "nl 000.222.333 b01",
+          "no",
+          "yes",
+          "no",
+        ),
+      ],
       [
         a("Import Delta", "SOW", "Delta SOW", { 4: "active", 7: "2026-01-10", 8: "2026-02-01", 9: "2026-12-31", 10: "Delta MSA", 11: "time_and_materials", 12: 64000 }),
         a("Import Delta", "MSA", "Delta MSA", { 4: "active", 7: "2026-01-10" }),
@@ -250,7 +268,26 @@ describe("A-8 import", () => {
     const vendors = wb.addWorksheet("Vendors");
     vendors.addRow(old);
     vendors.addRow(["Old Template Vendor", "software", "", "", "", "", "GB"]);
-    wb.addWorksheet("Agreements").addRow(["Vendor name", "Kind", "Title", "Reference", "Status", "Owner email", "Currency", "Signed on", "Start date", "End date", "Parent MSA title", "Pricing", "Budget", "Annual value", "Notice period days", "Auto renews", "Renewal term months", "Notes"]);
+    wb.addWorksheet("Agreements").addRow([
+      "Vendor name",
+      "Kind",
+      "Title",
+      "Reference",
+      "Status",
+      "Owner email",
+      "Currency",
+      "Signed on",
+      "Start date",
+      "End date",
+      "Parent MSA title",
+      "Pricing",
+      "Budget",
+      "Annual value",
+      "Notice period days",
+      "Auto renews",
+      "Renewal term months",
+      "Notes",
+    ]);
     const res = await send("preview", Buffer.from(await wb.xlsx.writeBuffer()));
     expect(res.status).toBe(200);
     expect(res.body.rows[0]).toMatchObject({ label: "Old Template Vendor", outcome: "add", problems: [] });

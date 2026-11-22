@@ -1,12 +1,15 @@
 import { Router, type Response } from "express";
 import { z } from "zod";
 import { rfpStages } from "../../../shared/rfp";
-import { currentUser } from "../../platform/auth";
+import { currentUser, requireRole } from "../../platform/auth";
 import { AppError } from "../../platform/errors";
 import { dir, id, paging, text, upload } from "../../platform/http";
 import * as candidates from "./candidates";
 import * as evaluation from "./evaluation";
-import { answerSheet, decisionRecordPdf, rfpPdf, rfpWord } from "./files";
+import { answerSheet, decisionRecordPdf, rfpWord } from "./files";
+import * as template from "./template";
+import { templateInForce } from "./template";
+import { exampleTemplate } from "./word/example";
 import * as service from "./service";
 
 const listQuery = z.object({
@@ -19,6 +22,7 @@ const listQuery = z.object({
 
 const types = {
   pdf: "application/pdf",
+  dotx: "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 };
@@ -74,12 +78,22 @@ export function rfpRoutes(ctx: service.RfpContext) {
   r.delete("/rfp-signoffs/:id", async (req, res) => res.json(await service.changeSignoff(ctx, id.parse(req.params.id), { remove: true }, currentUser(req))));
   r.get("/rfps/:id/rfp.docx", async (req, res) => {
     const rfp = await get(id.parse(req.params.id));
-    download(res, `${rfp.title} RFP review copy`, "docx", await rfpWord(rfp, { today: ctx.today() }));
+    const doc = await rfpWord(rfp, { template: await templateInForce(ctx.db, ctx.storage), today: ctx.today(), version: null, review: { rfpId: rfp.id } });
+    download(res, `${rfp.title} RFP review copy`, "docx", doc);
   });
-  r.get("/rfps/:id/rfp.pdf", async (req, res) => {
-    const rfp = await get(id.parse(req.params.id));
-    download(res, `${rfp.title} RFP review copy`, "pdf", await rfpPdf(rfp, ctx.today()));
+
+  // The company's Word template (Q-14), admins only.
+  r.get("/admin/word-template", requireRole("admin"), async (_req, res) => res.json(await template.templateInfo(ctx.db)));
+  r.post("/admin/word-template", requireRole("admin"), upload.single("file"), async (req, res) =>
+    res.status(201).json(await template.uploadTemplate(ctx, file(req, "Choose the template file."), currentUser(req))),
+  );
+  r.delete("/admin/word-template", requireRole("admin"), async (req, res) => res.json(await template.usePlainLayout(ctx.db, currentUser(req))));
+  r.get("/admin/word-template/file", requireRole("admin"), async (_req, res) => {
+    const f = await template.templateFile(ctx.db, ctx.storage);
+    const ext = /\.dotx$/i.test(f.fileName) ? "dotx" : "docx";
+    download(res, f.fileName.replace(/\.(dotx|docx)$/i, ""), ext, f.data);
   });
+  r.get("/admin/word-template/example", requireRole("admin"), async (_req, res) => download(res, "Example RFP template (invented)", "dotx", await exampleTemplate()));
 
   // Candidates and issue (Q-4, Q-5)
   r.post("/rfps/:id/candidates", async (req, res) => res.status(201).json(await candidates.addCandidate(ctx, id.parse(req.params.id), body(req), currentUser(req))));
@@ -90,7 +104,8 @@ export function rfpRoutes(ctx: service.RfpContext) {
     const candidateId = id.parse(req.params.id);
     const rfp = await get(await candidates.rfpOfCandidate(ctx.db, candidateId));
     const candidate = candidates.exportable(rfp, candidateId);
-    download(res, `${rfp.title} RFP for ${candidate.vendorName}`, "docx", await rfpWord(rfp, { candidate, today: ctx.today() }));
+    const doc = await rfpWord(rfp, { candidate, template: await templateInForce(ctx.db, ctx.storage), today: ctx.today(), version: null });
+    download(res, `${rfp.title} RFP for ${candidate.vendorName}`, "docx", doc);
   });
   r.get("/rfp-candidates/:id/answer-sheet.xlsx", async (req, res) => {
     const candidateId = id.parse(req.params.id);

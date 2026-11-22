@@ -332,7 +332,9 @@ test.describe("V-5 import columns", () => {
       return r;
     };
     vendors.spliceRows(2, 1);
-    vendors.addRow(row(`Addressed import ${tag}`, { Street: "Testplein 1", "Postal code": "1000 AA", City: "Amsterdam", Country: "nl", "VAT or tax number": "nl 111.222.333 b01" }));
+    vendors.addRow(
+      row(`Addressed import ${tag}`, { Street: "Testplein 1", "Postal code": "1000 AA", City: "Amsterdam", Country: "nl", "VAT or tax number": "nl 111.222.333 b01" }),
+    );
     vendors.addRow(row(`Bare import ${tag}`, {}));
     vendors.addRow(row(`Taken import ${tag}`, { "VAT or tax number": holder.vatNumber!.toLowerCase() }));
     wb.getWorksheet("Agreements")!.spliceRows(2, 1);

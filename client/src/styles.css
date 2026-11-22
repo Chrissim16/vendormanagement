@@ -121,3 +121,92 @@ table {
 :root[data-mode="dark"] {
   --bar: rgba(57, 169, 240, 0.28);
 }
+
+/* Formatted text (Q-12): the RFP's sections as they read, in the editor and on the page. */
+:root {
+  --crit-tint: #fde8ea;
+  --ok-tint: #dff5ea;
+  --ok-text: #0b6b48;
+}
+:root[data-mode="dark"] {
+  --crit-tint: rgba(229, 72, 77, 0.2);
+  --ok-tint: rgba(111, 216, 172, 0.18);
+  --ok-text: #8ee6bf;
+}
+.rich {
+  max-width: 78ch;
+  line-height: 1.6;
+}
+.rich > * + * {
+  margin-top: 0.6em;
+}
+.rich h2,
+.rich h4 {
+  font-size: 15px;
+  font-weight: 650;
+  margin-top: 1em;
+}
+.rich h3,
+.rich h5 {
+  font-size: 14px;
+  font-weight: 650;
+  font-style: italic;
+  margin-top: 0.9em;
+}
+.rich ul {
+  list-style: disc;
+  padding-left: 1.4em;
+}
+.rich ol {
+  list-style: decimal;
+  padding-left: 1.6em;
+}
+.rich li + li {
+  margin-top: 0.2em;
+}
+.rich li p {
+  margin: 0;
+}
+.rich-table,
+.rich .tableWrapper {
+  overflow-x: auto;
+}
+.rich table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13.5px;
+}
+.rich th,
+.rich td {
+  border: 1px solid var(--line-2);
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+  min-width: 4em;
+}
+.rich th {
+  background: var(--sunk);
+  font-weight: 600;
+}
+.rich th p,
+.rich td p {
+  margin: 0;
+}
+.rich ins,
+.rich del {
+  padding: 0 1px;
+}
+/* In the editor: the cell being edited, and an empty editor's hint. */
+.rich .selectedCell {
+  background: var(--tint);
+}
+.rich p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--ink-3);
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
+.ProseMirror:focus {
+  outline: none;
+}

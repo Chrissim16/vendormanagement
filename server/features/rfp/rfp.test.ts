@@ -248,25 +248,21 @@ describe("Q-2 draft", () => {
 });
 
 describe("Q-3 review", () => {
-  it("exports as Word and as PDF, with the demand, the sections, the criteria with weights and the questions", async () => {
+  it("exports as Word, with the demand, the sections, the criteria with weights and the questions, and no longer as PDF", async () => {
     const r = await drafted({ title: `Expense tool (pilot) é ${n()}`, sponsor: "Finance director", budgetMinor: 80_000_00 });
     const word = await file(`/api/rfps/${r.id}/rfp.docx`);
     expect(word.headers["content-type"]).toContain("wordprocessingml");
     expect(word.headers["content-disposition"]).toContain("%28pilot%29%20%C3%A9");
-    const w = await wordText(word.body as Buffer);
-    const pdf = await file(`/api/rfps/${r.id}/rfp.pdf`);
-    expect(pdf.headers["content-type"]).toBe("application/pdf");
-    const p = await textOf(pdf.body as Buffer);
-    for (const text of [w, p]) {
-      expect(text).toContain(r.title);
-      expect(text).toContain("Finance director");
-      expect(text).toContain("€ 80,000.00");
-      expect(text).toContain(r.sections[0]!.heading);
-      expect(text).toContain(`${r.criteria[0]!.name}`);
-      expect(text).toContain(`${r.criteria[0]!.weight}%`);
-      expect(text).toContain(r.questions.at(-1)!.text);
-      expect(text).toContain("70% of the overall score");
-    }
+    const text = await wordText(word.body as Buffer);
+    expect(text).toContain(r.title);
+    expect(text).toContain("Finance director");
+    expect(text).toContain("€ 80,000.00");
+    expect(text).toContain(r.sections[0]!.heading);
+    expect(text).toContain(`${r.criteria[0]!.name}`);
+    expect(text).toContain(`${r.criteria[0]!.weight}%`);
+    expect(text).toContain(r.questions.at(-1)!.text);
+    expect(text).toContain("70% of the overall score");
+    expect((await t.as(MEMBER).get(`/api/rfps/${r.id}/rfp.pdf`)).status).toBe(404);
   });
 
   it("cannot be approved without an approval, nor while a requested change is open", async () => {

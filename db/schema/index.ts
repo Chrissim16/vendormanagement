@@ -681,8 +681,18 @@ export const rfpSections = pgTable(
     position: integer("position").notNull(),
     heading: text("heading").notNull(),
     body: text("body"),
+    /**
+     * Q-12: how the body is written. "markdown" is the formatted text of shared/richtext;
+     * "plain" is text typed before M11, which opens as plain paragraphs, unchanged.
+     */
+    bodyFormat: text("body_format", { enum: ["plain", "markdown"] })
+      .notNull()
+      .default("markdown"),
+    /** Q-12: the AI's latest rewrite of this section, and the reviewers' remarks it was asked for. It counts for nothing until a person uses it. */
+    rewriteSuggestionId: uuid("rewrite_suggestion_id").references((): AnyPgColumn => aiSuggestions.id),
+    rewriteFor: jsonb("rewrite_for").$type<string[]>(),
   },
-  (t) => [index("rfp_sections_rfp_idx").on(t.rfpId)],
+  (t) => [index("rfp_sections_rfp_idx").on(t.rfpId), check("rfp_sections_format_check", sql`${t.bodyFormat} in ('plain', 'markdown')`)],
 );
 
 export const rfpQuestions = pgTable(
@@ -784,4 +794,107 @@ export const rfpScores = pgTable(
     ...stamps,
   },
   (t) => [uniqueIndex("rfp_scores_one_per_evaluator").on(t.candidateId, t.criterionId, t.evaluatorUserId), check("rfp_scores_score_check", sql`${t.score} between 1 and 5`)],
+);
+
+/**
+ * Q-14: the company's Word template, uploaded by an admin. Every upload is kept; the one
+ * in force (at most one) is what new Word files are made from. None in force: the plain layout.
+ */
+export const wordTemplates = pgTable(
+  "word_templates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    fileName: text("file_name").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    storageKey: text("storage_key").notNull(),
+    /** What the app recognised in it (TemplateFound). */
+    found: jsonb("found").notNull(),
+    inForce: boolean("in_force").notNull().default(true),
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
+    uploadedBy: text("uploaded_by").notNull(),
+  },
+  (t) => [uniqueIndex("word_templates_one_in_force").on(t.inForce).where(sql`${t.inForce}`)],
+);
+
+/** Q-13: one review round of an RFP: the version number, and the review copy exactly as it was downloaded. */
+export const rfpReviewRounds = pgTable(
+  "rfp_review_rounds",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    rfpId: uuid("rfp_id")
+      .notNull()
+      .references(() => rfps.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    /** The demand, sections, criteria and questions as in the review copy. */
+    content: jsonb("content").notNull(),
+    /** The content without ids, to tell whether anything changed since. */
+    fingerprint: text("fingerprint").notNull(),
+    fileName: text("file_name").notNull(),
+    storageKey: text("storage_key").notNull(),
+    madeAt: timestamp("made_at", { withTimezone: true }).notNull().defaultNow(),
+    madeBy: text("made_by").notNull(),
+  },
+  (t) => [uniqueIndex("rfp_review_rounds_version").on(t.rfpId, t.version), check("rfp_review_rounds_version_check", sql`${t.version} >= 1`)],
+);
+
+/** Q-13: a Word file a reviewer sent back, uploaded to the round it is a copy of. */
+export const rfpReviewFiles = pgTable(
+  "rfp_review_files",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    roundId: uuid("round_id")
+      .notNull()
+      .references(() => rfpReviewRounds.id, { onDelete: "cascade" }),
+    fileName: text("file_name").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    storageKey: text("storage_key").notNull(),
+    /** The same file twice in one round is refused. */
+    sha256: text("sha256").notNull(),
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
+    uploadedBy: text("uploaded_by").notNull(),
+  },
+  (t) => [uniqueIndex("rfp_review_files_once").on(t.roundId, t.sha256)],
+);
+
+/** Q-13: a comment or a tracked change read from a returned review copy, and what a member did with it. */
+export const rfpReviewerRemarks = pgTable(
+  "rfp_reviewer_remarks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => rfpReviewFiles.id, { onDelete: "cascade" }),
+    rfpId: uuid("rfp_id")
+      .notNull()
+      .references(() => rfps.id, { onDelete: "cascade" }),
+    /** Its place in the file, to list remarks in reading order. */
+    position: integer("position").notNull(),
+    kind: text("kind", { enum: ["comment", "suggested_edit"] }).notNull(),
+    author: text("author").notNull(),
+    /** The section it stands in. Empty when it could not be placed, or when its section was removed since. */
+    sectionId: uuid("section_id").references(() => rfpSections.id, { onDelete: "set null" }),
+    /** The heading it stands under in the file, or "Cover page", so an unplaced remark can still be found. */
+    foundUnder: text("found_under").notNull(),
+    anchorText: text("anchor_text"),
+    text: text("text"),
+    removedText: text("removed_text"),
+    addedText: text("added_text"),
+    /** A few words around a suggested edit, as in the file, so that it is found in the right place. */
+    beforeText: text("before_text"),
+    afterText: text("after_text"),
+    status: text("status", { enum: ["open", "dealt_with", "set_aside"] })
+      .notNull()
+      .default("open"),
+    /** How it was dealt with: taken over, rewritten by the AI, by hand. */
+    resolution: text("resolution", { enum: ["taken_over", "ai_rewrite", "by_hand"] }),
+    resolvedBy: text("resolved_by"),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("rfp_reviewer_remarks_rfp_idx").on(t.rfpId),
+    index("rfp_reviewer_remarks_file_idx").on(t.fileId),
+    check("rfp_reviewer_remarks_kind_check", sql`${t.kind} in ('comment', 'suggested_edit')`),
+    check("rfp_reviewer_remarks_status_check", sql`${t.status} in ('open', 'dealt_with', 'set_aside')`),
+    check("rfp_reviewer_remarks_resolved_check", sql`(${t.status} = 'open') = (${t.resolvedAt} is null)`),
+  ],
 );

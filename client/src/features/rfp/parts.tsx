@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { documentTypes, MAX_DOCUMENT_BYTES } from "../../../../shared/agreements";
+import { MAX_DOCUMENT_BYTES } from "../../../../shared/agreements";
 import { rfpStageLabels, type RfpDetail, type RfpStage } from "../../../../shared/rfp";
 import { messageOf } from "../../lib/api";
 import { Button, Pill, type Tone } from "../../platform/ui";
@@ -63,6 +63,8 @@ export function FileButton({
   onFile,
   onProblem,
   primary,
+  wrongType,
+  maxBytes = MAX_DOCUMENT_BYTES,
 }: {
   label: string;
   busyLabel?: string;
@@ -74,6 +76,9 @@ export function FileButton({
   onFile: (file: File) => void;
   onProblem: (message: string) => void;
   primary?: boolean;
+  /** What to say when a file of another type is chosen. */
+  wrongType?: string;
+  maxBytes?: number;
 }) {
   const input = useRef<HTMLInputElement>(null);
   return (
@@ -90,9 +95,8 @@ export function FileButton({
           e.target.value = "";
           if (!file) return;
           const ext = file.name.includes(".") ? file.name.split(".").pop()!.toLowerCase() : "";
-          if (!accept.includes(ext) || !(ext in documentTypes))
-            onProblem(accept.length === 1 ? "Choose an Excel file (.xlsx)." : "Only PDF, Word and Excel files can be attached.");
-          else if (file.size > MAX_DOCUMENT_BYTES) onProblem("That file is larger than 25 MB.");
+          if (!accept.includes(ext)) onProblem(wrongType ?? (accept.length === 1 ? "Choose an Excel file (.xlsx)." : "Only PDF, Word and Excel files can be attached."));
+          else if (file.size > maxBytes) onProblem(`That file is larger than ${Math.round(maxBytes / 1024 / 1024)} MB.`);
           else onFile(file);
         }}
       />

@@ -156,8 +156,7 @@ async function resolveRoles(tx: Tx, names: string[], by: User): Promise<{ id: st
     let role = await repo.roleNamed(tx, name);
     if (!role) {
       const added = await repo.insertRole(tx, name, by.email);
-      if (added)
-        await audit(tx, { userEmail: by.email, action: "create", ...ROLES, summary: added.name, changes: { [`role ${added.name}`]: { from: null, to: "added" } } });
+      if (added) await audit(tx, { userEmail: by.email, action: "create", ...ROLES, summary: added.name, changes: { [`role ${added.name}`]: { from: null, to: "added" } } });
       // Not added: a colleague added the same role a moment ago, and that one is used.
       role = added ?? (await repo.roleNamed(tx, name));
     }

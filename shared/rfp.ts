@@ -2,6 +2,7 @@ import { z } from "zod";
 import { isDay, type Day } from "./dates";
 import { currencies, type Currency } from "./money";
 import type { TextSuggestion } from "./overview";
+import { normalise, parseBlocks, TABLE_LIMITS } from "./richtext";
 import { cleanName, vendorTypes, type Paperwork, type VendorStatus, type VendorType } from "./vendors";
 
 /**
@@ -81,7 +82,15 @@ export type RfpDemand = z.infer<typeof rfpDemandSchema>;
 
 export const rfpContentSchema = z.object({
   sections: z
-    .array(z.object({ heading: requiredText(200, "Give the section a heading."), body: optionalText(10_000) }))
+    .array(
+      z.object({
+        /** The section as saved before, so that what points at it (a reviewer's remark, an AI rewrite) stays with it. Absent for a new one. */
+        id: z.string().uuid().optional(),
+        heading: requiredText(200, "Give the section a heading."),
+        /** Formatted text (shared/richtext). */
+        body: optionalText(20_000),
+      }),
+    )
     .max(30, "An RFP has at most 30 sections.")
     .default([]),
   criteria: z
@@ -121,6 +130,13 @@ export function contentProblems(c: RfpContentInput): Record<string, string> {
     if (seen.has(k)) out[`criteria.${i}.name`] = "This part already has a criterion with this name.";
     seen.add(k);
   });
+  c.sections.forEach((s, i) => {
+    for (const b of parseBlocks(s.body))
+      if (b.kind === "table" && (b.rows.length > TABLE_LIMITS.rows || (b.rows[0]?.length ?? 0) > TABLE_LIMITS.columns))
+        out[`sections.${i}.body`] = `A table has at most ${TABLE_LIMITS.rows} rows and ${TABLE_LIMITS.columns} columns.`;
+  });
+  const ids = c.sections.flatMap((s) => (s.id ? [s.id] : []));
+  if (new Set(ids).size !== ids.length) out["sections"] = "A section appears twice.";
   const byKey = new Map(c.criteria.map((x) => [x.key, x]));
   c.questions.forEach((q, i) => {
     const criterion = byKey.get(q.criterionKey);
@@ -180,7 +196,7 @@ export const templateDraft = (): RfpDraft => ({ sections: RFP_TEMPLATE.sections.
 export const draftToContent = (d: RfpDraft): RfpContentInput => {
   const key = (name: string) => `new-${d.criteria.findIndex((c) => c.part === "written" && c.name.toLowerCase() === name.toLowerCase())}`;
   return {
-    sections: d.sections.map((s) => ({ heading: s.heading, body: s.body || null })),
+    sections: d.sections.map((s) => ({ heading: s.heading, body: normalise(s.body) || null })),
     criteria: d.criteria.map((c, i) => ({ key: `new-${i}`, name: c.name, weight: c.weight, part: c.part })),
     questions: d.questions.map((q) => ({ text: q.text, criterionKey: key(q.criterion) })),
   };
@@ -191,12 +207,12 @@ const squash = (s: string | null | undefined) => (s ?? "").trim().replace(/\s+/g
 export function sameAsDraft(doc: { sections: RfpSection[]; criteria: RfpCriterion[]; questions: RfpQuestion[] }, d: RfpDraft): boolean {
   const names = new Map(doc.criteria.map((c) => [c.id, c.name]));
   const mine = JSON.stringify([
-    doc.sections.map((s) => [squash(s.heading), squash(s.body)]),
+    doc.sections.map((s) => [squash(s.heading), normalise(s.body)]),
     doc.criteria.map((c) => [squash(c.name).toLowerCase(), c.part, c.weight]),
     doc.questions.map((q) => [squash(q.text), squash(names.get(q.criterionId)).toLowerCase()]),
   ]);
   const theirs = JSON.stringify([
-    d.sections.map((s) => [squash(s.heading), squash(s.body)]),
+    d.sections.map((s) => [squash(s.heading), normalise(s.body)]),
     d.criteria.map((c) => [squash(c.name).toLowerCase(), c.part, c.weight]),
     d.questions.map((q) => [squash(q.text), squash(q.criterion).toLowerCase()]),
   ]);
@@ -431,6 +447,7 @@ export interface RfpRow {
 export interface RfpSection {
   id: string;
   heading: string;
+  /** Formatted text (shared/richtext); text from before M11 is given as plain paragraphs in that form. */
   body: string | null;
 }
 export interface RfpCriterion {
@@ -565,7 +582,7 @@ export function nextStep(r: RfpDetail, meId?: string): NextStep {
     case "in_review": {
       const blocker = approvalBlocker(r.signoffs);
       return blocker
-        ? { title: "Collect the sign-offs", text: `Send the Word or PDF export to the reviewers and record what each of them decided. ${blocker}`, tab: "review" }
+        ? { title: "Collect the sign-offs", text: `Send the Word copy to the reviewers and record what each of them decided. ${blocker}`, tab: "review" }
         : { title: "Mark it as approved", text: "At least one reviewer approved and no requested change is open.", tab: "review" };
     }
     case "approved": {

@@ -69,3 +69,26 @@ describe("V-7 a long job title carried over as a role", () => {
     expect(long.length).toBeGreaterThan(60);
   });
 });
+
+describe("Q-12 section text from before M11", () => {
+  it("is marked as plain text, and everything saved afterwards as formatted text", async () => {
+    const dir = migrationsBefore("0015_rfp_section_format");
+    const client = new PGlite();
+    const db = drizzle(client);
+    await migrate(db, { migrationsFolder: dir });
+    await client.exec(`
+      insert into users (id, email, role) values ('00000000-0000-4000-8000-000000000001', 'owner@example.test', 'admin');
+      insert into rfps (id, title, need, owner_user_id) values ('00000000-0000-4000-8000-0000000000b1', 'Old RFP', 'A need', '00000000-0000-4000-8000-000000000001');
+      insert into rfp_sections (rfp_id, position, heading, body) values ('00000000-0000-4000-8000-0000000000b1', 1, 'Intro', '- typed as a line, not a list');
+    `);
+    await migrate(db, { migrationsFolder: "db/migrations" });
+    await client.exec(`insert into rfp_sections (rfp_id, position, heading, body) values ('00000000-0000-4000-8000-0000000000b1', 2, 'New', '- a list');`);
+    const rows = await client.query<{ heading: string; body_format: string }>(`select heading, body_format from rfp_sections order by position`);
+    expect(rows.rows).toEqual([
+      { heading: "Intro", body_format: "plain" },
+      { heading: "New", body_format: "markdown" },
+    ]);
+    await client.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+});

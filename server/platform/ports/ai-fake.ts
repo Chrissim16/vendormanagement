@@ -168,9 +168,9 @@ function rfpDraft(ask: RfpDraftAsk): string {
   const bodies = [
     // The need was written for colleagues; a real model rewords it for vendors. The stand-in leaves that to a person and does not copy it.
     `We invite you to respond to this request for proposal for ${ask.title}. [Describe here, in words meant for vendors, what you need and why. The need as recorded in the demand was written for colleagues and is not copied into this document.]`,
-    `The scope of this request is ${ask.title}, as described in the introduction. Please make clear what your offer includes as standard and what it does not. [Add what is out of scope.]`,
-    `Responses are compared on the written answers first. Vendors on the shortlist may then be invited to a demonstration or an interview. ${ask.decisionWantedBy ? `We intend to decide by ${ask.decisionWantedBy}.` : "[Add the day a decision is expected.]"}`,
-    "Answer every question in the answer sheet that comes with this document, in the Answer column, and return the sheet as an Excel file. Supporting material may be sent along as PDF or Word. [Add the closing date and whom to ask questions.]",
+    `The scope of this request is **${ask.title}**, as described in the introduction. Please make clear what your offer includes as standard and what it does not.\n\n## In scope\n\n- [Add what is in scope.]\n- [Add what is in scope.]\n\n## Out of scope\n\n- [Add what is out of scope.]`,
+    `Responses are compared on the written answers first. Vendors on the shortlist may then be invited to a demonstration or an interview.\n\n| Step | When |\n| --- | --- |\n| Questions from vendors | [Add the date] |\n| Responses due | [Add the date] |\n| Demonstrations | [Add the date] |\n| Decision | ${ask.decisionWantedBy ?? "[Add the date]"} |`,
+    "Send back, as one response:\n\n1. the answer sheet that comes with this document, filled in, in the Answer column, as an Excel file;\n2. any supporting material, as PDF or Word.\n\n*[Add the closing date and whom to ask questions.]*",
     "Every response is scored per criterion on a scale from 1 to 5. The criteria and their weights are listed in this document, so that you know what matters most to us.",
     "This document, and everything shared in the course of this request, is confidential and is to be used for preparing your response only. [Add the terms that apply.]",
   ];

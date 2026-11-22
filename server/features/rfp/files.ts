@@ -1,4 +1,3 @@
-import { AlignmentType, Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableRow, TextRun, WidthType } from "docx";
 import ExcelJS from "exceljs";
 import { formatDay, type Day } from "../../../shared/dates";
 import {
@@ -16,11 +15,14 @@ import {
 } from "../../../shared/rfp";
 import { vendorStatusLabels } from "../../../shared/vendors";
 import { AppError } from "../../platform/errors";
-import { makePdf, type Pdf } from "../../platform/pdf";
+import { makePdf } from "../../platform/pdf";
 import { cellText, loadWorkbook } from "../import/service";
+import { parseBlocks } from "../../../shared/richtext";
 import { budgetWords } from "./service";
+import { BodyWriter } from "./word/body";
+import { openTemplate } from "./word/template";
 
-const partWeight = (r: RfpDetail, p: Part) => (p === "written" ? r.writtenWeight : r.demoWeight);
+const partWeight = (r: Pick<RfpDetail, "writtenWeight" | "demoWeight">, p: Part) => (p === "written" ? r.writtenWeight : r.demoWeight);
 const paragraphs = (text: string | null) =>
   (text ?? "")
     .split(/\n+/)
@@ -29,7 +31,7 @@ const paragraphs = (text: string | null) =>
 const day = (d: Day | null) => (d ? formatDay(d) : "Not set");
 
 /** The lines of the demand, for the copies that stay inside the company. */
-const demandFacts = (r: RfpDetail): [string, string][] => [
+const demandFacts = (r: WordContent): [string, string][] => [
   ["Sponsor", r.sponsor ?? "Not set"],
   ["Budget", budgetWords(r)],
   ["Demand approved on", day(r.demandApprovedOn)],
@@ -37,115 +39,72 @@ const demandFacts = (r: RfpDetail): [string, string][] => [
   ["Owner", r.ownerName],
 ];
 
+/** What a Word copy of an RFP is made from: the RFP as it stands, or as it stood when a review round was made (Q-13). */
+export type WordContent = Pick<
+  RfpDetail,
+  | "title"
+  | "need"
+  | "budgetMinor"
+  | "currency"
+  | "sponsor"
+  | "demandApprovedOn"
+  | "targetDecisionDate"
+  | "ownerName"
+  | "writtenWeight"
+  | "demoWeight"
+  | "sections"
+  | "criteria"
+  | "questions"
+>;
+
+/** The names of the custom properties that say which RFP and version a review copy is (Q-13). */
+export const REVIEW_PROPS = { rfp: "Vendor Management RFP", version: "Vendor Management review version" } as const;
+
 /**
- * The RFP as a Word document (Q-3, Q-5). Without a candidate it is the copy for the
- * reviewers, with the demand at the top. For a candidate it is the document that goes
- * out: the sections, the criteria with their weights and the questions, and nothing internal.
+ * The RFP as a Word document (Q-3, Q-5, Q-14), made from the template in force. Without a
+ * candidate it is the review copy for one review round, with the demand after the cover
+ * page and the RFP and version written into the file, so a returned copy can be recognised.
+ * For a candidate it is the document that goes out: the sections, the criteria with their
+ * weights and the questions, and nothing internal.
  */
-export async function rfpWord(r: RfpDetail, o: { candidate?: Candidate; today: Day }): Promise<Buffer> {
-  const text = (t: string, opts: { bold?: boolean; italics?: boolean; color?: string } = {}) => new TextRun({ text: t, ...opts });
-  const p = (t: string) => new Paragraph({ children: [text(t)], spacing: { after: 140 } });
-  const cell = (t: string, width: number, bold = false, right = false) =>
-    new TableCell({
-      width: { size: width, type: WidthType.PERCENTAGE },
-      children: [new Paragraph({ children: [text(t, { bold })], alignment: right ? AlignmentType.RIGHT : AlignmentType.LEFT })],
-    });
-  const body: (Paragraph | Table)[] = [
-    new Paragraph({ text: r.title, heading: HeadingLevel.TITLE }),
-    new Paragraph({
-      children: [
-        text(
-          o.candidate
-            ? `Request for proposal · for ${o.candidate.vendorName}`
-            : `Request for proposal · review copy of ${formatDay(o.today)} · ${rfpStageLabels[r.stage]} · internal`,
-          { color: "555D70" },
-        ),
-      ],
-      spacing: { after: 300 },
-    }),
-  ];
+export async function rfpWord(
+  r: WordContent,
+  o: { template: Buffer; today: Day; version: number | null; candidate?: Pick<Candidate, "vendorName">; review?: { rfpId: string } },
+): Promise<Buffer> {
+  const t = await openTemplate(o.template);
+  const w = new BodyWriter(t.styles);
+  const muted = (text: string) => ({ text, color: "555D70" });
   if (!o.candidate) {
-    body.push(new Paragraph({ text: "The demand (internal, not sent to vendors)", heading: HeadingLevel.HEADING_1 }));
-    for (const line of paragraphs(r.need)) body.push(p(line));
-    for (const [label, value] of demandFacts(r)) body.push(new Paragraph({ children: [text(`${label}: `, { bold: true }), text(value)] }));
-  }
+    w.paragraph([muted(`Review copy${o.version ? `, version ${o.version}` : ""}. For internal use: the demand below is not sent to vendors.`)], { after: 240 });
+    w.heading(1, [{ text: "The demand (internal, not sent to vendors)" }]);
+    for (const line of paragraphs(r.need)) w.paragraph([{ text: line }]);
+    for (const [label, value] of demandFacts(r)) w.paragraph([{ text: `${label}: `, bold: true }, { text: value }], { after: 40 });
+  } else w.paragraph([muted(`Request for proposal for ${o.candidate.vendorName}`)], { after: 240 });
   for (const s of r.sections) {
-    body.push(new Paragraph({ text: s.heading, heading: HeadingLevel.HEADING_1 }));
-    const lines = paragraphs(s.body);
-    if (lines.length) for (const line of lines) body.push(p(line));
-    else body.push(new Paragraph({ children: [text("[Still to be written]", { italics: true })] }));
+    w.heading(1, [{ text: s.heading }]);
+    const blocks = parseBlocks(s.body);
+    if (blocks.length) w.blocks(blocks);
+    else w.paragraph([{ text: "[Still to be written]", italic: true }]);
   }
-  body.push(new Paragraph({ text: "Evaluation criteria", heading: HeadingLevel.HEADING_1 }));
+  w.heading(1, [{ text: "Evaluation criteria" }]);
   for (const part of parts) {
     const mine = r.criteria.filter((c) => c.part === part);
     if (!mine.length) continue;
-    body.push(new Paragraph({ children: [text(`${partLabels[part]} · ${partWeight(r, part)}% of the overall score`, { bold: true })], spacing: { before: 200, after: 100 } }));
-    body.push(
-      new Table({
-        width: { size: 100, type: WidthType.PERCENTAGE },
-        rows: [
-          new TableRow({ tableHeader: true, children: [cell("Criterion", 75, true), cell("Weight", 25, true, true)] }),
-          ...mine.map((c) => new TableRow({ children: [cell(c.name, 75), cell(`${c.weight}%`, 25, false, true)] })),
-        ],
-      }),
-    );
+    w.paragraph([{ text: `${partLabels[part]} · ${partWeight(r, part)}% of the overall score`, bold: true }], { keepNext: true });
+    w.table([[[{ text: "Criterion" }], [{ text: "Weight" }]], ...mine.map((c) => [[{ text: c.name }], [{ text: `${c.weight}%` }]])], { widths: [0.75, 0.25], alignRight: [1] });
   }
-  body.push(new Paragraph({ text: "Questions", heading: HeadingLevel.HEADING_1 }));
-  if (o.candidate) body.push(p("Please answer every question in the answer sheet (Excel) that comes with this document, in the Answer column, and return the sheet."));
+  w.heading(1, [{ text: "Questions" }]);
+  if (o.candidate) w.paragraph([{ text: "Please answer every question in the answer sheet (Excel) that comes with this document, in the Answer column, and return the sheet." }]);
   for (const c of r.criteria.filter((x) => x.part === "written")) {
     const mine = r.questions.filter((q) => q.criterionId === c.id);
     if (!mine.length) continue;
-    body.push(new Paragraph({ text: c.name, heading: HeadingLevel.HEADING_2 }));
-    for (const q of mine) body.push(new Paragraph({ children: [text(`${q.number}. `, { bold: true }), text(q.text)], spacing: { after: 100 } }));
+    w.heading(2, [{ text: c.name }]);
+    for (const q of mine) w.paragraph([{ text: `${q.number}. `, bold: true }, { text: q.text }], { after: 100 });
   }
-  const doc = new Document({
-    creator: "Vendor Management",
+  return t.finish(w, {
     title: r.title,
-    styles: { default: { document: { run: { font: "Calibri", size: 22 } } } },
-    sections: [{ children: body }],
-  });
-  return Packer.toBuffer(doc);
-}
-
-function drawDocument(pdf: Pdf, r: RfpDetail) {
-  for (const s of r.sections) {
-    pdf.heading(s.heading);
-    const lines = paragraphs(s.body);
-    if (lines.length) for (const line of lines) pdf.paragraph(line);
-    else pdf.paragraph("[Still to be written]", { muted: true });
-  }
-  pdf.heading("Evaluation criteria");
-  for (const part of parts) {
-    const mine = r.criteria.filter((c) => c.part === part);
-    if (!mine.length) continue;
-    pdf.paragraph(`${partLabels[part]} · ${partWeight(r, part)}% of the overall score`, { bold: true });
-    pdf.table(
-      [
-        { header: "Criterion", width: 0.8 },
-        { header: "Weight", width: 0.2, align: "right" },
-      ],
-      mine.map((c) => [c.name, `${c.weight}%`]),
-    );
-  }
-  if (!r.criteria.length) pdf.paragraph("No criteria yet.", { muted: true });
-  pdf.heading("Questions");
-  if (!r.questions.length) pdf.paragraph("No questions yet.", { muted: true });
-  for (const c of r.criteria.filter((x) => x.part === "written")) {
-    const mine = r.questions.filter((q) => q.criterionId === c.id);
-    if (!mine.length) continue;
-    pdf.paragraph(c.name, { bold: true });
-    for (const q of mine) pdf.paragraph(`${q.number}.  ${q.text}`);
-  }
-}
-
-/** The review copy as a PDF (Q-3): the demand, then the document as it stands. */
-export function rfpPdf(r: RfpDetail, today: Day): Promise<Buffer> {
-  return makePdf({ title: r.title, footer: `${r.title} · RFP review copy of ${formatDay(today)} · internal` }, (pdf) => {
-    pdf.title(`Request for proposal · review copy of ${formatDay(today)} · ${rfpStageLabels[r.stage]} · internal`, r.title);
-    pdf.heading("The demand (internal, not sent to vendors)");
-    for (const line of paragraphs(r.need)) pdf.paragraph(line);
-    pdf.facts(demandFacts(r));
-    drawDocument(pdf, r);
+    marks: { title: r.title, date: formatDay(o.today), version: o.version ? `Version ${o.version}` : "" },
+    properties: o.review ? { [REVIEW_PROPS.rfp]: o.review.rfpId, [REVIEW_PROPS.version]: String(o.version ?? "") } : undefined,
   });
 }
 
