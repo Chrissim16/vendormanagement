@@ -304,6 +304,8 @@ test.describe("A-7 warnings", () => {
     await nda.getByRole("link").click();
     const adding = page.getByRole("dialog", { name: "Add agreement" });
     await expect(adding.getByLabel("Kind")).toHaveValue("nda");
+    // The kind is chosen, so typing starts in the title.
+    await expect(adding.getByLabel("Title")).toBeFocused();
     await adding.getByLabel("Title").fill("Warned NDA");
     await adding.getByRole("button", { name: "Add agreement" }).click();
     await expect(adding).toBeHidden();

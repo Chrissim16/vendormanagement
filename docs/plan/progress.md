@@ -25,7 +25,7 @@ Newest entry first. Written for the owner, in plain language.
 You noticed that going from "NDA missing" on the dashboard to editing the NDA took five clicks: the warning opened the vendor, then you had to find the Agreements tab, then the NDA, then Edit. Now:
 
 - **An NDA is being worked on** (a draft, in negotiation or out for signature): the warning opens that NDA directly. From the dashboard that is three clicks to its edit form: "NDA missing", the vendor's warning, "Edit or change status". If there are several, the one closest to being signed is opened. The warning now also names it, for example "No NDA is in place. “Mutual NDA” is in negotiation."
-- **There is no NDA at all:** the warning opens the form to add one, for that vendor and with NDA already chosen. That is two clicks from the dashboard.
+- **There is no NDA at all:** the warning opens the form to add one, for that vendor and with NDA already chosen, and the cursor waits in the Title field. That is two clicks from the dashboard.
 - **The NDA has expired:** the warning opens the replacement if one is being worked on, otherwise the expired one, as before.
 - **Data processing agreements** behave in the same way.
 

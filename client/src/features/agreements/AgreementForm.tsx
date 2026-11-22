@@ -161,7 +161,8 @@ export function AgreementForm({
               ))}
             </SelectField>
           )}
-          {text("title", "Title", { autoFocus: true })}
+          {/* With the kind already chosen by a link, the title is the first thing left to fill. */}
+          {text("title", "Title", { autoFocus: true, "data-start": !a && kind ? "" : undefined })}
           {text("reference", "Our reference (optional)")}
           <SelectField form={shown} name="ownerUserId" label="Owner" value={v.ownerUserId} onChange={(e) => set("ownerUserId", e.target.value)}>
             {owners.map((p) => (

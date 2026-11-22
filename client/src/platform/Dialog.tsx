@@ -12,8 +12,8 @@ export function Dialog({ title, onClose, children, wide }: { title: string; onCl
     const el = ref.current!;
     const opener = document.activeElement as HTMLElement | null;
     if (!el.open) el.showModal();
-    // Start in the first field, not on the Close button.
-    el.querySelector<HTMLElement>("input:not([type=hidden]):not([type=checkbox]), select, textarea")?.focus();
+    // Start in the field the form marks as the first to fill, else the first field; never on the Close button.
+    (el.querySelector<HTMLElement>("[data-start]") ?? el.querySelector<HTMLElement>("input:not([type=hidden]):not([type=checkbox]), select, textarea"))?.focus();
     return () => {
       el.close();
       // By now the dialog has left the page, so the browser cannot hand focus back itself.
