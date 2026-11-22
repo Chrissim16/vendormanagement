@@ -6,30 +6,30 @@ when you stop it. Do not enter real company data: this copy runs outside the com
 
 It takes about ten minutes the first time and one minute after that.
 
-## 1. Install two tools (once)
+## 1. Install Node.js (once)
 
-- **Node.js**, version 20 or newer: download the "LTS" installer from https://nodejs.org and click through it.
-- **Git**: on a Mac it is usually there already (the Mac offers to install it the first time you use it). On Windows, download it from https://git-scm.com and click through the installer with the suggested settings.
+Download the "LTS" installer from https://nodejs.org and click through it. Version 20 or newer.
 
-## 2. Open a terminal
+## 2. Download the project (once, and again whenever you want the newest version)
 
-- **Mac**: press Cmd+Space, type `Terminal`, press Enter.
-- **Windows**: press the Windows key, type `PowerShell`, press Enter.
+No extra tool is needed for this:
 
-A window with a blinking cursor opens. You paste each command below into it and press Enter.
+1. In your browser, signed in to GitHub, open https://github.com/chrissim16/vendormanagement/tree/claude/jolly-curie-d4v8z0
+2. Press the green **Code** button, then **Download ZIP**.
+3. Open the downloaded ZIP so it unpacks into a folder (on a Mac: double-click it in Downloads). The folder is called `vendormanagement-claude-jolly-curie-d4v8z0`. Move it somewhere you will find it again, such as Documents.
 
-## 3. Get the project (once)
+## 3. Open a terminal in that folder and install (once per download)
+
+- **Mac**: press Cmd+Space, type `Terminal`, press Enter. In the window type `cd ` (the two letters and a space), then drag the project folder from Finder into the window, and press Enter.
+- **Windows**: open the folder in File Explorer, click the address bar, type `powershell` and press Enter.
+
+Then paste this and press Enter:
 
 ```
-git clone https://github.com/chrissim16/vendormanagement.git
-cd vendormanagement
-git checkout claude/jolly-curie-d4v8z0
 npm install
 ```
 
-The first command may ask you to sign in to GitHub in your browser, because the project
-is private. `npm install` takes a few minutes and prints a lot; it is done when the cursor
-comes back. Warnings in yellow are fine.
+It takes a few minutes and prints a lot; it is done when the cursor comes back. Warnings in yellow are fine.
 
 ## 4. Start it
 
@@ -48,16 +48,9 @@ Click the terminal window and press Ctrl+C. Close the window.
 
 ## Next time
 
-Open a terminal and type:
+Open a terminal in the folder as in step 3 and type `npm run try`.
 
-```
-cd vendormanagement
-git pull
-npm install
-npm run try
-```
-
-`git pull` fetches what was built since. If you only want to start it again as it was, `cd vendormanagement` and `npm run try` are enough.
+To get what was built since, download the ZIP again (step 2), and in the new folder run `npm install` and then `npm run try`. The old folder can go in the bin.
 
 ## Things to try
 
@@ -74,6 +67,7 @@ The AI in this copy is a simple stand-in that only understands plain wordings; t
 |---|---|
 | `node` or `npm` "is not recognized" or "command not found" | Node.js is not installed, or the terminal was open while you installed it. Close the terminal, open a new one, try again. |
 | "This needs Node.js 20 or newer" | Install the current LTS version from nodejs.org. |
-| `git clone` says "Repository not found" | You are not signed in to GitHub in the terminal. Run the command again and sign in when the browser opens. |
+| GitHub shows "404" for the project page | You are not signed in to GitHub in that browser, or signed in as someone else. The project is private. |
+| `npm install` says "no such file or directory, open ... package.json" | The terminal is not in the project folder. Repeat the `cd` step: type `cd `, drag the folder in, press Enter. |
 | "Port 3000 is already in use" or "5173 is in use" | The app is already running in another terminal window. Close that window, or press Ctrl+C in it. |
 | The page is empty or says it cannot connect | The app has not finished starting. Wait for `vendorapp is running`, then reload the page. |
