@@ -415,6 +415,7 @@ architecture and plan were rewritten to match. The plan now has ten milestones.
 First version of the brief, requirements, plan and agent workflow. No application code yet.
 
 ## Follow-ups
+- The check of the RFP list's search (Q-11) failed once during a full run on 22 Nov 2026, while the machine was busy, and passed in every run since, alone and in full. Probably the search box and the "All" button changing the address at nearly the same moment. To be watched.
 - Pressing Tab past the last button of a dialog moves on to the browser itself before coming back. That is how the browser's own dialogs work and it predates M10, but the design guide says focus stays inside; to be looked at.
 - At a very narrow window (a phone) the vendor form is cramped and the vendor list scrolls sideways. The app is made for a laptop screen.
 - A VAT number typed into Excel as a plain number loses any zeros at its start before the app sees it; type it with its country letters.
