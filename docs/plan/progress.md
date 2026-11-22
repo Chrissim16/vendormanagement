@@ -21,6 +21,9 @@ Newest entry first. Written for the owner, in plain language.
 
 ## Log
 
+### 2026-11-22 Three building blocks updated
+Installing the app reported eight known weaknesses, all rated moderate, in three of the outside building blocks it uses: the one that moves between pages, one used when making Excel files, and one used only by a tool for building. All three are now on versions without those weaknesses, and the install reports none. Nothing changes in how the app looks or works; the full set of automated checks passes. The notes about "deprecated" packages during install remain: those are old but working parts that other building blocks bring along, and are not weaknesses.
+
 ### 2026-11-22 Trying the app yourself
 You asked where you can try the app. There is no web address for it; it runs on your own computer with one command. The guide is `docs/try-it.md`: install two tools once, fetch the project, type `npm run try`, open http://localhost:5173. It starts with the invented sample data every time and keeps nothing when you stop it.
 
