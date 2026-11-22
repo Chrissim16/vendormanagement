@@ -16,12 +16,45 @@ Newest entry first. Written for the owner, in plain language.
 | M7 Ask a question | Done here; how well a real AI understands questions is unproven until tried with the company's model |
 | M8 Contract reading | Done here; how well a real AI reads a contract is unproven until tried with the company's model |
 | M10 Vendor details, contact roles, history tabs | Done |
-| M11 RFP editor, review rounds, company template | Not started; asked for on 22 Nov 2026 |
+| M11 RFP editor, review rounds, company template | Done here; the company's own template, real Word and the AI's rewriting are unproven until tried at work |
 | M9 Move to Databricks | Not started; done at work |
 
-**Next:** M11 RFP editor, review rounds and company template, built here. After that M9 Move to Databricks, which is done at work and needs you.
+**Next:** M9 Move to Databricks, which is done at work and needs you.
 
 ## Log
+
+### 2026-11-22 M11 Writing and reviewing the RFP done
+What you can do now:
+
+- **Format the RFP's text.** Each section of an RFP is written in an editor with a small toolbar: bold, italic, a heading and a smaller heading, bullet and numbered lists, and tables. Every button has a keyboard shortcut (Ctrl+B for bold, for example), and the Tab key moves between table cells and otherwise leaves the editor, so it never gets stuck. The AI's first draft now arrives formatted too, with lists and a table for the timeline. Text written before keeps exactly what was typed, as plain paragraphs.
+- **Get the same in Word.** The Word file has the same headings, lists, bold, italic and tables as the screen.
+- **Have the AI rewrite one section.** Under each section, "Rewrite with AI" asks what should change ("shorter", "turn the requirements into a list") and lets you tick reviewers' remarks to rewrite for. The rewrite appears under the section next to the current text, with the words it takes out struck through in red and the words it adds marked in green. Nothing changes until you choose "Use this text", "Edit before using" or "Reject". Using it marks the remarks it was for as dealt with. It is refused on an approved, issued, decided or cancelled RFP, and a rewrite of a text someone changed since cannot be used.
+- **Run review rounds in Word.** On the Review tab, "Download the review copy" makes version 1, then 2, and so on; the version is on the cover page and in the file name. Downloading again without a change gives the same version. Reviewers comment and make tracked changes in Word and send the file back. You upload it to its round and the app reads every comment (with the words it was made on, and replies) and every tracked change (what would go and what would come), with the reviewer's name, and puts each next to the section it is in. What stands outside the sections, such as a comment on a question, is listed under "Not placed", where you choose its section.
+- **Deal with each remark.** For each one: "Take over this edit" (changes the section, only where the words still stand once, as whole words; otherwise the page says to do it by hand), "Ask the AI to rewrite for it", "Dealt with by hand", or "Set aside". Each says afterwards who did what and when, and can be opened again. The RFP cannot be marked as approved while any remark of any round is open. Earlier versions stay downloadable with all their remarks and what was done with each.
+- **Use the company's Word template (admins).** On the settings page, "Word template": upload the company's template (.dotx or .docx) and the app lists what it found, each with Found or Missing: the cover page, where [Title], [Date] and [Version] are, header, footer, pictures (the logo), the font, and the heading, list and table styles, with what it does where something is missing. Every RFP Word file, the review copy and each candidate's copy, then uses it: the template's cover page with the title, the day and the version filled in, its header, footer, logo, fonts and spacing, and its own styles for the RFP's text. A new upload is used from then on; "Use the plain layout instead" goes back to the app's own simple layout. The settings history records each change.
+- **No review PDF any more.** Reviewers get the Word file; Word can save it as PDF itself. The decision record stays a PDF.
+
+The sample data has a fourth invented RFP, "Travel booking tool", in review: version 1 came back from two invented reviewers with comments, a reply and tracked changes; one edit is already taken over. The invented "Larkspur & Vale" template, with a made-up logo, is in use; it is drawn by the app itself, so no template file sits in the project.
+
+How it was checked: an independent tester went through every point of Q-12, Q-13, Q-14 and the change to Q-3 in the running app, with returned files made in three ways (the app's own reviewer stand-in, LibreOffice with real tracked changes, and python-docx), awkward templates (marks split by formatting, no styles, no marks, macros), files of other RFPs and versions, the AI switched off, keyboard only, dark mode and a narrow window. Two things failed and are fixed, each with a test:
+
+- **A taken-over edit could be lost.** With unsaved typing on the Document tab, taking an edit over on the Review tab worked, but the next Save wrote the old text back over it. Now the Review tab says the document has unsaved changes and does not allow taking an edit over until they are saved or discarded.
+- **The AI rewrite failed on sections with a date at the start of a table line**, such as the sample "Timeline and process". The check that stops the AI from inventing figures misread such a date. Fixed for every AI text that is checked this way.
+
+An independent reviewer read all the code and found three things that had to be fixed and seven that should be; all are fixed, each with a test:
+
+- **A suggested edit could change the wrong words.** Changing "30" to "60" could have turned "300 users" into "600 users", and an edit could land in the middle of a word. Now edits only ever match whole words, and when the words around an edit have changed, it is found by its own words only if they are distinctive (two words or more, or a word of six letters or more).
+- **An edit to a heading was applied to the text.** A reviewer renaming "Scope" to "Scope of work" changed the first "Scope" in the text instead. Now it is shown as "in the heading" and taking it over renames the heading.
+- **A specially made Word file could have frozen the app.** Some ways of reading Word files took far longer on crafted files. Every reading of an uploaded Word file now goes through the file once, from left to right, and takes a moment whatever is in it.
+- Also fixed: a template with comments or tracked changes left in it is refused (they would have gone to vendors); a trial file is made from every uploaded template, so one the app cannot make a sound file from is refused at once; headings stay recognisable in returned copies when a template has no heading style; tables pasted from Word with merged cells keep their columns; a table row of dashes is kept; words added next to bold text are not made bold; and the note that a returned file belonged to an earlier version now stays on the page.
+
+Needs your attention:
+
+- **At work, try the company's template and real Word** (W10 to W12 in `docs/open-questions.md`). Upload the template with [Title], [Date] and [Version] typed on its cover page, read what the app found, download one review copy and open it in Word. Then have one colleague comment and track changes in Word, send it back, and upload it. The app recognises a returned copy by two hidden properties in the file; Word keeps them, as widely reported, but Microsoft does not promise it, and a file saved through some SharePoint routes may lose them. If so, the upload says it is not a review copy.
+- **No real AI model has been tried, again.** The stand-in makes a reviewer's edit and turns text into a list or shortens it by simple rules; for anything else it leaves a note in square brackets. There are four new invented test cases for the rewrite; the two the stand-in can take pass, and two (leaving a gap instead of inventing a fact, not following an instruction hidden in the text) wait for the company's model.
+- **The editor is for desktop screens.** On a phone-sized window it is squeezed, as the rest of the app is.
+
+Decided on your behalf (see `docs/open-questions.md`, Q97 to Q108): [Version] becomes "Version 2", so type it on its own; a candidate's copy has no version; one level of lists and tables up to 60 rows and 8 columns; a new template counts as a new version; an older version sent back goes to its own round; a reply to a comment is a remark of its own; a returned file can be removed while none of its remarks has been worked on; the AI rewrites only sections that have text and only for remarks placed in that section; the rules for taking edits over described above.
 
 ### 2026-11-22 M10 Vendor details, contact roles and history done
 What you can do now:
