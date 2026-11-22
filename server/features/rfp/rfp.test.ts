@@ -250,7 +250,8 @@ describe("Q-2 draft", () => {
 describe("Q-3 review", () => {
   it("exports as Word, with the demand, the sections, the criteria with weights and the questions, and no longer as PDF", async () => {
     const r = await drafted({ title: `Expense tool (pilot) é ${n()}`, sponsor: "Finance director", budgetMinor: 80_000_00 });
-    const word = await file(`/api/rfps/${r.id}/rfp.docx`);
+    const round = ok<{ roundId: string }>(await t.as(MEMBER).post(`/api/rfps/${r.id}/review-rounds`), 201);
+    const word = await file(`/api/rfp-review-rounds/${round.roundId}/review-copy.docx`);
     expect(word.headers["content-type"]).toContain("wordprocessingml");
     expect(word.headers["content-disposition"]).toContain("%28pilot%29%20%C3%A9");
     const text = await wordText(word.body as Buffer);
@@ -263,6 +264,7 @@ describe("Q-3 review", () => {
     expect(text).toContain(r.questions.at(-1)!.text);
     expect(text).toContain("70% of the overall score");
     expect((await t.as(MEMBER).get(`/api/rfps/${r.id}/rfp.pdf`)).status).toBe(404);
+    expect(word.headers["content-disposition"]).toContain("review%20copy%20v1.docx");
   });
 
   it("cannot be approved without an approval, nor while a requested change is open", async () => {

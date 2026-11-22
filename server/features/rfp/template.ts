@@ -24,8 +24,12 @@ export async function templateInfo(db: Queryable): Promise<WordTemplateInfo> {
 
 /** The template new Word files are made from: the one in force, or the plain layout. */
 export async function templateInForce(db: Queryable, storage: StoragePort): Promise<Buffer> {
-  const row = (await db.select({ key: wordTemplates.storageKey }).from(wordTemplates).where(eq(wordTemplates.inForce, true)))[0];
-  return row ? storage.get(row.key) : plainTemplate();
+  return (await templateWithId(db, storage)).data;
+}
+/** … with what names it, so that a review copy made from another template counts as another version (Q-13). */
+export async function templateWithId(db: Queryable, storage: StoragePort): Promise<{ id: string; data: Buffer }> {
+  const row = (await db.select({ id: wordTemplates.id, key: wordTemplates.storageKey }).from(wordTemplates).where(eq(wordTemplates.inForce, true)))[0];
+  return row ? { id: row.id, data: await storage.get(row.key) } : { id: "plain", data: await plainTemplate() };
 }
 
 /** The template in force as uploaded, for an admin to check what is in use. */

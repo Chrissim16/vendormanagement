@@ -212,6 +212,7 @@ describe("D-1 dashboard", () => {
   it("lists the RFPs still running with their stage, the nearest decision first, and leaves out the decided one", () => {
     expect(d.rfps.map((r) => [r.title, r.stage])).toEqual([
       ["Expense management tool", "Evaluating"],
+      ["Travel booking tool", "In review"],
       ["Service desk tooling", "Drafting"],
     ]);
   });
@@ -231,6 +232,7 @@ describe("D-2 monthly management report", () => {
     expect(r.data).toMatchObject({ month: "2026-10", asAt: "2026-10-31", running: false });
     expect(r.data.rfps.map((x) => [x.title, x.stage])).toEqual([
       ["Expense management tool", "Evaluating"],
+      ["Travel booking tool", "In review"],
       ["Service desk tooling", "Drafting"],
     ]);
     expect(r.summary).toBeNull();
@@ -288,6 +290,8 @@ describe("D-2 monthly management report", () => {
       "Open RFPs",
       "Expense management tool",
       "Evaluating",
+      "Travel booking tool",
+      "In review",
       "Service desk tooling",
       "Drafting",
     ])

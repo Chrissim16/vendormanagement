@@ -9,6 +9,7 @@ import { RichText } from "../../platform/RichText";
 import { RichTextEditor } from "../../platform/RichTextEditor";
 import { AiTextPanel, Nothing, Section } from "../overview/parts";
 import { textareaClass, useRfpChange } from "./parts";
+import { RemarkCard } from "./Remarks";
 
 interface Editing {
   sections: { id?: string; heading: string; body: string }[];
@@ -192,6 +193,7 @@ function Editor({ rfp, onDirty, keep }: { rfp: RfpDetail; onDirty: (dirty: boole
                   onChange={(body) => setV((x) => ({ ...x, sections: x.sections.map((y, n) => (n === i ? { ...y, body } : y)) }))}
                 />
                 <Problem id={`p-sections.${i}.body`}>{errors[`sections.${i}.body`]}</Problem>
+                {s.id && <SectionRemarks rfp={rfp} sectionId={s.id} heading={s.heading} unsaved={dirty} />}
               </div>
               <div className="flex flex-col">
                 <IconButton
@@ -402,6 +404,25 @@ function Editor({ rfp, onDirty, keep }: { rfp: RfpDetail; onDirty: (dirty: boole
         </div>
       </div>
     </form>
+  );
+}
+
+/** Q-13: the open remarks of reviewers next to the section they are in. Nothing that changes the section can happen while the document has unsaved changes. */
+function SectionRemarks({ rfp, sectionId, heading, unsaved }: { rfp: RfpDetail; sectionId: string; heading: string; unsaved: boolean }) {
+  const open = rfp.review.remarks.filter((m) => m.status === "open" && m.sectionId === sectionId);
+  if (!open.length) return null;
+  return (
+    <details className="rounded-2xl bg-sunk px-4 py-3">
+      <summary className="cursor-pointer text-[13.5px] font-medium text-accent-ink">
+        {open.length === 1 ? "1 open remark" : `${open.length} open remarks`} from reviewers on {heading || "this section"}
+      </summary>
+      {unsaved && <p className="mt-2 text-[13px] text-ink-2">Save or discard your changes to the document before taking an edit over.</p>}
+      <ul aria-label={`Open remarks on ${heading || "this section"}`} className="mt-3 flex flex-col gap-2">
+        {open.map((m) => (
+          <RemarkCard key={m.id} rfp={rfp} remark={m} unsaved={unsaved} />
+        ))}
+      </ul>
+    </details>
   );
 }
 

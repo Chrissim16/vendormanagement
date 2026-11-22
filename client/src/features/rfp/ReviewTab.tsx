@@ -7,7 +7,8 @@ import { FormFooter, Grid, SelectField, TextAreaField, TextField, useForm } from
 import { useToday } from "../../platform/session";
 import { Button, ConfirmButton, Pill } from "../../platform/ui";
 import { Nothing, Section } from "../overview/parts";
-import { downloadClass, useAdoptRfp, useRfpChange } from "./parts";
+import { useAdoptRfp, useRfpChange } from "./parts";
+import { OpenRemarks, ReviewRounds } from "./Remarks";
 
 function SignoffForm({ rfp, onClose, onSaved }: { rfp: RfpDetail; onClose: () => void; onSaved: (r: RfpDetail) => void }) {
   const today = useToday();
@@ -60,7 +61,7 @@ function SignoffForm({ rfp, onClose, onSaved }: { rfp: RfpDetail; onClose: () =>
   );
 }
 
-/** Q-3: the exports for the reviewers, what each reviewer decided, and the step to approved. */
+/** Q-3, Q-13: the review copy and its rounds, the reviewers' remarks from Word, what each reviewer decided, and the step to approved. */
 export function ReviewTab({ rfp }: { rfp: RfpDetail }) {
   const [adding, setAdding] = useState(false);
   const adopt = useAdoptRfp(rfp.id);
@@ -71,19 +72,18 @@ export function ReviewTab({ rfp }: { rfp: RfpDetail }) {
     done: (_r, v) => (v.resolved ? "Marked as dealt with" : "Open again"),
   });
   const remove = useRfpChange(rfp.id, (s: Signoff) => api<RfpDetail>(`/rfp-signoffs/${s.id}`, { method: "DELETE" }), { done: "Sign-off removed" });
-  const blocker = approvalBlocker(rfp.signoffs);
+  const blocker = approvalBlocker(rfp.signoffs, rfp.review.remarks);
   const notReady = reviewBlockers(rfp);
   const editable = rfp.stage === "drafting" || rfp.stage === "in_review";
   const move = (to: "drafting" | "in_review" | "approved") => !stage.isPending && stage.mutate(to);
   return (
     <>
-      <Section title="For the reviewers">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <a href={`/api/rfps/${rfp.id}/rfp.docx`} download className={downloadClass}>
-            Download as Word
-          </a>
-          <p className="min-w-0 flex-1 text-[13px] text-ink-2">The review copy holds the demand, the sections, the criteria with their weights and the questions, as last saved.</p>
-        </div>
+      <Section title="Review copy and rounds">
+        <ReviewRounds rfp={rfp} />
+      </Section>
+
+      <Section title="Reviewers' remarks from Word">
+        <OpenRemarks rfp={rfp} />
       </Section>
 
       <Section
@@ -150,7 +150,7 @@ export function ReviewTab({ rfp }: { rfp: RfpDetail }) {
       {rfp.stage === "in_review" && (
         <div className="flex flex-wrap items-center gap-2.5 rounded-2xl bg-sunk px-5 py-4">
           <p role="status" className="min-w-0 flex-1 text-ink-2">
-            {blocker ?? "At least one reviewer approved and no requested change is open: the RFP can be marked as approved."}
+            {blocker ?? "At least one reviewer approved and no requested change or reviewer's remark is open: the RFP can be marked as approved."}
           </p>
           <Button onClick={() => move("drafting")}>Back to drafting</Button>
           <Button variant="primary" disabled={!!blocker} onClick={() => move("approved")}>

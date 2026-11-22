@@ -17,7 +17,9 @@ import { addMonth, monthOf } from "../../shared/performance";
 import { addQuarter, quarterBounds, quarterOf } from "../../shared/scorecards";
 import { createVendor, saveContact, updateVendor } from "../../server/features/vendors/service";
 import { briefings, jiraBoardLinks, rfps, scorecards, wordTemplates } from "../schema";
+import { actOnRemark, makeRound, roundFile, uploadReturned } from "../../server/features/rfp/review";
 import { uploadTemplate } from "../../server/features/rfp/template";
+import { annotate } from "../../server/features/rfp/word/annotate";
 import { exampleTemplate } from "../../server/features/rfp/word/example";
 import { addCandidate, issueCandidate, moveCandidate, saveAnswer } from "../../server/features/rfp/candidates";
 import { compareAnswers, decide, saveScore } from "../../server/features/rfp/evaluation";
@@ -441,7 +443,7 @@ export async function seed(db: Db, today: Day, ctx?: ScorecardContext, storage?:
       await uploadTemplate({ db, storage }, { name: "Larkspur & Vale RFP template (invented example).dotx", data: await exampleTemplate() }, toUser(admin));
     if (admin) await seedPerformance(ctx.perf, toUser(admin));
     await seedScorecards(ctx, today);
-    await seedRfps(ctx, today);
+    await seedRfps(ctx, today, storage);
     await seedOverview(ctx, today);
   }
 }
@@ -452,7 +454,7 @@ export async function seed(db: Db, today: Day, ctx?: ScorecardContext, storage?:
  * issued and without an NDA), one in drafting with an AI draft nobody has looked at, and
  * one decided. Everything goes through the same functions the screens use.
  */
-async function seedRfps(ctx: ScorecardContext, today: Day) {
+async function seedRfps(ctx: ScorecardContext, today: Day, storage?: StoragePort) {
   if (ctx.ai.kind !== "stand-in") return;
   if ((await ctx.db.select({ n: sql<number>`count(*)::int` }).from(rfps))[0]!.n > 0) return;
   const people = await ctx.db.select().from(users);
@@ -569,6 +571,49 @@ async function seedRfps(ctx: ScorecardContext, today: Day) {
     jonas,
   );
   await suggestDraft(rfp, desk.id, jonas);
+
+  // 4. In review (Q-13): version 1 went to two reviewers, who sent it back with comments and tracked changes in Word.
+  if (storage) {
+    const withFiles: RfpContext = { ...rfp, storage };
+    const travel = await createRfp(
+      withFiles,
+      {
+        title: "Travel booking tool",
+        need: "Business trips are booked by email through an agency. We want one tool to book, approve and pay for travel, with the company's travel policy built in.",
+        sponsor: "Head of finance operations",
+        demandApprovedOn: d(-20),
+        targetDecisionDate: d(120),
+        ownerUserId: mira.id,
+      },
+      mira,
+    );
+    const drafted = await suggestDraft(withFiles, travel.id, mira);
+    await reviewDraft(withFiles, travel.id, { action: "accept", suggestionId: drafted.draft!.id }, mira);
+    await moveStage(withFiles, travel.id, { to: "in_review" }, mira);
+    const { roundId } = await makeRound(withFiles, travel.id, mira);
+    const copy = await roundFile(withFiles, roundId);
+    const returned = await annotate(copy.data, [
+      {
+        comment: "Name the systems it must connect to: the HR system and the expense tool.",
+        on: "as described in the introduction",
+        author: "Chris Tanaka",
+        under: "Scope and requirements",
+      },
+      { replace: "as PDF or Word", by: "as PDF", author: "Chris Tanaka", under: "How to respond" },
+      {
+        comment: "Give vendors at least three weeks.",
+        on: "Responses due",
+        author: "Priya Raman",
+        under: "Timeline and process",
+        reply: { author: "Chris Tanaka", text: "Agreed, four if we can." },
+      },
+      { replace: "confidential", by: "strictly confidential", author: "Priya Raman", under: "Confidentiality and terms" },
+      { comment: "Ask for the price per traveller as well.", on: "pricing model", author: "Priya Raman", under: "Questions" },
+    ]);
+    const up = await uploadReturned(withFiles, roundId, { name: "Travel booking tool - comments Chris and Priya.docx", data: returned }, mira);
+    const pdfOnly = up.rfp.review.remarks.find((m) => m.addedText === "as PDF")!;
+    await actOnRemark(withFiles, pdfOnly.id, { action: "take_over" }, mira);
+  }
 
   // 3. Decided.
   const treasury = await approved(

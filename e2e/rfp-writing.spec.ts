@@ -23,10 +23,10 @@ const open = async (page: Page, rfp: { id: string }, tab: string) => {
   await page.goto(`/rfps/${rfp.id}?tab=${tab}`);
   await expect(page.getByRole("tablist", { name: "Parts of this RFP" })).toBeVisible();
 };
-/** The text of a Word file's body, and its XML. */
-async function word(page: Page, link: string) {
+/** The review copy as the Review tab downloads it: its body's text, and its XML. */
+async function word(page: Page) {
   const download = page.waitForEvent("download");
-  await page.getByRole("link", { name: link }).click();
+  await page.getByRole("button", { name: "Download the review copy" }).click();
   const path = await (await download).path();
   const zip = await JSZip.loadAsync(await (await import("node:fs/promises")).readFile(path!));
   const xml = await zip.file("word/document.xml")!.async("string");
@@ -103,7 +103,7 @@ test.describe("Q-12 document editor", () => {
 
     // The Word file holds the same: bold, italic, a heading, both lists and the table, in the template's styles.
     await page.getByRole("tab", { name: "Review" }).click();
-    const { xml } = await word(page, "Download as Word");
+    const { xml } = await word(page);
     expect(xml).toMatch(/<w:b\/><\/w:rPr><w:t xml:space="preserve">Strong point<\/w:t>/);
     expect(xml).toMatch(/<w:i\/><\/w:rPr><w:t xml:space="preserve">a soft one<\/w:t>/);
     expect(xml).toMatch(/<w:pStyle w:val="Heading2"\/><\/w:pPr><w:r><w:t xml:space="preserve">What we need/);
@@ -178,7 +178,7 @@ test.describe("Q-14 company Word template", () => {
     await expect(section.getByRole("status")).toContainText("the app's own plain layout is used");
     await signInAs(context, MEMBER);
     await open(page, rfp, "review");
-    expect((await word(page, "Download as Word")).text).not.toContain("Larkspur");
+    expect((await word(page)).text).not.toContain("Larkspur");
 
     await signInAs(context, ADMIN);
     await page.goto("/admin/settings");
@@ -189,7 +189,7 @@ test.describe("Q-14 company Word template", () => {
     await expectAccessible(page);
     await signInAs(context, MEMBER);
     await open(page, rfp, "review");
-    const { text } = await word(page, "Download as Word");
+    const { text } = await word(page);
     expect(text).toContain("Larkspur");
     expect(text).toContain(rfp.title);
     expect(text).toContain("Issued on 21 Nov 2026");
@@ -201,5 +201,135 @@ test.describe("Q-14 company Word template", () => {
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(page.getByRole("region", { name: "Word template" })).toHaveCount(0);
     expect((await request.get(`${BASE}/api/admin/word-template`, { headers: { "x-dev-user": MEMBER, cookie: "" } })).status()).toBe(403);
+  });
+});
+
+test.describe("Q-13 review rounds with comments from Word", () => {
+  test("Q-13 a review copy is downloaded as version 1, a reviewer's file is uploaded, and every remark is dealt with before approval", async ({ page, context, request }) => {
+    const rfp = await drafted(request);
+    await call(request, "post", `/rfps/${rfp.id}/stage`, { to: "in_review" });
+    await signInAs(context, MEMBER);
+    await open(page, rfp, "review");
+
+    // Downloading starts round 1; the version is in the file's name and on its cover.
+    let download = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Download the review copy" }).click();
+    const v1 = await download;
+    expect(v1.suggestedFilename()).toBe(`${rfp.title} RFP review copy v1.docx`);
+    const copy = await (await import("node:fs/promises")).readFile((await v1.path())!);
+    expect(await (await JSZip.loadAsync(copy)).file("word/document.xml")!.async("string")).toContain("Version 1");
+    const rounds = page.getByRole("list", { name: "Review rounds" });
+    await expect(rounds.getByRole("listitem").first()).toContainText("Version 1");
+
+    // Without a change, the same version again.
+    download = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Download the review copy" }).click();
+    expect((await download).suggestedFilename()).toBe(`${rfp.title} RFP review copy v1.docx`);
+    await expect(page.getByText("Nothing changed since version 1: that copy is downloaded again.")).toBeVisible();
+
+    // The reviewer comments and suggests edits in Word, and sends it back.
+    const { annotate } = await import("../server/features/rfp/word/annotate");
+    const returned = await annotate(copy, [
+      { replace: "as PDF or Word", by: "as PDF", author: "Chris Tanaka", under: "How to respond" },
+      { comment: "Name the systems it must connect to.", on: "as described in the introduction", author: "Chris Tanaka", under: "Scope and requirements" },
+      { comment: "Ask for the price per traveller.", on: "pricing model", author: "Priya Raman", under: "Questions" },
+    ]);
+    await page.getByLabel("Choose a returned Word file for version 1").setInputFiles({ name: "Chris and Priya.docx", mimeType: "application/octet-stream", buffer: returned });
+    await expect(page.getByText("2 comments and 1 suggested edit read from Chris Tanaka, Priya Raman. 1 could not be placed in a section.")).toBeVisible();
+    await expect(rounds).toContainText("Chris and Priya.docx");
+
+    // Each remark next to its section; the one on the questions under "Not placed".
+    await expect(page.getByRole("list", { name: "Open remarks on How to respond" })).toContainText("as PDF or Word");
+    await expect(page.getByRole("list", { name: "Open remarks on Scope and requirements" })).toContainText("On: as described in the introduction");
+    const unplaced = page.getByRole("list", { name: "Remarks not placed" });
+    await expect(unplaced).toContainText('under "Questions" in the file, not placed');
+
+    // Approval is blocked while one is open.
+    await call(request, "post", `/rfps/${rfp.id}/signoffs`, { reviewerName: "Chris Tanaka", outcome: "approved", onDate: "2026-11-21" });
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Mark as approved" })).toBeDisabled();
+    await expect(page.getByText("3 reviewers' remarks from Word are still open").last()).toBeVisible();
+
+    // Take the edit over: the section changes.
+    await page.getByRole("list", { name: "Open remarks on How to respond" }).getByRole("button", { name: "Take over this edit" }).click();
+    await expect(page.getByText("Edit taken over into the section")).toBeVisible();
+    const after = await call(request, "get", `/rfps/${rfp.id}`);
+    expect(after.sections.find((s) => s.heading === "How to respond")!.body).toContain("any supporting material, as PDF.");
+    // The comment: dealt with by hand. The unplaced one: put in a section, then set aside.
+    await page.getByRole("list", { name: "Open remarks on Scope and requirements" }).getByRole("button", { name: "Dealt with by hand" }).click();
+    await unplaced.getByLabel(/Section for the comment by Priya Raman/).selectOption({ label: "How responses are evaluated" });
+    await unplaced.getByRole("button", { name: "Place in section" }).click();
+    await page.getByRole("list", { name: "Open remarks on How responses are evaluated" }).getByRole("button", { name: "Set aside" }).click();
+    await expect(page.getByText("All 3 remarks are dealt with or set aside.")).toBeVisible();
+
+    // Taking the edit over changed the document, so a new approval is needed; then approval is open.
+    await call(request, "post", `/rfps/${rfp.id}/signoffs`, { reviewerName: "Chris Tanaka", outcome: "approved", onDate: "2026-11-21" });
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Mark as approved" })).toBeEnabled();
+
+    // What was done with each stays with the round.
+    await page.getByText("All remarks of version 1 (3) and what was done with each").click();
+    const all = rounds.getByRole("listitem").first();
+    await expect(all).toContainText("Dealt with, taken over by Mira Okafor");
+    await expect(all).toContainText("Dealt with, by hand by Mira Okafor");
+    await expect(all).toContainText("Set aside by Mira Okafor");
+    await expectAccessible(page);
+
+    // The next download holds the change and is version 2; version 1 can still be downloaded.
+    download = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Download the review copy" }).click();
+    expect((await download).suggestedFilename()).toBe(`${rfp.title} RFP review copy v2.docx`);
+    download = page.waitForEvent("download");
+    await page.getByRole("link", { name: "Download version 1" }).click();
+    expect((await download).suggestedFilename()).toBe(`${rfp.title} RFP review copy v1.docx`);
+  });
+
+  test("Q-13 a file that is not a review copy of this RFP is refused, and says why", async ({ page, context, request }) => {
+    const rfp = await drafted(request);
+    await call(request, "post", `/rfps/${rfp.id}/stage`, { to: "in_review" });
+    await call(request, "post", `/rfps/${rfp.id}/review-rounds`);
+    await signInAs(context, MEMBER);
+    await open(page, rfp, "review");
+    const plain = await new JSZip().loadAsync(
+      Buffer.from(await (await request.get(`${BASE}/api/admin/word-template/example`, { headers: { "x-dev-user": ADMIN, cookie: "" } })).body()),
+    );
+    await page.getByLabel("Choose a returned Word file for version 1").setInputFiles({
+      name: "Something else.docx",
+      mimeType: "application/octet-stream",
+      buffer: await plain.generateAsync({ type: "nodebuffer" }),
+    });
+    await expect(page.getByText("That file is not a review copy made by the app")).toBeVisible();
+    await page.getByLabel("Choose a returned Word file for version 1").setInputFiles({ name: "notes.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF") });
+    await expect(page.getByText("Choose the Word file the reviewer sent back (.docx).")).toBeVisible();
+  });
+
+  test("Q-13 the remarks stand next to their section on the Document tab too", async ({ page, context, request }) => {
+    const rfp = await drafted(request);
+    await call(request, "post", `/rfps/${rfp.id}/stage`, { to: "in_review" });
+    const { roundId } = await call<{ roundId: string }>(request, "post", `/rfps/${rfp.id}/review-rounds`);
+    const copy = Buffer.from(await (await request.get(`${BASE}/api/rfp-review-rounds/${roundId}/review-copy.docx`, { headers: { "x-dev-user": MEMBER, cookie: "" } })).body());
+    const { annotate } = await import("../server/features/rfp/word/annotate");
+    const res = await request.post(`${BASE}/api/rfp-review-rounds/${roundId}/files`, {
+      headers: { "x-dev-user": MEMBER, cookie: "" },
+      multipart: {
+        file: {
+          name: "back.docx",
+          mimeType: "application/octet-stream",
+          buffer: await annotate(copy, [{ replace: "as PDF or Word", by: "as PDF", author: "Chris Tanaka", under: "How to respond" }]),
+        },
+      },
+    });
+    expect(res.ok()).toBe(true);
+    await signInAs(context, MEMBER);
+    await open(page, rfp, "document");
+    await page.getByText("1 open remark from reviewers on How to respond").click();
+    const remarks = page.getByRole("list", { name: "Open remarks on How to respond" });
+    // While something typed is unsaved, nothing that changes a section can happen.
+    await page.getByRole("textbox", { name: "Text of section 1" }).pressSequentially(" More.");
+    await expect(remarks.getByRole("button", { name: "Take over this edit" })).toBeDisabled();
+    await page.getByRole("button", { name: "Discard changes" }).click();
+    await remarks.getByRole("button", { name: "Take over this edit" }).click();
+    await expect(page.getByRole("textbox", { name: "Text of section 4" })).toContainText("any supporting material, as PDF.");
+    await expect(page.getByText("1 open remark from reviewers on How to respond")).toHaveCount(0);
   });
 });

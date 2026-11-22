@@ -7,6 +7,7 @@ import { dir, id, paging, text, upload } from "../../platform/http";
 import * as candidates from "./candidates";
 import * as evaluation from "./evaluation";
 import { answerSheet, decisionRecordPdf, rfpWord } from "./files";
+import * as review from "./review";
 import * as template from "./template";
 import { templateInForce } from "./template";
 import { exampleTemplate } from "./word/example";
@@ -76,11 +77,24 @@ export function rfpRoutes(ctx: service.RfpContext) {
   r.post("/rfps/:id/signoffs", async (req, res) => res.status(201).json(await service.addSignoff(ctx, id.parse(req.params.id), body(req), currentUser(req))));
   r.patch("/rfp-signoffs/:id", async (req, res) => res.json(await service.changeSignoff(ctx, id.parse(req.params.id), body(req), currentUser(req))));
   r.delete("/rfp-signoffs/:id", async (req, res) => res.json(await service.changeSignoff(ctx, id.parse(req.params.id), { remove: true }, currentUser(req))));
-  r.get("/rfps/:id/rfp.docx", async (req, res) => {
-    const rfp = await get(id.parse(req.params.id));
-    const doc = await rfpWord(rfp, { template: await templateInForce(ctx.db, ctx.storage), today: ctx.today(), version: null, review: { rfpId: rfp.id } });
-    download(res, `${rfp.title} RFP review copy`, "docx", doc);
+  // Review rounds and the remarks read from returned Word files (Q-13)
+  r.post("/rfps/:id/review-rounds", async (req, res) => {
+    const made = await review.makeRound(ctx, id.parse(req.params.id), currentUser(req));
+    res.status(made.made ? 201 : 200).json(made);
   });
+  r.get("/rfp-review-rounds/:id/review-copy.docx", async (req, res) => {
+    const f = await review.roundFile(ctx, id.parse(req.params.id));
+    download(res, f.name, "docx", f.data);
+  });
+  r.post("/rfp-review-rounds/:id/files", upload.single("file"), async (req, res) =>
+    res.status(201).json(await review.uploadReturned(ctx, id.parse(req.params.id), file(req, "Choose the Word file the reviewer sent back."), currentUser(req))),
+  );
+  r.get("/rfp-review-files/:id/file.docx", async (req, res) => {
+    const f = await review.returnedFile(ctx, id.parse(req.params.id));
+    download(res, f.name, "docx", f.data);
+  });
+  r.delete("/rfp-review-files/:id", async (req, res) => res.json(await review.removeReturned(ctx, id.parse(req.params.id), currentUser(req))));
+  r.post("/rfp-remarks/:id", async (req, res) => res.json(await review.actOnRemark(ctx, id.parse(req.params.id), body(req), currentUser(req))));
 
   // The company's Word template (Q-14), admins only.
   r.get("/admin/word-template", requireRole("admin"), async (_req, res) => res.json(await template.templateInfo(ctx.db)));

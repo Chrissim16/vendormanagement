@@ -42,6 +42,7 @@ import { AppError, notFound } from "../../platform/errors";
 import { failFields, like } from "../../platform/http";
 import type { AiPort, Db, Queryable, StoragePort, Tx } from "../../platform/ports/types";
 import { getVendor } from "../vendors/service";
+import { reviewOf } from "./reviewRead";
 
 /** What the RFP feature needs: the database, the AI, the place files are kept, and the clock. */
 export interface RfpContext {
@@ -139,7 +140,11 @@ export async function getRfp(db: Queryable, id: string, today: Day): Promise<Rfp
     suggestedScore: s.suggestedScore,
   }));
   const plainAnswers = answers.map((a) => ({ candidateId: a.candidateId, questionId: a.questionId, text: a.text }));
-  const [draft, comparison] = await Promise.all([readSuggestion<RfpDraft>(db, r.draftSuggestionId), readSuggestion<RfpComparison>(db, r.comparisonSuggestionId)]);
+  const [draft, comparison, review] = await Promise.all([
+    readSuggestion<RfpDraft>(db, r.draftSuggestionId),
+    readSuggestion<RfpComparison>(db, r.comparisonSuggestionId),
+    reviewOf(db, id),
+  ]);
   const winner = candidates.find((c) => c.id === r.winnerCandidateId);
   return {
     id: r.id,
@@ -181,6 +186,7 @@ export async function getRfp(db: Queryable, id: string, today: Day): Promise<Rfp
       plainScores.filter((s) => running.includes(s.candidateId)),
     ),
     draft,
+    review,
     comparison,
     comparisonOutdated: !!comparison && r.comparisonAnswers !== answersFingerprint(candidates, plainAnswers),
     decision:
@@ -291,7 +297,7 @@ export async function change(ctx: RfpContext, id: string, by: User, apply: (tx: 
 
 export const closed = () => new AppError(409, "rfp_closed", "This RFP is decided or cancelled, so nothing on it can be changed any more.");
 /** Why the document or the part weights cannot be changed at this stage. */
-const locked = (stage: RfpStage) =>
+export const locked = (stage: RfpStage) =>
   contentLocked(stage)
     ? new AppError(
         409,
@@ -304,7 +310,7 @@ const locked = (stage: RfpStage) =>
  * The document or its weights changed: an approval given before speaks for an earlier
  * version and no longer counts (Q-3). It stays in the trail, marked as such.
  */
-async function supersedeApprovals(tx: Tx, rfp: RfpDetail): Promise<Changes> {
+export async function supersedeApprovals(tx: Tx, rfp: RfpDetail): Promise<Changes> {
   const earlier = rfp.signoffs.filter((x) => x.outcome === "approved" && !x.superseded);
   if (!earlier.length) return {};
   await tx
@@ -444,7 +450,7 @@ export async function writeContent(tx: Tx, rfpId: string, c: RfpContentInput) {
 }
 
 /** After the document changed: an AI draft that was taken over now counts as accepted or as edited, whichever is true (AI-1). */
-async function settleDraft(ctx: RfpContext, tx: Tx, rfp: RfpDetail, by: User): Promise<Changes> {
+export async function settleDraft(ctx: RfpContext, tx: Tx, rfp: RfpDetail, by: User): Promise<Changes> {
   const draft = rfp.draft;
   if (!draft || (draft.status !== "accepted" && draft.status !== "edited")) return {};
   const now = await getRfp(tx, rfp.id, ctx.today());
@@ -548,7 +554,7 @@ export async function moveStage(ctx: RfpContext, id: string, input: unknown, by:
       if (rfp.stage !== "in_review" && rfp.stage !== "approved") throw refuse(`An RFP that is ${rfpStageLabels[rfp.stage].toLowerCase()} cannot go back to drafting.`);
     } else {
       if (rfp.stage !== "in_review") throw refuse("Only an RFP that is in review can be marked as approved.");
-      const blocker = approvalBlocker(rfp.signoffs);
+      const blocker = approvalBlocker(rfp.signoffs, rfp.review.remarks);
       if (blocker) throw refuse(blocker);
     }
     await tx.update(rfps).set({ stage: to }).where(eq(rfps.id, id));

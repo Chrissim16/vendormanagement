@@ -2,6 +2,7 @@ import { z } from "zod";
 import { isDay, type Day } from "./dates";
 import { currencies, type Currency } from "./money";
 import type { TextSuggestion } from "./overview";
+import { openRemarks, type ReviewerRemark, type ReviewRound } from "./review";
 import { normalise, parseBlocks, TABLE_LIMITS } from "./richtext";
 import { cleanName, vendorTypes, type Paperwork, type VendorStatus, type VendorType } from "./vendors";
 
@@ -529,6 +530,8 @@ export interface RfpDetail extends Omit<RfpDemand, "ownerUserId"> {
   /** Worked out for the candidates that can be scored: shortlisted and issued. */
   results: CandidateResult[];
   draft: TextSuggestion<RfpDraft> | null;
+  /** Q-13: the review rounds, newest first, and every remark read from the reviewers' returned files. */
+  review: { rounds: ReviewRound[]; remarks: ReviewerRemark[] };
   comparison: TextSuggestion<RfpComparison> | null;
   /** An answer was added or changed after the AI compared them. */
   comparisonOutdated: boolean;
@@ -542,9 +545,13 @@ export const ndaInPlace = (c: Pick<Candidate, "nda">) => c.nda === "in_place" ||
 export const openChangeRequests = (signoffs: Pick<Signoff, "outcome" | "resolvedOn" | "superseded">[]) =>
   signoffs.filter((s) => s.outcome === "changes_requested" && !s.resolvedOn && !s.superseded);
 /** Q-3: approved needs at least one approval of the document as it stands and no change request still open. Returns why not, or null. */
-export function approvalBlocker(signoffs: Pick<Signoff, "outcome" | "resolvedOn" | "superseded">[]): string | null {
+export function approvalBlocker(signoffs: Pick<Signoff, "outcome" | "resolvedOn" | "superseded">[], remarks: Pick<ReviewerRemark, "status">[] = []): string | null {
   const open = openChangeRequests(signoffs).length;
   if (open) return `${open === 1 ? "A requested change is" : `${open} requested changes are`} still open. Mark ${open === 1 ? "it" : "them"} as dealt with first.`;
+  // Q-13: a reviewer's comment or suggested edit counts as a requested change (Q87).
+  const remarksOpen = openRemarks(remarks).length;
+  if (remarksOpen)
+    return `${remarksOpen === 1 ? "A reviewer's remark from Word is" : `${remarksOpen} reviewers' remarks from Word are`} still open. Deal with ${remarksOpen === 1 ? "it" : "each"} or set ${remarksOpen === 1 ? "it" : "them"} aside first.`;
   if (!signoffs.some((s) => s.outcome === "approved" && !s.superseded))
     return signoffs.some((s) => s.outcome === "approved")
       ? "The document was changed after it was approved, so the earlier approval no longer counts. Record an approval of the document as it is now."
@@ -580,7 +587,7 @@ export function nextStep(r: RfpDetail, meId?: string): NextStep {
         : { title: "Send it for review", text: "The draft has sections, weighted criteria and a question list. When it reads well, send it for review.", tab: "document" };
     }
     case "in_review": {
-      const blocker = approvalBlocker(r.signoffs);
+      const blocker = approvalBlocker(r.signoffs, r.review.remarks);
       return blocker
         ? { title: "Collect the sign-offs", text: `Send the Word copy to the reviewers and record what each of them decided. ${blocker}`, tab: "review" }
         : { title: "Mark it as approved", text: "At least one reviewer approved and no requested change is open.", tab: "review" };

@@ -200,8 +200,8 @@ test.describe("Q-3 review", () => {
     await signInAs(context, MEMBER);
     await open(page, rfp, "review");
     const download = page.waitForEvent("download");
-    await page.getByRole("link", { name: "Download as Word" }).click();
-    expect((await download).suggestedFilename()).toBe(`${rfp.title} RFP review copy.docx`);
+    await page.getByRole("button", { name: "Download the review copy" }).click();
+    expect((await download).suggestedFilename()).toBe(`${rfp.title} RFP review copy v1.docx`);
     await expect(page.getByRole("link", { name: "Download as PDF" })).toHaveCount(0);
     await expect(page.getByText("No sign-offs yet. They are recorded once the draft has been sent for review.")).toBeVisible();
     await page.getByRole("button", { name: "Send for review" }).click();

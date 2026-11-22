@@ -106,6 +106,10 @@ wrong. Answered questions move to the bottom.
 | Q98 | What version does a candidate's copy show? | None: [Version] is left empty in the copy for a candidate. Versions are about the review; the candidates all get the approved text. | M11 |
 | Q99 | How far does the editor's formatting go? | Bold, italic, two sizes of sub-heading, bullet and numbered lists of one level, and simple tables with a header row (at most 60 rows and 8 columns). No underline, links, pictures, colours or lists inside lists: these are what Word shows the same everywhere, and what the AI can write reliably. | M11 |
 | Q100 | Can an admin go back to the plain layout after uploading a template? | Yes, with "Use the plain layout instead". Uploaded templates stay on file; the settings history says who changed what. | M11 |
+| Q101 | When a new Word template is uploaded and the RFP has not changed, is the next review copy a new version? | Yes. The copy looks different, so it gets the next version number; a reviewer's version always matches the file they hold. | M11 |
+| Q102 | A reviewer sends back an older version. Is it refused? | No. It is put in the round of the version it is, and the page says so. Its remarks are placed against that version's text, and a suggested edit whose words have changed since is done by hand. | M11 |
+| Q103 | What happens to a reply to a comment in Word? | It becomes a remark of its own, by the person who replied, standing where the comment stands. Each is dealt with or set aside by itself. | M11 |
+| Q104 | Can a returned file uploaded by mistake be removed? | Yes, with its remarks, as long as none of them has been dealt with or set aside yet. | M11 |
 | Q27 | How long are tickets kept? | 24 months after they were resolved, as the data model says. Open tickets are kept however old. | M3 |
 
 ## To check at work before M9
