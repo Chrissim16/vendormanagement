@@ -11,7 +11,7 @@ import { api, messageOf } from "../../lib/api";
 import { useWarnings } from "../../lib/data";
 import { hourNow, longDate } from "../../lib/format";
 import { item, list } from "../../lib/motion";
-import { ConvertedNote } from "../../platform/Money";
+import { ConvertedNote, wholeAmounts } from "../../platform/Money";
 import { ErrorState, Loading, PageHeader, Pill } from "../../platform/ui";
 import { budgetPill, BudgetMeter, linkClass, Nothing, RowLink, Section, TrendWords } from "./parts";
 
@@ -92,7 +92,7 @@ function SpendBars({ spend }: { spend: Dashboard["spend"] }) {
       {isMixed(spend.total.amounts) && (
         <div className="text-[13px]">
           <p className="num">
-            {eur(spend.total.eurMinor)} in all, converted to euros: {moneyLine(spend.total.amounts)}
+            {eur(spend.total.eurMinor)} in all, converted to euros: {wholeAmounts(moneyLine(spend.total.amounts))}
           </p>
           <ConvertedNote rates={spend.rates} />
         </div>

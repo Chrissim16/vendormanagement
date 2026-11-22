@@ -3,6 +3,9 @@ import { convertedNote, EUR, formatMoney, isMixed, moneyLine, type Money, type R
 import { useCurrencies } from "../lib/data";
 import { useMe } from "./session";
 
+/** A text with each amount kept on one line: the space between a sign or code and its number becomes a non-breaking one, so "SEK" never ends a line with "85,000.00" on the next. */
+export const wholeAmounts = (text: string) => text.replace(/([€£$]|\b[A-Z]{3}) (?=-?\d)/g, "$1\u00a0");
+
 /**
  * Under a euro total that was converted: the rates used. A starting rate says so, and an
  * admin gets a link to set the real one (M-8).
@@ -40,7 +43,7 @@ export function ConvertedTotal({ label, money, rates, size = "tile" }: { label: 
         {mixed && <span className="font-normal"> · converted to euros</span>}
       </dt>
       <dd className={`num mt-2 font-semibold leading-tight tracking-[-0.03em] ${size === "tile" ? "text-[30px]" : "text-[22px]"}`}>{formatMoney(money.eurMinor, EUR)}</dd>
-      {mixed && <dd className="num mt-1.5 text-[13.5px]">{moneyLine(money.amounts)}</dd>}
+      {mixed && <dd className="num mt-1.5 text-[13.5px]">{wholeAmounts(moneyLine(money.amounts))}</dd>}
       {mixed && (
         <dd>
           <ConvertedNote rates={rates} className="mt-1" />
@@ -54,8 +57,8 @@ export function ConvertedTotal({ label, money, rates, size = "tile" }: { label: 
 export function EurWithOriginal({ money }: { money: Money }) {
   return (
     <span className="num">
-      <span className="font-medium">{formatMoney(money.eurMinor, EUR)}</span>
-      {isMixed(money.amounts) && <span className="text-ink-2"> ({moneyLine(money.amounts)})</span>}
+      <span className="font-medium">{wholeAmounts(formatMoney(money.eurMinor, EUR))}</span>
+      {isMixed(money.amounts) && <span className="text-ink-2"> ({wholeAmounts(moneyLine(money.amounts))})</span>}
     </span>
   );
 }

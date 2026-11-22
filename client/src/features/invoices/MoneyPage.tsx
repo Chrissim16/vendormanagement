@@ -11,7 +11,7 @@ import type { Vendor } from "../../../../shared/vendors";
 import { api, messageOf, queryString } from "../../lib/api";
 import { pageNumber, useUrlState } from "../../lib/useUrlState";
 import { DataTable, Pager, type Column } from "../../platform/DataTable";
-import { ConvertedNote, ConvertedTotal, EurWithOriginal } from "../../platform/Money";
+import { ConvertedNote, ConvertedTotal, EurWithOriginal, wholeAmounts } from "../../platform/Money";
 import { useToday } from "../../platform/session";
 import { Button, EmptyState, ErrorState, Field, Loading, PageHeader, Select, TextInput } from "../../platform/ui";
 import { InvoiceForm } from "./InvoiceForm";
@@ -297,7 +297,7 @@ export function InvoicesPage() {
         context={
           !d || list.isPlaceholderData
             ? " "
-            : `${d.total} ${d.total === 1 ? "invoice" : "invoices"}${d.total ? `, ${formatMoney(d.sums.eurMinor, "EUR")}${isMixed(d.sums.amounts) ? ` in euros, converted (${moneyLine(d.sums.amounts)})` : ""}` : ""}`
+            : `${d.total} ${d.total === 1 ? "invoice" : "invoices"}${d.total ? `, ${formatMoney(d.sums.eurMinor, "EUR")}${isMixed(d.sums.amounts) ? ` in euros, converted (${wholeAmounts(moneyLine(d.sums.amounts))})` : ""}` : ""}`
         }
         title="Invoices"
       >

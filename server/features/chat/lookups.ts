@@ -93,7 +93,8 @@ const dayOr = (d: Day | null | undefined) => (d ? formatDay(d) : "–");
 const moneyTotals = (label: string, m: Money, rates: Rate[]) => [
   { label: `${label} in euros${isMixed(m.amounts) ? ", converted" : ""}`, value: formatMoney(m.eurMinor, "EUR") },
   ...(isMixed(m.amounts) ? currenciesIn(m.amounts).map((c) => ({ label: `${label} in ${c}`, value: formatMoney(m.amounts[c]!, c) })) : []),
-  ...(rates.length ? [{ label: "Rates", value: convertedNote(rates) }] : []),
+  // Without its full stop: the answer puts one after each figure.
+  ...(rates.length ? [{ label: "Rates", value: convertedNote(rates).replace(/\.$/, "") }] : []),
 ];
 
 const facts = (o: Record<string, string | null | undefined | false>): Record<string, string> =>

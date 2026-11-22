@@ -106,6 +106,12 @@ function Reading({ r, onRead, reading }: { r: DocumentReading; onRead: () => voi
           Left out, because the passage the AI gave does not state the value: {r.unverified.join(", ").toLowerCase()}. Look these up in the document yourself.
         </p>
       )}
+      {r.unlisted.length > 0 && (
+        <p className="text-[13px] text-ink-2">
+          The amount is in {r.unlisted.join(" and ")}, which {r.unlisted.length === 1 ? "is" : "are"} not on the app's list of currencies, so it was left out. An admin can add{" "}
+          {r.unlisted.length === 1 ? "it" : "them"} in Settings.
+        </p>
+      )}
       {r.partly && <p className="text-[13px] text-ink-2">This is a long document; the AI read only its first part.</p>}
     </>
   );

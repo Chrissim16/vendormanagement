@@ -12,6 +12,8 @@ import { History } from "../../platform/History";
 import { Button, ConfirmButton, ErrorState, Field, Loading, Pill, TextInput } from "../../platform/ui";
 
 const RATE_HINT = "Enter a rate like 11.49, with at most four decimals.";
+/** What is wrong with a typed rate, or "" when it can be saved. */
+const rateProblem = (text: string) => (parseRate(text) != null ? "" : /^\s*\d{6,}/.test(text) ? "Use at most 99,999.9999." : RATE_HINT);
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /** What still uses a currency, in words: "2 agreements and 1 rate card line", or "Not in use". */
@@ -33,7 +35,7 @@ function Row({ c }: { c: ListedCurrency }) {
   const people = usePeople();
   const start = { rate: formatRate(c.unitsPerEurE4) };
   const form = useForm(start, (v) => api<ListedCurrency[]>(`/admin/currencies/${c.code}`, { method: "PUT", body: { unitsPerEurE4: parseRate(v.rate) } }), {
-    check: (v) => ({ rate: parseRate(v.rate) == null ? RATE_HINT : "" }),
+    check: (v) => ({ rate: rateProblem(v.rate) }),
     onSaved: async () => {
       toast.success(`Rate for ${c.code} saved`);
       await qc.invalidateQueries();
@@ -106,7 +108,7 @@ function AddCurrency({ listed, onDone }: { listed: string[]; onDone: () => void 
     { code: "", rate: "" },
     (v) => api<ListedCurrency[]>("/admin/currencies", { method: "POST", body: { code: v.code.trim().toUpperCase(), unitsPerEurE4: parseRate(v.rate) } }),
     {
-      check: (v) => ({ code: /^[A-Za-z]{3}$/.test(v.code.trim()) ? "" : "Enter the three-letter code, for example CHF.", rate: parseRate(v.rate) == null ? RATE_HINT : "" }),
+      check: (v) => ({ code: /^[A-Za-z]{3}$/.test(v.code.trim()) ? "" : "Enter the three-letter code, for example CHF.", rate: rateProblem(v.rate) }),
       onSaved: async () => {
         toast.success(`Added ${form.values.code.trim().toUpperCase()}`);
         onDone();

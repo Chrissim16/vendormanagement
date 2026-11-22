@@ -426,6 +426,8 @@ describe("E-1 what cannot be read, and who may ask", () => {
       const doc = await attach(a.id, ["Order form", fee, "It renews on 31 January 2028 unless cancelled."]);
       const other = await read(doc.id);
       expect(other.proposals.map((p) => p.field), fee).toEqual(["endDate"]);
+      // The page names a currency that is not on the list, so it is clear what an admin could add.
+      expect(other.unlisted, fee).toEqual(fee.includes("CHF") ? ["CHF"] : []);
     }
     expect(await get(a.id)).toMatchObject({ annualValueMinor: 20_000_00, currency: "EUR" });
   });

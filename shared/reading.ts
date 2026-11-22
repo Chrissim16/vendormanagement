@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { kinds, type Kind } from "./agreements";
 import { isDay } from "./dates";
-import { currencyCode, parseAmount, STARTING_CURRENCIES, type Currency } from "./money";
+import { currencyCode, isCurrencyCode, parseAmount, STARTING_CURRENCIES, type Currency } from "./money";
 import type { TextSuggestion } from "./overview";
 
 /**
@@ -140,6 +140,13 @@ function currencyOf(words: Words, written: string): Currency | undefined {
   return words.codeOf.get(k);
 }
 
+/** The standard currency codes written next to a number in a passage that are not on the list (M-8): "CHF 12,000" while CHF is not listed. */
+export function unlistedIn(passage: string, listed: readonly NamedCurrency[]): Currency[] {
+  const known = new Set(listed.map((c) => c.code));
+  const found = [...passage.matchAll(new RegExp(String.raw`\b([A-Z]{3})\s?\d|\d\s?([A-Z]{3})\b`, "g"))].map((m) => (m[1] ?? m[2])!);
+  return [...new Set(found.filter((c) => isCurrencyCode(c) && !known.has(c)))];
+}
+
 /** Whether a passage names a currency in any of the ways a document writes it. */
 function namesCurrency(passage: string, code: Currency, listed: readonly NamedCurrency[]): boolean {
   const words = wordsFor(listed);
@@ -263,6 +270,8 @@ export interface DocumentReading {
   notFound: string[];
   /** Fields the AI gave a value for that its passage did not bear out; they are not shown as proposals. */
   unverified: string[];
+  /** M-8: currencies the AI's amount was written in that are not on the app's list, which is why that amount was left out. */
+  unlisted: string[];
   /** The document was longer than the AI reads in one go; only its first part was read. */
   partly: boolean;
 }

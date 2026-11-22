@@ -9,6 +9,7 @@ import {
   readingLabels,
   readingReviewSchema,
   targetOf,
+  unlistedIn,
   verifyReading,
   type ContractReading,
   type DocumentReading,
@@ -159,6 +160,7 @@ function build(
     proposals,
     notFound: readingFields.filter((f) => !answered[f] && !r[f]).map((f) => readingLabels[f]),
     unverified: unverified.filter((f) => !r[f]).map((f) => readingLabels[f]),
+    unlisted: !r.amount && answered.amount && unverified.includes("amount") ? unlistedIn(answered.amount.passage, listed) : [],
     partly: (doc.text ?? "").length > MAX_READING_CHARS,
     values,
   };

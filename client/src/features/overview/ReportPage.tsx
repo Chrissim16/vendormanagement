@@ -12,7 +12,7 @@ import { api, messageOf } from "../../lib/api";
 import { burst } from "../../lib/burst";
 import { useUrlState } from "../../lib/useUrlState";
 import { TextAreaField, useForm } from "../../platform/form";
-import { ConvertedNote } from "../../platform/Money";
+import { ConvertedNote, wholeAmounts } from "../../platform/Money";
 import { useToday } from "../../platform/session";
 import { Button, ErrorState, Loading, PageHeader, Pill } from "../../platform/ui";
 import { MonthSelect } from "../performance/parts";
@@ -162,7 +162,7 @@ export function ReportPage() {
                 {d!.spend.total.eurMinor === 0
                   ? `Nothing was invoiced in ${monthName(month)}.`
                   : `Invoiced in ${monthName(month)}: ${money(d!.spend.total.eurMinor)}` +
-                    (isMixed(d!.spend.total.amounts) ? ` in euros, converted (${moneyLine(d!.spend.total.amounts)}).` : ".")}
+                    (isMixed(d!.spend.total.amounts) ? ` in euros, converted (${wholeAmounts(moneyLine(d!.spend.total.amounts))}).` : ".")}
               </p>
               <ConvertedNote rates={d!.spend.rates} />
             </div>

@@ -140,7 +140,7 @@ describe("C-1 counts and amounts match the list pages for the same filter", () =
     }
     const pounds = await ask("What did Sedgewater invoice this year?");
     expect(pounds.lookups[0]!.totals).toContainEqual({ label: "Total in GBP", value: "£ 31,500.00" });
-    expect(pounds.lookups[0]!.totals).toContainEqual({ label: "Rates", value: expect.stringMatching(/^Converted at 1 EUR = 0.8547 GBP\.$/) });
+    expect(pounds.lookups[0]!.totals).toContainEqual({ label: "Rates", value: "Converted at 1 EUR = 0.8547 GBP" });
   });
 
   it("C-1 spend, vendors, renewals, warnings, scorecards and RFPs agree with their pages", async () => {

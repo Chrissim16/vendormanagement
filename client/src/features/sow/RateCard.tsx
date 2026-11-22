@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { formatDay } from "../../../../shared/dates";
 import { currenciesIn, formatMoney, isMixed, moneyLine, parseAmount, type Currency, type Money } from "../../../../shared/money";
-import { CurrencyOptions } from "../../platform/Money";
+import { CurrencyOptions, wholeAmounts } from "../../platform/Money";
 import type { Invoice, RateLine } from "../../../../shared/sow";
 import type { Page } from "../../../../shared/types";
 import { api, messageOf } from "../../lib/api";
@@ -86,11 +86,11 @@ export function VendorMoney({ vendorId, vendorName }: { vendorId: string; vendor
         ) : (
           <p className="num">
             <span className="text-[22px] font-semibold tracking-[-0.02em]">
-              {currenciesIn(sums!.amounts).length === 1 ? moneyLine(sums!.amounts) : formatMoney(sums!.eurMinor, "EUR")}
+              {wholeAmounts(currenciesIn(sums!.amounts).length === 1 ? moneyLine(sums!.amounts) : formatMoney(sums!.eurMinor, "EUR"))}
             </span>{" "}
             {isMixed(sums!.amounts) && (
               <span className="text-ink-2">
-                {currenciesIn(sums!.amounts).length === 1 ? `(${formatMoney(sums!.eurMinor, "EUR")} in euros, converted) ` : `in euros, converted (${moneyLine(sums!.amounts)}) `}
+                {currenciesIn(sums!.amounts).length === 1 ? `(${formatMoney(sums!.eurMinor, "EUR")} in euros, converted) ` : `in euros, converted (${wholeAmounts(moneyLine(sums!.amounts))}) `}
               </span>
             )}
             <span className="text-ink-2">

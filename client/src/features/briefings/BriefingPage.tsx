@@ -14,7 +14,7 @@ import { burst } from "../../lib/burst";
 import { formatDateTime } from "../../lib/format";
 import { TextAreaField, useForm } from "../../platform/form";
 import { History } from "../../platform/History";
-import { ConvertedNote } from "../../platform/Money";
+import { ConvertedNote, wholeAmounts } from "../../platform/Money";
 import { Button, ConfirmButton, ErrorState, Loading, PageHeader, Pill } from "../../platform/ui";
 import { agreementTone } from "../agreements/display";
 import { AiTextPanel, budgetPill, Figures, linkClass, Nothing, Section, TrendWords } from "../overview/parts";
@@ -90,7 +90,7 @@ function Facts({ f, vendorId }: { f: BriefingFacts; vendorId: string }) {
     [
       mixed ? "Invoiced, last 12 months · converted to euros" : "Invoiced, last 12 months",
       invoiced,
-      `${mixed ? `${moneyLine(f.spend.total.amounts)} · ` : ""}${formatDay(f.spend.from)} to ${formatDay(f.spend.to)}`,
+      `${mixed ? `${wholeAmounts(moneyLine(f.spend.total.amounts))} · ` : ""}${formatDay(f.spend.from)} to ${formatDay(f.spend.to)}`,
     ],
     [
       "Latest scorecard",
