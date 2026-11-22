@@ -46,7 +46,7 @@ How it was checked: an independent tester went through every point in the runnin
 - **Ask could have refused good answers.** It treated "€" and "EUR" as different currencies, and read "in 2026 USD invoices" as an amount. Both are fixed.
 - **Two sample names resembled real companies;** they are renamed.
 
-Smaller fixes from testing: an amount never breaks across two lines; a vendor's Money tab now names the rates used.
+Smaller fixes from testing: an amount never breaks across two lines on any screen; a vendor's Money tab names the rates used; a form says so when an amount was typed in another currency than its record's; a contract amount in a currency not on the list is named as such. The tester went over every fix again in the running app.
 
 Needs your attention:
 
