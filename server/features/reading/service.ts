@@ -114,6 +114,7 @@ function build(
   const answered = row.output as ContractReading;
   // The model's answer is kept as it was given; what is shown and can be used is only what the document bears out.
   const { reading: r, unverified } = verifyReading(readText(doc.text ?? ""), answered, listed);
+  const unlisted = !r.amount && answered.amount && unverified.includes("amount") ? unlistedIn(answered.amount.passage, listed) : [];
   const proposals: Proposal[] = [];
   /** What using a field writes to the agreement, by the agreement's own field names. */
   const values = new Map<ReadingField, Record<string, unknown>>();
@@ -159,8 +160,9 @@ function build(
     },
     proposals,
     notFound: readingFields.filter((f) => !answered[f] && !r[f]).map((f) => readingLabels[f]),
-    unverified: unverified.filter((f) => !r[f]).map((f) => readingLabels[f]),
-    unlisted: !r.amount && answered.amount && unverified.includes("amount") ? unlistedIn(answered.amount.passage, listed) : [],
+    // An amount in a currency that is not on the list is named as such, not as a passage that does not state it.
+    unverified: unverified.filter((f) => !r[f] && !(unlisted.length && (f === "amount" || f === "currency"))).map((f) => readingLabels[f]),
+    unlisted,
     partly: (doc.text ?? "").length > MAX_READING_CHARS,
     values,
   };

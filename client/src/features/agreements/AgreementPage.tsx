@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { documentTypes, kindLabels, MAX_DOCUMENT_BYTES, pricingLabels, statusLabels, type AgreementDetail, type DocumentInfo } from "../../../../shared/agreements";
 import { daysBetween, formatDay } from "../../../../shared/dates";
 import type { DocumentReading } from "../../../../shared/reading";
-import { formatMoney } from "../../../../shared/money";
+
 import { api, ApiError, messageOf } from "../../lib/api";
 import { formatDate } from "../../lib/format";
 import { History } from "../../platform/History";
@@ -17,6 +17,7 @@ import { AgreementForm } from "./AgreementForm";
 import { AgreementReadings } from "./DocumentReadings";
 import { DecisionDialog } from "./DecisionDialog";
 import { agreementTone, day, renewalPill } from "./display";
+import { shownMoney } from "../../platform/Money";
 
 const Fact = ({ label, value, note }: { label: string; value: React.ReactNode; note?: React.ReactNode }) => (
   <div className="min-w-0">
@@ -212,7 +213,7 @@ export function AgreementPage() {
       </PageHeader>
 
       <div className="grid grid-cols-4 gap-8 border-t border-line pt-6">
-        {a.kind === "subscription" && <Fact label="Annual value" value={value == null ? "–" : formatMoney(value, a.currency)} />}
+        {a.kind === "subscription" && <Fact label="Annual value" value={value == null ? "–" : shownMoney(value, a.currency)} />}
         <Fact label="Signed on" value={day(a.signedOn)} />
         {a.kind !== "nda" && a.kind !== "dpa" && <Fact label="Starts" value={day(a.startDate)} />}
         {a.kind === "msa" ? (
@@ -225,7 +226,7 @@ export function AgreementPage() {
           />
         )}
         {a.kind === "subscription" && <Fact label="Notice deadline" value={day(a.noticeDeadline)} note={`${a.noticePeriodDays} days before renewal`} />}
-        {a.kind === "subscription" && <Fact label="Invoiced so far" value={formatMoney(a.invoicedMinor, a.currency)} />}
+        {a.kind === "subscription" && <Fact label="Invoiced so far" value={shownMoney(a.invoicedMinor, a.currency)} />}
         <Fact label="Owner" value={<span className="text-[18px]">{a.ownerName}</span>} />
       </div>
 
@@ -270,7 +271,7 @@ export function AgreementPage() {
                     <span className="min-w-0 flex-1 truncate font-semibold">{c.title}</span>
                     <Pill tone={agreementTone(c.status)}>{statusLabels[c.status]}</Pill>
                     <span className="num w-28 text-right text-ink-2">{day(c.endDate)}</span>
-                    <span className="num w-32 text-right">{c.budgetMinor == null ? "–" : formatMoney(c.budgetMinor, c.currency)}</span>
+                    <span className="num w-32 text-right">{c.budgetMinor == null ? "–" : shownMoney(c.budgetMinor, c.currency)}</span>
                   </Link>
                 </li>
               ))}

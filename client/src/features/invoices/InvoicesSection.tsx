@@ -3,12 +3,13 @@ import { useState } from "react";
 import { toast } from "sonner";
 import type { AgreementDetail } from "../../../../shared/agreements";
 import { formatDay } from "../../../../shared/dates";
-import { formatMoney } from "../../../../shared/money";
+
 import type { Invoice } from "../../../../shared/sow";
 import type { Page } from "../../../../shared/types";
 import { api, messageOf } from "../../lib/api";
 import { Button, ConfirmButton, ErrorState, Loading } from "../../platform/ui";
 import { InvoiceForm } from "./InvoiceForm";
+import { shownMoney } from "../../platform/Money";
 
 /** The invoices booked against one SOW or subscription, on that agreement's page. */
 export function InvoicesSection({ agreement: a }: { agreement: AgreementDetail }) {
@@ -48,7 +49,7 @@ export function InvoicesSection({ agreement: a }: { agreement: AgreementDetail }
                 <span className="block truncate font-semibold">{i.invoiceNumber}</span>
                 <span className="num block truncate text-[13px] text-ink-2">{[formatDay(i.invoiceDate), i.milestoneTitle, i.description].filter(Boolean).join(" · ")}</span>
               </span>
-              <span className="num font-medium">{formatMoney(i.amountMinor, i.currency)}</span>
+              <span className="num font-medium">{shownMoney(i.amountMinor, i.currency)}</span>
               <Button className="h-8 px-3.5 text-[12.5px]" onClick={() => setDialog(i)} aria-label={`Edit invoice ${i.invoiceNumber}`}>
                 Edit
               </Button>

@@ -2,8 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { amountForInput, formatMoney, parseAmount } from "../../../../shared/money";
-import { CurrencyOptions } from "../../platform/Money";
+import { amountForInput, parseAmount } from "../../../../shared/money";
+import { amountProblem, CurrencyOptions, shownMoney } from "../../platform/Money";
 import { contentEditable, contentLocked, type RfpDetail, type RfpRow } from "../../../../shared/rfp";
 import type { Page } from "../../../../shared/types";
 import { api } from "../../lib/api";
@@ -79,7 +79,7 @@ export function DemandForm({ rfp, onClose, onSaved }: { rfp?: RfpDetail; onClose
         return {
           title: v.title.trim() ? "" : "Give the RFP a title.",
           need: v.need.trim() ? "" : "Describe what is needed.",
-          budget: v.budget && parseAmount(v.budget, v.currency) == null ? AMOUNT : "",
+          budget: v.budget ? amountProblem(v.budget, v.currency, AMOUNT) : "",
           demandApprovedOn: v.demandApprovedOn && v.demandApprovedOn > today && v.demandApprovedOn !== rfp?.demandApprovedOn ? "The approval date cannot be in the future." : "",
           writtenWeight: pct(v.writtenWeight) ? "" : PERCENT,
           demoWeight: !pct(v.demoWeight) ? PERCENT : pct(v.writtenWeight) && sum !== 100 ? `The two parts must add up to 100. They now add up to ${sum}.` : "",
@@ -123,7 +123,7 @@ export function DemandForm({ rfp, onClose, onSaved }: { rfp?: RfpDetail; onClose
             inputMode="decimal"
             value={v.budget}
             onChange={(e) => set("budget", e.target.value, ["budgetMinor"])}
-            hint={minor == null ? "Stays inside the team; it is never put in the RFP." : `Read as ${formatMoney(minor, v.currency)}`}
+            hint={minor == null ? "Stays inside the team; it is never put in the RFP." : `Read as ${shownMoney(minor, v.currency)}`}
           />
           <SelectField form={form} name="currency" label="Currency" value={v.currency} onChange={(e) => set("currency", e.target.value)}>
             <CurrencyOptions value={v.currency} />

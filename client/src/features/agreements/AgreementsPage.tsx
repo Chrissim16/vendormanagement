@@ -4,7 +4,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { agreementStatuses, kindLabels, kinds, kindShort, statusLabels, type Agreement } from "../../../../shared/agreements";
 import { isDay } from "../../../../shared/dates";
-import { formatMoney } from "../../../../shared/money";
+
 import type { Page } from "../../../../shared/types";
 import type { Vendor } from "../../../../shared/vendors";
 import { api, messageOf, queryString } from "../../lib/api";
@@ -14,6 +14,7 @@ import { DataTable, Pager, type Column } from "../../platform/DataTable";
 import { Button, EmptyState, ErrorState, Field, Loading, PageHeader, Pill, Select, TextInput } from "../../platform/ui";
 import { AgreementForm } from "./AgreementForm";
 import { agreementTone, day } from "./display";
+import { shownMoney } from "../../platform/Money";
 
 /** The two views of agreements: everything, and what needs a renewal decision. */
 export function AgreementTabs() {
@@ -43,7 +44,7 @@ const columns: Column<Agreement>[] = [
     fit: true,
     header: "Value or budget",
     sort: "value",
-    cell: (a) => <span className="num">{(a.budgetMinor ?? a.annualValueMinor) == null ? "–" : formatMoney((a.budgetMinor ?? a.annualValueMinor)!, a.currency)}</span>,
+    cell: (a) => <span className="num">{(a.budgetMinor ?? a.annualValueMinor) == null ? "–" : shownMoney((a.budgetMinor ?? a.annualValueMinor)!, a.currency)}</span>,
     className: "text-right",
   },
 ];

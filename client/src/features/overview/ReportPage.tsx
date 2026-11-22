@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { agreementName } from "../../../../shared/agreements";
 import { formatDay } from "../../../../shared/dates";
-import { formatMoney, isMixed, moneyLine } from "../../../../shared/money";
+import { isMixed, moneyLine } from "../../../../shared/money";
 import { REPORT_ENDING_DAYS, type ManagementReport } from "../../../../shared/overview";
 import { addMonth, formatMetric, formatTarget, isMonth, metricInfo, monthName, monthOf } from "../../../../shared/performance";
 import { formatScore, quarterName } from "../../../../shared/scorecards";
@@ -12,7 +12,7 @@ import { api, messageOf } from "../../lib/api";
 import { burst } from "../../lib/burst";
 import { useUrlState } from "../../lib/useUrlState";
 import { TextAreaField, useForm } from "../../platform/form";
-import { ConvertedNote, wholeAmounts } from "../../platform/Money";
+import { ConvertedNote, shownMoney, wholeAmounts } from "../../platform/Money";
 import { useToday } from "../../platform/session";
 import { Button, ErrorState, Loading, PageHeader, Pill } from "../../platform/ui";
 import { MonthSelect } from "../performance/parts";
@@ -105,7 +105,7 @@ export function ReportPage() {
   });
   const r = q.data;
   const d = r?.data;
-  const money = (minor: number, currency = "EUR") => formatMoney(minor, currency);
+  const money = (minor: number, currency = "EUR") => shownMoney(minor, currency);
   return (
     <>
       <PageHeader

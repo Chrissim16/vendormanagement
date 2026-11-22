@@ -398,7 +398,7 @@ test.describe("M-6 spend overview, M-7 warning thresholds and M-8 currencies", (
     await dialog.getByLabel("Currency").selectOption("DKK");
     await dialog.getByLabel("Rate per day").fill("SEK 9,800");
     await dialog.getByRole("button", { name: "Add rate" }).click();
-    await expect(dialog.getByText("Enter a day rate like 1,250.00.")).toBeVisible();
+    await expect(dialog.getByText("This is written in SEK, but the amount is in DKK.", { exact: false })).toBeVisible();
     await dialog.getByLabel("Rate per day").fill("9 800");
     await expect(dialog.getByText("Read as DKK 9,800.00 a day")).toBeVisible();
     await dialog.getByRole("button", { name: "Add rate" }).click();

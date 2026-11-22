@@ -63,8 +63,8 @@ test.describe("C-1 ask a question", () => {
       .locator("dl div")
       .evaluateAll((els) => Object.fromEntries(els.map((e) => [e.querySelector("dt")!.textContent, e.querySelector("dd")!.textContent])));
     // M-8: the euro total first, as the invoice list shows it, with the pounds beneath.
-    expect(figures["Total in GBP"]).toMatch(/^£ [\d,]+\.\d\d$/);
-    expect(figures["Total in euros, converted"]).toMatch(/^€ [\d,]+\.\d\d$/);
+    expect(figures["Total in GBP"]).toMatch(/^£\s[\d,]+\.\d\d$/);
+    expect(figures["Total in euros, converted"]).toMatch(/^€\s[\d,]+\.\d\d$/);
     await expect(answer).toContainText(figures["Total in euros, converted"]!);
     await looked.getByRole("link", { name: "Open the list" }).click();
     await expect(page).toHaveURL(/\/money\/invoices\?vendorId=/);

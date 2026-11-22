@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { toast } from "sonner";
 import { addMonths, formatDay, isDay } from "../../../../shared/dates";
-import { formatMoney, isMixed, moneyLine, type Money, type Rate } from "../../../../shared/money";
+import { isMixed, moneyLine, type Money, type Rate } from "../../../../shared/money";
 import type { Invoice, Spend } from "../../../../shared/sow";
 import type { Page } from "../../../../shared/types";
 import type { Vendor } from "../../../../shared/vendors";
 import { api, messageOf, queryString } from "../../lib/api";
 import { pageNumber, useUrlState } from "../../lib/useUrlState";
 import { DataTable, Pager, type Column } from "../../platform/DataTable";
-import { ConvertedNote, ConvertedTotal, EurWithOriginal, wholeAmounts } from "../../platform/Money";
+import { ConvertedNote, ConvertedTotal, EurWithOriginal, shownMoney, wholeAmounts } from "../../platform/Money";
 import { useToday } from "../../platform/session";
 import { Button, EmptyState, ErrorState, Field, Loading, PageHeader, Select, TextInput } from "../../platform/ui";
 import { InvoiceForm } from "./InvoiceForm";
@@ -39,7 +39,7 @@ function ceiling(minor: number): number {
   const unit = 10 ** Math.floor(Math.log10(minor));
   return [1, 2, 5, 10].map((s) => s * unit).find((s) => s >= minor)!;
 }
-const eur = (minor: number) => formatMoney(minor, "EUR");
+const eur = (minor: number) => shownMoney(minor, "EUR");
 /** A scale label: whole where it can be, one decimal where it cannot (€2.5k, never a rounded €3k). */
 const short = (minor: number) => {
   const n = (x: number) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
@@ -297,7 +297,7 @@ export function InvoicesPage() {
         context={
           !d || list.isPlaceholderData
             ? " "
-            : `${d.total} ${d.total === 1 ? "invoice" : "invoices"}${d.total ? `, ${formatMoney(d.sums.eurMinor, "EUR")}${isMixed(d.sums.amounts) ? ` in euros, converted (${wholeAmounts(moneyLine(d.sums.amounts))})` : ""}` : ""}`
+            : `${d.total} ${d.total === 1 ? "invoice" : "invoices"}${d.total ? `, ${shownMoney(d.sums.eurMinor, "EUR")}${isMixed(d.sums.amounts) ? ` in euros, converted (${wholeAmounts(moneyLine(d.sums.amounts))})` : ""}` : ""}`
         }
         title="Invoices"
       >

@@ -3,8 +3,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { formatDay } from "../../../../shared/dates";
-import { currenciesIn, formatMoney, isMixed, moneyLine, parseAmount, type Currency, type Money, type Rate } from "../../../../shared/money";
-import { ConvertedNote, CurrencyOptions, wholeAmounts } from "../../platform/Money";
+import { currenciesIn, isMixed, moneyLine, parseAmount, type Currency, type Money, type Rate } from "../../../../shared/money";
+import { amountProblem, ConvertedNote, CurrencyOptions, shownMoney, wholeAmounts } from "../../platform/Money";
 import type { Invoice, RateLine } from "../../../../shared/sow";
 import type { Page } from "../../../../shared/types";
 import { api, messageOf } from "../../lib/api";
@@ -18,7 +18,7 @@ function RateForm({ vendorId, roles, onClose, onSaved }: { vendorId: string; rol
   const form = useForm(
     { role: "", rate: "", currency: "EUR" as Currency, validFrom: today },
     ({ rate, ...v }) => api<RateLine[]>(`/vendors/${vendorId}/rate-card`, { body: { ...v, dayRateMinor: parseAmount(rate, v.currency) } }),
-    { onSaved, check: (v) => ({ rate: parseAmount(v.rate, v.currency) == null ? "Enter a day rate like 1,250.00." : "" }) },
+    { onSaved, check: (v) => ({ rate: amountProblem(v.rate, v.currency, "Enter a day rate like 1,250.00.") }) },
   );
   const { values: v, set } = form;
   const shown = { errors: { ...form.errors, rate: form.errors.rate || form.errors.dayRateMinor || "" } };
@@ -41,7 +41,7 @@ function RateForm({ vendorId, roles, onClose, onSaved }: { vendorId: string; rol
             placeholder="1,250.00"
             value={v.rate}
             onChange={(e) => set("rate", e.target.value, ["dayRateMinor"])}
-            hint={minor == null ? undefined : `Read as ${formatMoney(minor, v.currency)} a day`}
+            hint={minor == null ? undefined : `Read as ${shownMoney(minor, v.currency)} a day`}
           />
           <SelectField form={shown} name="currency" label="Currency" value={v.currency} onChange={(e) => set("currency", e.target.value as Currency)}>
             <CurrencyOptions value={v.currency} />
@@ -86,11 +86,13 @@ export function VendorMoney({ vendorId, vendorName }: { vendorId: string; vendor
         ) : (
           <p className="num">
             <span className="text-[22px] font-semibold tracking-[-0.02em]">
-              {wholeAmounts(currenciesIn(sums!.amounts).length === 1 ? moneyLine(sums!.amounts) : formatMoney(sums!.eurMinor, "EUR"))}
+              {wholeAmounts(currenciesIn(sums!.amounts).length === 1 ? moneyLine(sums!.amounts) : shownMoney(sums!.eurMinor, "EUR"))}
             </span>{" "}
             {isMixed(sums!.amounts) && (
               <span className="text-ink-2">
-                {currenciesIn(sums!.amounts).length === 1 ? `(${formatMoney(sums!.eurMinor, "EUR")} in euros, converted) ` : `in euros, converted (${wholeAmounts(moneyLine(sums!.amounts))}) `}
+                {currenciesIn(sums!.amounts).length === 1
+                  ? `(${shownMoney(sums!.eurMinor, "EUR")} in euros, converted) `
+                  : `in euros, converted (${wholeAmounts(moneyLine(sums!.amounts))}) `}
               </span>
             )}
             <span className="text-ink-2">
@@ -123,7 +125,7 @@ export function VendorMoney({ vendorId, vendorName }: { vendorId: string; vendor
                   <span className="num block text-[13px] text-ink-2">From {formatDay(l.validFrom)}</span>
                 </span>
                 {l.current && <Pill tone="brand">In force</Pill>}
-                <span className="num">{formatMoney(l.dayRateMinor, l.currency)} a day</span>
+                <span className="num">{shownMoney(l.dayRateMinor, l.currency)} a day</span>
                 <ConfirmButton
                   className="h-8 px-3.5 text-[12.5px]"
                   disabled={remove.isPending}

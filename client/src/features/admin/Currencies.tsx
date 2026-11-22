@@ -4,12 +4,13 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { formatDay } from "../../../../shared/dates";
 import { ISO_CURRENCIES, isoCurrency } from "../../../../shared/iso-currencies";
-import { ambiguousRate, EUR, formatMoney, formatRate, parseRate, type ListedCurrency } from "../../../../shared/money";
+import { ambiguousRate, EUR, formatRate, parseRate, type ListedCurrency } from "../../../../shared/money";
 import { api, messageOf } from "../../lib/api";
 import { personName, useCurrencies, usePeople } from "../../lib/data";
 import { FormFooter, useForm } from "../../platform/form";
 import { History } from "../../platform/History";
 import { Button, ConfirmButton, ErrorState, Field, Loading, Pill, TextInput } from "../../platform/ui";
+import { shownMoney } from "../../platform/Money";
 
 const RATE_HINT = "Enter a rate like 11.49, with at most four decimals.";
 /** What is wrong with a typed rate, or "" when it can be saved. */
@@ -34,7 +35,7 @@ function usesWords(u: ListedCurrency["uses"]) {
 }
 
 /** What a hundred euros comes to, so a rate typed the wrong way round shows at once. */
-const example = (code: string, e4: number | null) => (e4 == null ? undefined : `€ 100.00 is ${formatMoney(Math.round((100_00 * e4) / 10000), code)}`);
+const example = (code: string, e4: number | null) => (e4 == null ? undefined : `€ 100.00 is ${shownMoney(Math.round((100_00 * e4) / 10000), code)}`);
 
 /** One currency's row: its rate as "1 EUR = [   ] SEK", who set it, and removing it. */
 function Row({ c }: { c: ListedCurrency }) {
@@ -194,13 +195,15 @@ export function CurrenciesSection() {
           Currencies and exchange rates
         </h2>
         <p className="mt-1 text-ink-2">
-          The euro is the main currency: every total across currencies is shown in euros, converted with the rates below. Type each rate as 1 euro = so much of the other currency, the way banks
-          publish it. A rate changes converted totals only; no amount that was keyed in changes.
+          The euro is the main currency: every total across currencies is shown in euros, converted with the rates below. Type each rate as 1 euro = so much of the other currency,
+          the way banks publish it. A rate changes converted totals only; no amount that was keyed in changes.
         </p>
         {starting > 0 && (
           <p className="mt-2 flex items-center gap-2 text-[13.5px] font-medium">
             <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-warn" />
-            {starting === 1 ? "One rate is still a rough starting rate, not yet set by an admin. Check it and save it." : `${starting} rates are still rough starting rates, not yet set by an admin. Check each one and save it.`}
+            {starting === 1
+              ? "One rate is still a rough starting rate, not yet set by an admin. Check it and save it."
+              : `${starting} rates are still rough starting rates, not yet set by an admin. Check each one and save it.`}
           </p>
         )}
       </div>

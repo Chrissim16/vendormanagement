@@ -6,7 +6,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import type { Agreement } from "../../../../shared/agreements";
 import { formatDay } from "../../../../shared/dates";
-import { formatMoney } from "../../../../shared/money";
+
 import { api, messageOf } from "../../lib/api";
 import { item, list as listMotion } from "../../lib/motion";
 import { useUrlState } from "../../lib/useUrlState";
@@ -15,6 +15,7 @@ import { Button, EmptyState, ErrorState, Field, Loading, PageHeader, Pill, Selec
 import { AgreementTabs } from "./AgreementsPage";
 import { DecisionDialog } from "./DecisionDialog";
 import { renewalPill } from "./display";
+import { shownMoney } from "../../platform/Money";
 
 /** Subscriptions whose notice deadline has passed or is coming up, soonest first (A-6). */
 export function RenewalsPage() {
@@ -79,7 +80,7 @@ export function RenewalsPage() {
                     Notice deadline {a.renewalState === "overdue" ? "passed" : "is"} {formatDay(a.noticeDeadline!)} · renews {formatDay(a.endDate!)} · {a.ownerName}
                   </span>
                 </span>
-                <span className="num text-ink-2">{a.annualValueMinor == null ? "" : `${formatMoney(a.annualValueMinor, a.currency)} a year`}</span>
+                <span className="num text-ink-2">{a.annualValueMinor == null ? "" : `${shownMoney(a.annualValueMinor, a.currency)} a year`}</span>
                 <Button onClick={() => setDeciding(a)} aria-label={`Record decision for ${a.title}`}>
                   Record decision
                 </Button>

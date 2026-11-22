@@ -428,6 +428,7 @@ describe("E-1 what cannot be read, and who may ask", () => {
       expect(other.proposals.map((p) => p.field), fee).toEqual(["endDate"]);
       // The page names a currency that is not on the list, so it is clear what an admin could add.
       expect(other.unlisted, fee).toEqual(fee.includes("CHF") ? ["CHF"] : []);
+      if (fee.includes("CHF")) expect(other.unverified, fee).toEqual([]);
     }
     expect(await get(a.id)).toMatchObject({ annualValueMinor: 20_000_00, currency: "EUR" });
   });

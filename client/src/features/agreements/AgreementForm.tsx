@@ -11,8 +11,8 @@ import {
   type AgreementDetail,
   type Kind,
 } from "../../../../shared/agreements";
-import { amountForInput, formatMoney, parseAmount } from "../../../../shared/money";
-import { CurrencyOptions } from "../../platform/Money";
+import { amountForInput, parseAmount } from "../../../../shared/money";
+import { amountProblem, CurrencyOptions, shownMoney } from "../../platform/Money";
 import type { Page } from "../../../../shared/types";
 import type { Vendor } from "../../../../shared/vendors";
 import { api } from "../../lib/api";
@@ -80,8 +80,8 @@ export function AgreementForm({
       check: (v) => ({
         vendorId: v.vendorId ? "" : "Choose a vendor.",
         kind: v.kind ? "" : "Choose what kind of agreement this is.",
-        budget: v.budget && parseAmount(v.budget, v.currency) == null ? AMOUNT : "",
-        annualValue: v.annualValue && parseAmount(v.annualValue, v.currency) == null ? AMOUNT : "",
+        budget: v.budget ? amountProblem(v.budget, v.currency, AMOUNT) : "",
+        annualValue: v.annualValue ? amountProblem(v.annualValue, v.currency, AMOUNT) : "",
         noticePeriodDays: /^\d*$/.test(v.noticePeriodDays) ? "" : "Enter a number of days.",
         renewalTermMonths: /^\d*$/.test(v.renewalTermMonths) ? "" : "Enter a number of months.",
       }),
@@ -91,7 +91,7 @@ export function AgreementForm({
   // What the app understood from a typed amount, shown before saving so "1.234" is never a surprise.
   const reading = (typed: string) => {
     const minor = typed ? parseAmount(typed, v.currency) : null;
-    return minor == null ? undefined : `Read as ${formatMoney(minor, v.currency)}`;
+    return minor == null ? undefined : `Read as ${shownMoney(minor, v.currency)}`;
   };
   // Changing the kind empties the fields that belonged to the old kind, so nothing unseen is sent.
   const changeKind = (kind: Kind) =>

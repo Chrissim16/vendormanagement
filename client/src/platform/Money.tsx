@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { convertedNote, EUR, formatMoney, isMixed, moneyLine, type Money, type Rate } from "../../../shared/money";
+import { convertedNote, EUR, formatMoney, isMixed, moneyLine, parseAmount, typedCurrency, type Money, type Rate } from "../../../shared/money";
 import { useCurrencies } from "../lib/data";
 import { useMe } from "./session";
 
@@ -80,4 +80,16 @@ export function CurrencyOptions({ value }: { value: string }) {
       ))}
     </>
   );
+}
+
+/** An amount as the screens show it: as `formatMoney` writes it, kept on one line. */
+export const shownMoney = (minor: number, currency: string) => wholeAmounts(formatMoney(minor, currency));
+
+/** What is wrong with a typed amount, or "": an amount written in another currency says so; anything else gets the form's own `fallback`. */
+export function amountProblem(text: string, currency: string, fallback: string): string {
+  if (parseAmount(text, currency) != null) return "";
+  const typed = typedCurrency(text);
+  return typed && typed !== currency
+    ? `This is written in ${typed}, but the amount is in ${currency}. Write it in ${currency}, or choose ${typed} as the currency where that can be chosen.`
+    : fallback;
 }
