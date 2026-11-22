@@ -20,7 +20,11 @@ can click through. A milestone is done when:
 | M6 | RFP | Q-1 to Q-11 | M1; AI from M4 |
 | M7 | Ask a question | C-1 | M5, M6 |
 | M8 | Contract reading | E-1 | M1; AI from M4 |
+| M10 | Vendor details, contact roles, history tabs | V-5 to V-7; changes to F-3 and Q-11 | M8 |
+| M11 | RFP editor, review rounds, company template | Q-12 to Q-14; change to Q-3 | M10 |
 | M9 | Move to Databricks | none new | all; needs the owner at work |
+
+M10 and M11 were asked for after M8 was done (22 Nov 2026) and are built before M9.
 
 X-1 to X-6 apply to every milestone. M2 and M3 touch different features and may be built in parallel.
 
@@ -60,6 +64,16 @@ Read-only query tools over the existing list queries, document text search, chat
 ## M8 Contract reading
 Field proposal from an uploaded document with source passages and confirm step.
 
+## M10 Vendor details, contact roles, history tabs
+Address and VAT or tax number on the vendor, a main contact on the new-vendor form, a shared list of contact roles in place of the job title, and the history out of the way of long pages.
+
+Reworks what was built: the vendor form, panel and page; the contact form; the import template and its checks; Ask's vendor look-up; the sample data (invented addresses, VAT numbers and roles); the RFP page, which gets a History tab after Decision; the agreement, scorecard and briefing pages, where the history shows the newest five entries with "Show all". A migration turns each job title into a role.
+
+## M11 RFP editor, review rounds, company template
+A formatting editor for RFP sections, the AI rewriting a section on request, review rounds with a version number, reading comments and tracked changes back from returned Word files, and the company's Word template uploaded by an admin.
+
+Reworks what was built: the Document and Review tabs, the AI draft prompt (formatted output), the Word export for review and for candidates, the decision record PDF (formatted sections), and the review PDF, which is removed. The editor is a new pattern and goes into the design guide. The `docx` package's handling of an existing template, and reading comments and tracked changes from a Word file, are checked against current documentation before building. An invented example template is made for trying the app.
+
 ## M9 Move to Databricks
 Done at work, with limited AI assistance, so the preparation is done here first.
 
@@ -73,7 +87,8 @@ At work:
 2. Create the app, the Lakebase database and the volume; grant app access to the VS Finance team only.
 3. Set the Jira service account and the model serving endpoint as app resources.
 4. Deploy and open the system check page. Fix whatever it reports.
-5. Link the real Jira boards, run the first sync, compare a month's metrics with Jira's own reports.
+5. Upload the company's Word template on the settings page, with [Title], [Date] and [Version] typed on its cover page, and check one RFP review copy in Word.
+6. Link the real Jira boards, run the first sync, compare a month's metrics with Jira's own reports.
 6. Enter real vendors and agreements with the Excel import.
 
 Recommended: do steps 1 to 4 once straight after M0, with the empty app. It costs little,

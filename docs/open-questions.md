@@ -92,6 +92,11 @@ wrong. Answered questions move to the bottom.
 | Q84 | How much of a long contract is read? | The first 30,000 characters, roughly ten pages. The page says when a document is longer than that. | M8 |
 | Q85 | Can the AI read the same document again? | Yes, at any time; the new reading takes the place of the old one on the page. A reading that was used or rejected cannot be used a second time. | M8 |
 | Q86 | Which documents can be read? | Those attached to an agreement, with real text in them (PDF, .docx, .xlsx). Not scans, not the old .doc and .xls formats, and not documents an RFP candidate sent. | M8 |
+| Q87 | Should open reviewer comments stop an RFP from being approved? | Yes, as an open requested change does today. | M11 |
+| Q88 | The vendor page already had a History tab; the agreement, scorecard and briefing pages have no tabs. | The RFP gets a History tab after Decision. The pages without tabs show the newest five history entries with "Show all", instead of adding tabs. | M10 |
+| Q89 | Who may add a contact role, and who may rename or remove one? | Any member adds one while filling in a contact; an admin renames and removes. One in use cannot be removed. | M10 |
+| Q90 | What does the owner need to do to the company's Word template? | Type [Title], [Date] and [Version] on its cover page where they should go, then upload it on the settings page once the app runs at work. The app reports what it found. The template stays at work; only an invented example is in the project. | M11, M9 |
+| Q91 | Should the rewrite and editor also cover briefings or other documents? | Not now. Only the RFP document. | M11 |
 | Q27 | How long are tickets kept? | 24 months after they were resolved, as the data model says. Open tickets are kept however old. | M3 |
 
 ## To check at work before M9

@@ -16,7 +16,7 @@ Fields marked `*` are required. Every table also has `id`, `created_at`, `create
 ## Vendors
 
 **Vendor**: `name*` (unique, ignoring case), `legal_name`, `type*` (software | consultancy | advisory),
-`status*` (prospect | active | on_hold | offboarded), `owner_user_id*`, `website`, `country`, `description`, `notes`,
+`status*` (prospect | active | on_hold | offboarded), `owner_user_id*`, `website`, `address_line1`, `address_line2`, `postal_code`, `city`, `country`, `vat_number`, `description`, `notes`,
 `scoring_enabled*` (default yes), `nda_required*` (default yes), `dpa_required*` (default yes).
 - A vendor with an active agreement cannot be offboarded.
 - An offboarded vendor cannot receive new agreements, and none of its agreements can be made active. Every other status can, so a prospect can sign an NDA.
@@ -24,8 +24,12 @@ Fields marked `*` are required. Every table also has `id`, `created_at`, `create
 - The owner must be a person who has access to the app.
 - RFP candidates are vendors with status `prospect`.
 - Changes to a vendor's contacts are recorded in the vendor's history.
+- `vat_number` (V-5) is optional and stored in capitals without spaces, dots or dashes. When given, no other vendor holds the same one.
+- A vendor added with a main contact (V-6) is saved with that contact, as primary, in one transaction, or not at all.
 
-**Contact**: `vendor_id*`, `name*`, `job_title`, `email`, `phone`, `is_primary*`. At most one primary per vendor.
+**Contact**: `vendor_id*`, `name*`, `roles` (any number of contact roles), `email`, `phone`, `is_primary*`. At most one primary per vendor. The free-text `job_title` was replaced by roles in M10; each title held then became a role.
+
+**Contact role** (V-7): `name*` (unique ignoring case and extra spaces). Shown A to Z. Any member adds one; an admin renames or removes one, and one in use cannot be removed. Adding, renaming and removing are recorded in the audit log. Not the same as a rate card role, which is a consultant's role and day rate.
 
 **Rate card line**: `vendor_id*`, `role*`, `day_rate_minor*`, `currency*`, `valid_from*`. The current rate for a role is the latest line not in the future.
 
@@ -82,7 +86,7 @@ Derived, not stored:
 
 Warnings are sorted with what is already wrong first, then the soonest date. The windows and the budget percentage are the admin's settings.
 
-**Import** (A-8): a vendor row whose name is already in the app, and an agreement row whose vendor, kind and title are already in the app, are left alone. A row that appears twice in the file is a problem, for every copy. An empty owner means the person importing. A cell showing a formula error is a problem, never read as empty. A number finer than a cent is refused, not rounded. A subscription row must say whether it renews automatically. The template's example rows are refused if left in. The preview and the import run the same analysis and always agree.
+**Import** (A-8): the vendor sheet has the address and VAT or tax number columns, optional, by the vendor form's rules. A vendor row whose name is already in the app, and an agreement row whose vendor, kind and title are already in the app, are left alone. A row that appears twice in the file is a problem, for every copy. An empty owner means the person importing. A cell showing a formula error is a problem, never read as empty. A number finer than a cent is refused, not rounded. A subscription row must say whether it renews automatically. The template's example rows are refused if left in. The preview and the import run the same analysis and always agree.
 
 ## SOW delivery and money
 
@@ -261,7 +265,7 @@ per criterion a `score` 1 to 5, a `vendor_comment` and an `internal_note`, plus 
 - Every change to an RFP and its parts is recorded in the RFP's own history.
 
 **RFP criterion**: `rfp_id*`, `name*` (unique within its part), `weight*` (1 to 100; the weights within a part add up to 100), `part*` (written | demo).
-**RFP section**: `rfp_id*`, `position*`, `heading*`, `body`.
+**RFP section**: `rfp_id*`, `position*`, `heading*`, `body` (formatted text since M11: paragraphs, sub-headings, bullet and numbered lists, bold, italic, simple tables; text from before is plain paragraphs).
 **RFP question**: `rfp_id*`, `number*` (its place in the list), `text*`, `criterion_id*` (a written criterion).
 - Sections, criteria and questions are saved together as one document. They and the two part weights can be changed while drafting or in review. An approved RFP is fixed as approved and has to be taken back to drafting to change; once it is `issued` it is locked for good.
 - The template gives six sections and six criteria (four written, two demo). The AI's draft is a suggestion; the document is what a person saved. A draft taken over counts as accepted while the document still reads as drafted and as edited once it does not.
@@ -269,6 +273,19 @@ per criterion a `score` 1 to 5, a `vendor_comment` and an `internal_note`, plus 
 **Review sign-off**: `rfp_id*`, `reviewer_name*`, `reviewer_role`, `outcome*` (approved | changes_requested), `on_date*` (not in the future), `comment` (required for requested changes), `resolved_on`, `superseded`.
 - A requested change is open until a member marks it as dealt with. Approved needs at least one approval that still counts and no open request. Sign-offs are recorded in review and stand once the RFP is approved.
 - When the document or the part weights change, every approval given before is marked as superseded: it stays in the trail as "approved an earlier version" and no longer counts.
+
+**Review round** (Q-13): `rfp_id*`, `version*` (1, 2, ... per RFP), `made_at*`, `made_by*`, `content*` (the sections, criteria and questions exactly as in the review copy). Made when a review copy is downloaded; a download with no change since the last round reuses that round.
+
+**Returned review file**: `round_id*`, a **Document** (the uploaded Word file), `uploaded_by*`. Must be a review copy of this RFP; one of an earlier version is accepted and marked with its version.
+
+**Reviewer remark** (Q-13): `file_id*`, `kind*` (comment | suggested_edit), `author*` (the name in Word), `section_id` (empty until placed), `anchor_text` (the words commented on), `text` (the comment), `removed_text`, `added_text` (a suggested edit), `status*` (open | dealt_with | set_aside), `resolved_by`, `resolved_at`.
+- Placed by the section the remark stands in, recognised by the section's heading and position in the round's content. One that fits no section stays unplaced until a member places it or sets it aside.
+- A suggested edit is taken over only where `removed_text` stands in the section once, as it is now; otherwise it is done by hand.
+- An open remark of any round blocks moving to approved. Every action on a remark is in the RFP's history.
+
+**Section rewrite** (Q-12): an AI suggestion of kind `rfp_section_rewrite` with the section as subject, the instruction and any remarks it answers as input, and the new section text as output. Accepted when used as it is, edited when changed first, rejected otherwise. The figures rule of the other prompts applies.
+
+**Word template** (Q-14, admin, one in force): a Word file kept in file storage, `uploaded_by*`, `uploaded_at*`, `found` (what the app recognised: cover page, the [Title], [Date] and [Version] marks, header, footer, styles). Replacing it is recorded in the settings history. Without one, a plain layout is used. Only an invented example template is ever in the repository.
 
 **Candidate**: `rfp_id*`, `vendor_id*` (once per RFP, not an offboarded vendor), `list*` (longlist | shortlist | dropped), `reason*`, `issued_on`, `nda_warning_acknowledged_by`, `response_received_on`, `unmatched` (rows of an uploaded answer sheet that fitted no question).
 - A new vendor is created as a prospect owned by the member who adds it.

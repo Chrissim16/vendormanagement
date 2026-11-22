@@ -15,11 +15,31 @@ Newest entry first. Written for the owner, in plain language.
 | M6 RFP | Done here; the AI draft and comparison are unproven until tried with the company's model |
 | M7 Ask a question | Done here; how well a real AI understands questions is unproven until tried with the company's model |
 | M8 Contract reading | Done here; how well a real AI reads a contract is unproven until tried with the company's model |
+| M10 Vendor details, contact roles, history tabs | Not started; asked for on 22 Nov 2026 |
+| M11 RFP editor, review rounds, company template | Not started; asked for on 22 Nov 2026 |
 | M9 Move to Databricks | Not started; done at work |
 
-**Next:** M9 Move to Databricks, which is done at work and needs you. Everything that can be built outside the company is now built.
+**Next:** M10, then M11, both built here. After that M9 Move to Databricks, which is done at work and needs you.
 
 ## Log
+
+### 2026-11-22 Your four requests written down
+You asked for four changes. They are now part of the plan as two new parts, built here before the move to Databricks.
+
+**Part M10: vendor details, contact roles, history.**
+- A vendor gets an address (street, second line, postal code, city, country) and a VAT or tax number. Both are optional. The same number on two vendors is refused.
+- The form for a new vendor has an optional main contact; when filled in, that person becomes the main contact straight away.
+- A contact gets one or more roles from a shared list, sorted A to Z: Account Manager, Billing / Finance, Consultant, Delivery Manager, Developer, Executive Sponsor, Helpdesk, Legal / Contracts, Program Manager, Project Manager, Support Manager, Technical Contact. Anyone can add a missing role while filling in a contact; an admin can rename or remove roles. The job titles already typed become roles, so nothing is lost.
+- The RFP's history moves to its own tab after Decision. The vendor page already has one. Pages without tabs (agreement, scorecard, briefing) show the newest five entries with "Show all".
+
+**Part M11: writing and reviewing the RFP.**
+- The RFP text gets a proper editor with headings, lists, bold, italic and tables, and the AI can rewrite a section when you ask, in your own words. A rewrite is shown next to the current text and changes nothing until you use it.
+- Reviewers keep working in Word. Each review copy has a version number. You upload the files they send back; the app reads their comments and tracked changes and shows each next to its section. For each one you take it over, ask the AI to rewrite for it, edit by hand, or set it aside. An RFP cannot be approved while one is still open.
+- Every RFP Word file uses the company's template: cover page, logo, fonts, spacing, header and footer. The cover gets the title, the date and the version. An admin uploads the template in the app once it runs at work, so the company's template and logo never sit in the project; here an invented example is used. The review PDF is dropped, since Word can save the file as PDF itself.
+
+What it costs: M10 is small. M11 is about the size of one of the earlier parts. The move to Databricks waits until both are done.
+
+Before M9, at work: type [Title], [Date] and [Version] on the template's cover page where they should appear. Decided on your behalf (see `docs/open-questions.md`, Q87 to Q91): open reviewer comments block approval; only the RFP document gets the editor for now.
 
 ### 2026-11-22 Three building blocks updated
 Installing the app reported eight known weaknesses, all rated moderate, in three of the outside building blocks it uses: the one that moves between pages, one used when making Excel files, and one used only by a tool for building. All three are now on versions without those weaknesses, and the install reports none. Nothing changes in how the app looks or works; the full set of automated checks passes. The notes about "deprecated" packages during install remain: those are old but working parts that other building blocks bring along, and are not weaknesses.
