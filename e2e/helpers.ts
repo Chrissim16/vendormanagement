@@ -54,7 +54,7 @@ export async function newVendor(request: APIRequestContext, label: string, field
     data: { name: unique(label), type: "software", ownerUserId: me.id, ndaRequired: false, dpaRequired: false, ...fields },
   });
   expect(res.ok(), await res.text()).toBe(true);
-  return (await res.json()) as { id: string; name: string; ownerUserId: string };
+  return (await res.json()) as { id: string; name: string; ownerUserId: string; vatNumber: string | null };
 }
 
 export async function newAgreement(request: APIRequestContext, vendor: { id: string; ownerUserId: string }, fields: Record<string, unknown>) {

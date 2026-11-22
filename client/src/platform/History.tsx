@@ -1,4 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { Button } from "./ui";
 import type { AuditEntry, Page } from "../../../shared/types";
 import { api, messageOf } from "../lib/api";
 import { formatDay, isDay } from "../../../shared/dates";
@@ -42,6 +44,10 @@ const names: Record<string, string> = {
   sowEndDays: "days of warning before a SOW ends",
   budgetWarningPct: "budget warning percentage",
   jobTitle: "job title",
+  addressLine1: "street",
+  addressLine2: "second street line",
+  postalCode: "postal code",
+  vatNumber: "VAT or tax number",
 };
 /** A field name as people would say it: "signedOn" becomes "signed on". Names that already contain spaces are kept. */
 const fieldName = (key: string) =>
@@ -81,16 +87,24 @@ export function describeChanges(e: AuditEntry): string {
     .join(", ");
 }
 
-/** The history of one record, newest first. Shown on every record's page. */
-export function History({ entityType, entityId }: { entityType: string; entityId: string }) {
+/**
+ * The history of one record, newest first. Shown on every record's page: on its own tab
+ * where the page has tabs, otherwise with `limit` so a long history does not push the page
+ * down; then the newest entries show, with "Show all" for the rest (F-3).
+ */
+export function History({ entityType, entityId, limit }: { entityType: string; entityId: string; limit?: number }) {
   const q = useQuery({ queryKey: ["history", entityType, entityId], queryFn: () => api<Page<AuditEntry>>("/audit/history", { query: { entityType, entityId } }) });
+  const [all, setAll] = useState(false);
+  const items = q.data?.items ?? [];
+  const shown = limit && !all ? items.slice(0, limit) : items;
+  const hidden = items.length - shown.length;
   return (
     <div className="flex flex-col gap-3">
       <h3 className="text-base font-semibold">History</h3>
       {q.isError && <p className="text-ink-2">{messageOf(q.error)}</p>}
       {q.data?.items.length === 0 && <p className="text-ink-2">No changes recorded yet.</p>}
-      <ol className="flex flex-col">
-        {q.data?.items.map((e) => (
+      <ol className="flex flex-col" aria-label="History">
+        {shown.map((e) => (
           <li key={e.id} className="border-b border-line py-3 last:border-0">
             <p>
               <span className="font-semibold">{verbs[e.action] ?? e.action}</span>
@@ -102,6 +116,25 @@ export function History({ entityType, entityId }: { entityType: string; entityId
           </li>
         ))}
       </ol>
+      {hidden > 0 && (
+        <div>
+          <Button className="h-8 px-3.5 text-[12.5px]" onClick={() => setAll(true)}>
+            Show all {items.length}
+          </Button>
+        </div>
+      )}
+      {limit && all && items.length > limit && (
+        <div>
+          <Button className="h-8 px-3.5 text-[12.5px]" onClick={() => setAll(false)}>
+            Show the newest {limit}
+          </Button>
+        </div>
+      )}
+      {q.data && q.data.total > items.length && (all || !limit) && (
+        <p className="text-[13px] text-ink-2">
+          These are the newest {items.length} of {q.data.total} changes. An admin can see every one on the Audit log page.
+        </p>
+      )}
     </div>
   );
 }

@@ -426,7 +426,7 @@ export function BriefingPage() {
       <Facts f={f} vendorId={b.vendorId} />
 
       <Section title="History">
-        <History entityType="briefing" entityId={b.id} />
+        <History entityType="briefing" entityId={b.id} limit={5} />
       </Section>
     </>
   );

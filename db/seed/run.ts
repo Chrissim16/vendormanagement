@@ -37,7 +37,8 @@ type A = Partial<AgreementInput> & Pick<AgreementInput, "kind" | "title">;
 interface SeedVendor {
   vendor: Partial<VendorInput> & Pick<VendorInput, "name" | "type">;
   owner: string;
-  contact?: [name: string, jobTitle: string];
+  /** The first is the primary contact. */
+  contacts?: [name: string, roles: string[]][];
   agreements: (A & { under?: string })[];
   /** Day rates per role: [role, rate in cents, days ago it started]. */
   rates?: [role: string, dayRateMinor: number, since: number][];
@@ -79,9 +80,13 @@ function sampleVendors(today: Day): SeedVendor[] {
   });
   return [
     {
-      vendor: { name: "Bluefinch Systems", type: "software", legalName: "Bluefinch Systems B.V. (invented)", country: "NL", website: "https://bluefinch.example.test" },
+      vendor: { name: "Bluefinch Systems", type: "software", legalName: "Bluefinch Systems B.V. (invented)", country: "NL", website: "https://bluefinch.example.test", addressLine1: "Kanaalweg 12", addressLine2: "4th floor", postalCode: "3526 KL", city: "Utrecht", vatNumber: "NL000100001B01" },
       owner: "mira@example.test",
-      contact: ["Lena Hartog", "Service Director"],
+      contacts: [
+        ["Lena Hartog", ["Account Manager", "Executive Sponsor"]],
+        ["Joris Veld", ["Helpdesk", "Support Manager"]],
+        ["Femke Raad", ["Billing / Finance"]],
+      ],
       rates: [
         ["Lead architect", 1_250_00, 800],
         ["Lead architect", 1_350_00, 140],
@@ -128,9 +133,12 @@ function sampleVendors(today: Day): SeedVendor[] {
       ],
     },
     {
-      vendor: { name: "Quillon Consulting", type: "consultancy", country: "NL" },
+      vendor: { name: "Quillon Consulting", type: "consultancy", country: "NL", addressLine1: "Herengracht 401", postalCode: "1017 BP", city: "Amsterdam", vatNumber: "NL000100002B01" },
       owner: "sanne@example.test",
-      contact: ["Pieter Aalto", "Partner"],
+      contacts: [
+        ["Pieter Aalto", ["Partner"]],
+        ["Iris Bloem", ["Consultant", "Project Manager"]],
+      ],
       rates: [
         ["Senior consultant", 1_450_00, 440],
         ["Analyst", 890_00, 440],
@@ -174,15 +182,18 @@ function sampleVendors(today: Day): SeedVendor[] {
       ],
     },
     {
-      vendor: { name: "Tarnwick Software", type: "software", country: "DE" },
+      vendor: { name: "Tarnwick Software", type: "software", country: "DE", addressLine1: "Lindenstraße 8", postalCode: "10969", city: "Berlin", vatNumber: "DE000100003" },
       owner: "jonas@example.test",
-      contact: ["Ruth Emery", "Customer Success"],
+      contacts: [["Ruth Emery", ["Account Manager"]]],
       agreements: [sub("Reporting suite", 81, 48_000_00), ...paper(-2000)],
     },
     {
-      vendor: { name: "Mossgate IT", type: "software", country: "NL" },
+      vendor: { name: "Mossgate IT", type: "software", country: "NL", addressLine1: "Stationsplein 45", postalCode: "3013 AK", city: "Rotterdam", vatNumber: "NL000100004B01" },
       owner: "mira@example.test",
-      contact: ["Dana Whitlow", "Account Lead"],
+      contacts: [
+        ["Dana Whitlow", ["Account Manager"]],
+        ["Theo Marsh", ["Helpdesk"]],
+      ],
       agreements: [
         sub("Service desk licence", 117, 26_400_00),
         { kind: "nda", title: "Mutual NDA", status: "active", signedOn: d(-1700) },
@@ -190,18 +201,21 @@ function sampleVendors(today: Day): SeedVendor[] {
       ],
     },
     {
-      vendor: { name: "Sedgewater Cloud", type: "software", country: "GB" },
+      vendor: { name: "Sedgewater Cloud", type: "software", country: "GB", addressLine1: "22 Wharf Road", postalCode: "N1 7GR", city: "London", vatNumber: "GB000100005" },
       owner: "jonas@example.test",
-      contact: ["Sam Idris", "Account Manager"],
+      contacts: [
+        ["Sam Idris", ["Account Manager"]],
+        ["Priya Nandi", ["Technical Contact", "Developer"]],
+      ],
       agreements: [sub("Data platform licence", 250, 31_500_00, { currency: "GBP", autoRenews: false }), ...paper(-740)],
     },
     {
-      vendor: { name: "Emberline Advisory", type: "advisory", scoringEnabled: false, dpaRequired: false, country: "GB" },
+      vendor: { name: "Emberline Advisory", type: "advisory", scoringEnabled: false, dpaRequired: false, country: "GB", addressLine1: "3 Castle Street", postalCode: "EH2 3AH", city: "Edinburgh" },
       owner: "sanne@example.test",
       agreements: [sub("Research membership", 300, 62_000_00, { noticePeriodDays: 60 }), { kind: "nda", title: "NDA", status: "active", signedOn: d(-2400) }],
     },
     {
-      vendor: { name: "Larkspur Data", type: "software", country: "NL" },
+      vendor: { name: "Larkspur Data", type: "software", country: "NL", addressLine1: "Grote Markt 7", postalCode: "9711 LV", city: "Groningen", vatNumber: "NL000100007B01" },
       owner: "jonas@example.test",
       agreements: [
         { kind: "dpa", title: "Data processing agreement", status: "active", signedOn: d(-200) },
@@ -216,7 +230,7 @@ function sampleVendors(today: Day): SeedVendor[] {
     {
       vendor: { name: "Harrowick Partners", type: "consultancy", status: "prospect", country: "NL" },
       owner: "sanne@example.test",
-      contact: ["Noor Castell", "Partner"],
+      contacts: [["Noor Castell", ["Partner"]]],
       agreements: [],
     },
   ];
@@ -592,16 +606,11 @@ async function seedCore(db: Db, today: Day) {
   for (const s of sampleVendors(today)) {
     // Every sample vendor says in its legal name that it is made up, so it can never be mistaken for a real firm.
     const vendor = await createVendor(db, { legalName: `${s.vendor.name} (invented)`, ...s.vendor, ownerUserId: idOf(s.owner) }, admin, today);
-    if (s.contact)
+    for (const [i, [name, roles]] of (s.contacts ?? []).entries())
       await saveContact(
         db,
         { vendorId: vendor.id },
-        {
-          name: s.contact[0],
-          jobTitle: s.contact[1],
-          email: `${s.contact[0].split(" ")[0]!.toLowerCase()}@${s.vendor.name.split(" ")[0]!.toLowerCase()}.example.test`,
-          isPrimary: true,
-        },
+        { name, roles, email: `${name.split(" ")[0]!.toLowerCase()}@${s.vendor.name.split(" ")[0]!.toLowerCase()}.example.test`, isPrimary: i === 0 },
         admin,
       );
     const made = new Map<string, string>();

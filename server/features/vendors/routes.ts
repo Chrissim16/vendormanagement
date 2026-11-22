@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import type { Day } from "../../../shared/dates";
 import { vendorStatuses, vendorTypes } from "../../../shared/vendors";
-import { currentUser } from "../../platform/auth";
+import { currentUser, requireRole } from "../../platform/auth";
 import { dir, id, paging, text } from "../../platform/http";
 import type { Db } from "../../platform/ports/types";
 import { vendorSorts } from "./repo";
@@ -31,5 +31,8 @@ export function vendorRoutes(db: Db, today: () => Day) {
   r.post("/vendors/:id/contacts", async (req, res) => res.status(201).json(await service.saveContact(db, { vendorId: id.parse(req.params.id) }, req.body ?? {}, currentUser(req))));
   r.patch("/contacts/:id", async (req, res) => res.json(await service.saveContact(db, { contactId: id.parse(req.params.id) }, req.body ?? {}, currentUser(req))));
   r.delete("/contacts/:id", async (req, res) => res.json(await service.saveContact(db, { contactId: id.parse(req.params.id) }, null, currentUser(req))));
+  r.get("/contact-roles", async (_req, res) => res.json(await service.listContactRoles(db)));
+  r.patch("/contact-roles/:id", requireRole("admin"), async (req, res) => res.json(await service.renameContactRole(db, id.parse(req.params.id), req.body, currentUser(req))));
+  r.delete("/contact-roles/:id", requireRole("admin"), async (req, res) => res.json(await service.removeContactRole(db, id.parse(req.params.id), currentUser(req))));
   return r;
 }

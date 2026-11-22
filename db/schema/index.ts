@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, boolean, check, date, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { bigint, boolean, check, date, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
 
 const stamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -50,7 +50,12 @@ export const vendors = pgTable(
       .notNull()
       .references(() => users.id),
     website: text("website"),
+    addressLine1: text("address_line1"),
+    addressLine2: text("address_line2"),
+    postalCode: text("postal_code"),
+    city: text("city"),
     country: text("country"),
+    vatNumber: text("vat_number"),
     description: text("description"),
     notes: text("notes"),
     scoringEnabled: boolean("scoring_enabled").notNull().default(true),
@@ -61,6 +66,10 @@ export const vendors = pgTable(
   (t) => [
     // One vendor per name, ignoring case. Names are stored with extra spaces removed.
     uniqueIndex("vendors_name_unique").on(sql`lower(${t.name})`),
+    // A VAT or tax number belongs to one vendor. It is stored in capitals without spaces, dots or dashes.
+    uniqueIndex("vendors_vat_unique")
+      .on(t.vatNumber)
+      .where(sql`${t.vatNumber} is not null`),
     check("vendors_type_check", sql`${t.type} in ('software', 'consultancy', 'advisory')`),
     check("vendors_status_check", sql`${t.status} in ('prospect', 'active', 'on_hold', 'offboarded')`),
   ],
@@ -74,7 +83,6 @@ export const contacts = pgTable(
       .notNull()
       .references(() => vendors.id),
     name: text("name").notNull(),
-    jobTitle: text("job_title"),
     email: text("email"),
     phone: text("phone"),
     isPrimary: boolean("is_primary").notNull().default(false),
@@ -86,6 +94,30 @@ export const contacts = pgTable(
       .on(t.vendorId)
       .where(sql`${t.isPrimary}`),
   ],
+);
+
+/** The shared list of roles a vendor's contact can have (V-7). Names are stored with extra spaces removed. */
+export const contactRoles = pgTable(
+  "contact_roles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    ...stamps,
+  },
+  (t) => [uniqueIndex("contact_roles_name_unique").on(sql`lower(${t.name})`)],
+);
+
+export const contactRoleLinks = pgTable(
+  "contact_role_links",
+  {
+    contactId: uuid("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    roleId: uuid("role_id")
+      .notNull()
+      .references(() => contactRoles.id),
+  },
+  (t) => [primaryKey({ columns: [t.contactId, t.roleId] }), index("contact_role_links_role_idx").on(t.roleId)],
 );
 
 export const agreements = pgTable(

@@ -172,7 +172,7 @@ describe("A-8 import", () => {
 
   it("imports the valid rows, and importing the same file again adds nothing", async () => {
     const file = await workbook(
-      [v("Import Delta", "consultancy", "prospect", MEMBER, "Delta B.V.", "https://delta.example.test", "nl", "no", "yes", "no")],
+      [v("Import Delta", "consultancy", "prospect", MEMBER, "Delta B.V.", "https://delta.example.test", "Deltaweg 1", "", "2611 AA", "Delft", "nl", "nl 000.222.333 b01", "no", "yes", "no")],
       [
         a("Import Delta", "SOW", "Delta SOW", { 4: "active", 7: "2026-01-10", 8: "2026-02-01", 9: "2026-12-31", 10: "Delta MSA", 11: "time_and_materials", 12: 64000 }),
         a("Import Delta", "MSA", "Delta MSA", { 4: "active", 7: "2026-01-10" }),
@@ -188,6 +188,11 @@ describe("A-8 import", () => {
     expect(vendor).toMatchObject({
       type: "consultancy",
       status: "prospect",
+      addressLine1: "Deltaweg 1",
+      addressLine2: null,
+      postalCode: "2611 AA",
+      city: "Delft",
+      vatNumber: "NL000222333B01",
       ownerName: "Mira Okafor",
       legalName: "Delta B.V.",
       country: "NL",
@@ -224,5 +229,30 @@ describe("A-8 import", () => {
     expect(res.status).toBe(400);
     expect(res.body.error.message).toMatch(/missing the columns Type, Status/);
     expect((await t.as(ADMIN).post("/api/admin/import/preview")).status).toBe(400);
+  });
+
+  it("V-5 refuses a VAT or tax number another vendor holds or that appears twice in the file", async () => {
+    const holder = (await t.as(MEMBER).get("/api/vendors").query({ q: "Bluefinch" })).body.items[0];
+    // Name, Type, Status, Owner, Legal name, Website, Street, Second line, Postal code, City, Country, VAT
+    const vat = (name: string, number: string) => v(name, "software", "", "", "", "", "", "", "", "", "", number);
+    const file = await workbook([vat("Vat One", holder.vatNumber.toLowerCase()), vat("Vat Two", "DE 123"), vat("Vat Three", "de-123"), vat("Vat Four", "FR999")], []);
+    const res = await send("preview", file);
+    const problems = (label: string) => res.body.rows.find((r: { label: string }) => r.label === label).problems;
+    expect(problems("Vat One")).toEqual([`VAT or tax number: ${holder.name} already has this number.`]);
+    expect(problems("Vat Two")).toEqual(["VAT or tax number: it appears on more than one row of the file."]);
+    expect(problems("Vat Three")).toEqual(["VAT or tax number: it appears on more than one row of the file."]);
+    expect(problems("Vat Four")).toEqual([]);
+  });
+
+  it("V-5 still reads a workbook made from the template before the address columns existed", async () => {
+    const wb = new ExcelJS.Workbook();
+    const old = ["Name", "Type", "Status", "Owner email", "Legal name", "Website", "Country", "NDA required", "DPA required", "Scored", "Description"];
+    const vendors = wb.addWorksheet("Vendors");
+    vendors.addRow(old);
+    vendors.addRow(["Old Template Vendor", "software", "", "", "", "", "GB"]);
+    wb.addWorksheet("Agreements").addRow(["Vendor name", "Kind", "Title", "Reference", "Status", "Owner email", "Currency", "Signed on", "Start date", "End date", "Parent MSA title", "Pricing", "Budget", "Annual value", "Notice period days", "Auto renews", "Renewal term months", "Notes"]);
+    const res = await send("preview", Buffer.from(await wb.xlsx.writeBuffer()));
+    expect(res.status).toBe(200);
+    expect(res.body.rows[0]).toMatchObject({ label: "Old Template Vendor", outcome: "add", problems: [] });
   });
 });

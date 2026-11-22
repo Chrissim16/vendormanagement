@@ -144,7 +144,7 @@ describe("V-3 vendor page", () => {
     const second = (await t.as(MEMBER).post(`/api/vendors/${v.id}/contacts`).send({ name: "Bo Lind", isPrimary: true })).body;
     expect(second.filter((c: { isPrimary: boolean }) => c.isPrimary).map((c: { name: string }) => c.name)).toEqual(["Bo Lind"]);
     const ada = first[0].id;
-    const edited = (await t.as(MEMBER).patch(`/api/contacts/${ada}`).send({ name: "Ada Vale", jobTitle: "CFO", isPrimary: true })).body;
+    const edited = (await t.as(MEMBER).patch(`/api/contacts/${ada}`).send({ name: "Ada Vale", roles: ["Billing / Finance"], isPrimary: true })).body;
     expect(edited.filter((c: { isPrimary: boolean }) => c.isPrimary).map((c: { name: string }) => c.name)).toEqual(["Ada Vale"]);
     expect((await t.as(MEMBER).delete(`/api/contacts/${ada}`)).body.map((c: { name: string }) => c.name)).toEqual(["Bo Lind"]);
     expect((await t.as(MEMBER).get(`/api/vendors/${v.id}`)).body.contacts).toHaveLength(1);
@@ -158,8 +158,8 @@ describe("V-3 vendor page", () => {
     const v = (await add()).body;
     const [c] = (await t.as(MEMBER).post(`/api/vendors/${v.id}/contacts`).send({ name: "Pat Moss", email: "pat@vendor.example.test", phone: "+31 20 555 0100", isPrimary: true }))
       .body;
-    const [after] = (await t.as(MEMBER).patch(`/api/contacts/${c.id}`).send({ jobTitle: "Lead" })).body;
-    expect(after).toMatchObject({ name: "Pat Moss", jobTitle: "Lead", email: "pat@vendor.example.test", phone: "+31 20 555 0100", isPrimary: true });
+    const [after] = (await t.as(MEMBER).patch(`/api/contacts/${c.id}`).send({ roles: ["Helpdesk"] })).body;
+    expect(after).toMatchObject({ name: "Pat Moss", roles: ["Helpdesk"], email: "pat@vendor.example.test", phone: "+31 20 555 0100", isPrimary: true });
     expect((await t.as(MEMBER).patch(`/api/contacts/${c.id}`).send({ email: "nope" })).status).toBe(400);
   });
   it("refuses a contact without a name or with a bad email", async () => {
@@ -186,5 +186,142 @@ describe("V-4 offboarding", () => {
   it("is allowed once nothing is active", async () => {
     const v = await vendorNamed("Harrowick Partners");
     expect((await t.as(MEMBER).patch(`/api/vendors/${v.id}`).send({ status: "offboarded" })).body.status).toBe("offboarded");
+  });
+});
+
+describe("V-5 address and VAT number", () => {
+  it("keeps an address and stores the number in capitals without spaces, dots or dashes", async () => {
+    const v = (
+      await add({ addressLine1: " Dijkstraat 4 ", addressLine2: "", postalCode: "1011 AB", city: "Amsterdam", country: "nl", vatNumber: "nl 0001.2345-6b01" })
+    ).body;
+    expect(v).toMatchObject({ addressLine1: "Dijkstraat 4", addressLine2: null, postalCode: "1011 AB", city: "Amsterdam", country: "NL", vatNumber: "NL000123456B01" });
+  });
+  it("leaves both optional, for every status", async () => {
+    const res = await add({ status: "active" });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ addressLine1: null, city: null, vatNumber: null });
+  });
+  it("refuses a number another vendor holds, naming that vendor, also when written differently", async () => {
+    const first = (await add({ name: "Vat Holder", vatNumber: "GB999000111" })).body;
+    const res = await add({ vatNumber: "gb 999 000 111" });
+    expect(res.status).toBe(400);
+    expect(res.body.error.fields.vatNumber).toBe("Vat Holder already has this VAT or tax number.");
+    const other = (await add()).body;
+    const change = await t.as(MEMBER).patch(`/api/vendors/${other.id}`).send({ vatNumber: "GB-999-000-111" });
+    expect(change.status).toBe(400);
+    expect(change.body.error.fields.vatNumber).toContain("Vat Holder");
+    // Saving the holder itself with its own number is fine.
+    expect((await t.as(MEMBER).patch(`/api/vendors/${first.id}`).send({ vatNumber: "GB 999000111", city: "Leeds" })).status).toBe(200);
+  });
+  it("refuses characters a VAT or tax number does not have", async () => {
+    const res = await add({ vatNumber: "NL#123" });
+    expect(res.status).toBe(400);
+    expect(res.body.error.fields.vatNumber).toBe("Use only letters, digits, spaces, dots and dashes.");
+  });
+  it("records address changes in the vendor's history", async () => {
+    const v = (await add()).body;
+    await t.as(MEMBER).patch(`/api/vendors/${v.id}`).send({ city: "Delft", vatNumber: "NL111" });
+    const h = (await t.as(MEMBER).get("/api/audit/history").query({ entityType: "vendor", entityId: v.id })).body.items[0];
+    expect(h.changes).toMatchObject({ city: { from: null, to: "Delft" }, vatNumber: { from: null, to: "NL111" } });
+  });
+});
+
+describe("V-7 contact roles", () => {
+  const roles = async () => (await t.as(MEMBER).get("/api/contact-roles")).body as { id: string; name: string; contacts: number }[];
+  const contact = async (vendorId: string, o: Record<string, unknown>) => (await t.as(MEMBER).post(`/api/vendors/${vendorId}/contacts`).send({ name: "Role Person", ...o })).body;
+
+  it("starts with the agreed list, A to Z", async () => {
+    const names = (await roles()).map((r) => r.name);
+    for (const n of ["Account Manager", "Billing / Finance", "Consultant", "Delivery Manager", "Developer", "Executive Sponsor", "Helpdesk", "Legal / Contracts", "Program Manager", "Project Manager", "Support Manager", "Technical Contact"])
+      expect(names).toContain(n);
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" })));
+  });
+  it("gives a contact several roles, shown A to Z, and records them in the vendor's history", async () => {
+    const v = (await add()).body;
+    const [c] = await contact(v.id, { roles: ["Support Manager", "account manager", "Account  Manager"] });
+    expect(c.roles).toEqual(["Account Manager", "Support Manager"]);
+    const h = (await t.as(MEMBER).get("/api/audit/history").query({ entityType: "vendor", entityId: v.id })).body.items[0];
+    expect(h.changes).toEqual({ "contact Role Person": { from: null, to: "added as Account Manager, Support Manager" } });
+    await t.as(MEMBER).patch(`/api/contacts/${c.id}`).send({ roles: ["Helpdesk"] });
+    const h2 = (await t.as(MEMBER).get("/api/audit/history").query({ entityType: "vendor", entityId: v.id })).body.items[0];
+    expect(h2.changes).toEqual({ "contact Role Person roles": { from: "Account Manager, Support Manager", to: "Helpdesk" } });
+  });
+  it("adds a role that is not on the list, for everyone, but not twice", async () => {
+    const v = (await add()).body;
+    const name = `Data Steward ${Math.random().toString(36).slice(2, 6)}`;
+    const [c] = await contact(v.id, { roles: [`  ${name}  `] });
+    expect(c.roles).toEqual([name]);
+    await contact(v.id, { name: "Second", roles: [name.toUpperCase()] });
+    const list = (await roles()).filter((r) => r.name.toLowerCase() === name.toLowerCase());
+    expect(list).toEqual([expect.objectContaining({ name, contacts: 2 })]);
+    const h = (await t.as(MEMBER).get("/api/audit/history").query({ entityType: "contact_roles", entityId: "list" })).body.items;
+    expect(h.filter((e: { summary: string }) => e.summary === name)).toHaveLength(1);
+  });
+  it("refuses an empty or overlong role", async () => {
+    const v = (await add()).body;
+    expect((await t.as(MEMBER).post(`/api/vendors/${v.id}/contacts`).send({ name: "X", roles: [" "] })).status).toBe(400);
+    expect((await t.as(MEMBER).post(`/api/vendors/${v.id}/contacts`).send({ name: "X", roles: ["x".repeat(61)] })).status).toBe(400);
+  });
+  it("lets only an admin rename a role, which changes it on every contact", async () => {
+    const v = (await add()).body;
+    const name = `Renamable ${Math.random().toString(36).slice(2, 6)}`;
+    await contact(v.id, { roles: [name] });
+    const role = (await roles()).find((r) => r.name === name)!;
+    expect((await t.as(MEMBER).patch(`/api/contact-roles/${role.id}`).send({ name: "Nope" })).status).toBe(403);
+    expect((await t.as(ADMIN).patch(`/api/contact-roles/${role.id}`).send({ name: "helpdesk" })).body.error.fields.name).toBe("There is already a role called Helpdesk.");
+    const res = await t.as(ADMIN).patch(`/api/contact-roles/${role.id}`).send({ name: `${name} Lead` });
+    expect(res.status).toBe(200);
+    expect((await t.as(MEMBER).get(`/api/vendors/${v.id}`)).body.contacts[0].roles).toEqual([`${name} Lead`]);
+    const h = (await t.as(MEMBER).get("/api/audit/history").query({ entityType: "contact_roles", entityId: "list" })).body.items[0];
+    expect(h).toMatchObject({ action: "update", userEmail: ADMIN, changes: { [`role ${name}`]: { from: name, to: `${name} Lead` } } });
+  });
+  it("lets only an admin remove a role, and not one in use, naming who holds it", async () => {
+    const v = (await add({ name: `Holder Vendor ${Math.random().toString(36).slice(2, 6)}` })).body;
+    const name = `Removable ${Math.random().toString(36).slice(2, 6)}`;
+    const [c] = await contact(v.id, { name: "Holder Person", roles: [name] });
+    const role = (await roles()).find((r) => r.name === name)!;
+    expect((await t.as(MEMBER).delete(`/api/contact-roles/${role.id}`)).status).toBe(403);
+    const refused = await t.as(ADMIN).delete(`/api/contact-roles/${role.id}`);
+    expect(refused.status).toBe(409);
+    expect(refused.body.error.message).toBe(`${name} is still held by Holder Person (${v.name}). Take it off those contacts first.`);
+    await t.as(MEMBER).patch(`/api/contacts/${c.id}`).send({ roles: [] });
+    expect((await t.as(ADMIN).delete(`/api/contact-roles/${role.id}`)).status).toBe(200);
+    expect((await roles()).some((r) => r.name === name)).toBe(false);
+  });
+  it("shows the roles in Ask's vendor look-up", async () => {
+    const res = await t.as(MEMBER).post("/api/ask").send({ question: "Tell me about Bluefinch" });
+    expect(JSON.stringify(res.body)).toContain("Joris Veld, Helpdesk and Support Manager");
+  });
+});
+
+describe("V-6 main contact when adding a vendor", () => {
+  it("saves the vendor with its main contact as primary, and both are in its history", async () => {
+    const v = (await add({ mainContact: { name: "Mona Reed", roles: ["Account Manager", "Helpdesk"], email: "mona@main.example.test", phone: "+44 20 7946 0000" } })).body;
+    expect(v.contacts).toEqual([
+      expect.objectContaining({ name: "Mona Reed", roles: ["Account Manager", "Helpdesk"], email: "mona@main.example.test", phone: "+44 20 7946 0000", isPrimary: true }),
+    ]);
+    const h = (await t.as(MEMBER).get("/api/audit/history").query({ entityType: "vendor", entityId: v.id })).body.items;
+    expect(h.map((e: { action: string }) => e.action)).toEqual(["create"]);
+    expect(h[0].changes).toEqual({ "contact Mona Reed": { from: null, to: "added as Account Manager, Helpdesk" } });
+  });
+  it("saves nothing when the contact is refused, and says which field", async () => {
+    const name = `Refused Contact ${Math.random().toString(36).slice(2, 6)}`;
+    const res = await add({ name, mainContact: { name: "Nils", email: "not an email" } });
+    expect(res.status).toBe(400);
+    expect(res.body.error.fields).toEqual({ "mainContact.email": "Enter a valid email address." });
+    expect(await vendorNamed(name)).toBeUndefined();
+  });
+  it("points out a contact filled in without a name", async () => {
+    const res = await add({ mainContact: { name: "", email: "who@main.example.test" } });
+    expect(res.body.error.fields).toEqual({ "mainContact.name": "Give the contact a name." });
+  });
+  it("saves the vendor without contacts when the main contact is left empty", async () => {
+    const res = await add({ mainContact: { name: " ", roles: [], email: "", phone: "" } });
+    expect(res.status).toBe(201);
+    expect(res.body.contacts).toEqual([]);
+  });
+  it("reports vendor and contact problems together", async () => {
+    const res = await add({ type: "hardware", mainContact: { name: "Ok", email: "nope" } });
+    expect(Object.keys(res.body.error.fields).sort()).toEqual(["mainContact.email", "type"]);
   });
 });

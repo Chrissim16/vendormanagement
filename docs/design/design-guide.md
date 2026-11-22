@@ -103,6 +103,9 @@ Figures that line up use tabular numerals. Dates read `21 Nov 2026`. Money reads
 - Removing a record that carries money or people (an invoice, a consultant, a rate) asks once more in place: the button turns red and reads "Really remove?", and goes back to rest after five seconds or when focus leaves it. No separate dialog.
 - A file is attached with an "Attach document" button, never a bare browser file box. Type and size are checked before sending.
 - Sections inside a panel are tabs with a sliding underline; arrow keys, Home and End move between them.
+- Several choices from a shared list (a contact's roles) are one box that holds the chosen ones as tinted chips, each with its own remove button, and a text field after them. Typing filters a list under the box, A to Z; the arrow keys move through it, Enter takes the highlighted one, Escape closes it, and Backspace in the empty field takes off the last chip. Where new choices are allowed, the last line of the list offers "Add "..." as a new role"; a name that differs from one on the list only in capitals or spaces is that one. The list closes after each pick so it never covers the form's buttons. The pattern is `ChoicePicker`.
+- A part of a form that is optional as a whole (the main contact of a new vendor, an address) is a group with its own small heading that says "(optional)", and a line saying what happens when it is left empty.
+- A record's history is the last tab where the record has tabs. On a page without tabs it is the last section and shows the newest five changes, with "Show all" under them.
 
 ## Motion
 

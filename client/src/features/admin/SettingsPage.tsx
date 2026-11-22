@@ -5,6 +5,7 @@ import { api, messageOf } from "../../lib/api";
 import { FormFooter, TextField, useForm } from "../../platform/form";
 import { History } from "../../platform/History";
 import { ErrorState, Loading, PageHeader } from "../../platform/ui";
+import { ContactRolesSection } from "../vendors/ContactRoles";
 
 const whole = (v: string) => (/^\d+$/.test(v.trim()) ? Number(v) : NaN);
 
@@ -97,7 +98,7 @@ function Form({ settings }: { settings: Settings }) {
   );
 }
 
-/** The exchange rate and the warning thresholds (M-7). Admins only. */
+/** The exchange rate and the warning thresholds (M-7), and the list of contact roles (V-7). Admins only. */
 export function SettingsPage() {
   const q = useQuery({ queryKey: ["settings"], queryFn: () => api<Settings>("/settings") });
   return (
@@ -111,7 +112,10 @@ export function SettingsPage() {
         <Form key={JSON.stringify(q.data)} settings={q.data} />
       )}
       <div className="max-w-[560px]">
-        <History entityType="settings" entityId="settings" />
+        <History entityType="settings" entityId="settings" limit={5} />
+      </div>
+      <div className="mt-12">
+        <ContactRolesSection />
       </div>
     </>
   );

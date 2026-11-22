@@ -535,7 +535,7 @@ export function approvalBlocker(signoffs: Pick<Signoff, "outcome" | "resolvedOn"
   return null;
 }
 
-export type RfpTab = "overview" | "document" | "review" | "candidates" | "responses" | "scoring" | "decision";
+export type RfpTab = "overview" | "document" | "review" | "candidates" | "responses" | "scoring" | "decision" | "history";
 export interface NextStep {
   title: string;
   text: string;

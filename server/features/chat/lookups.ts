@@ -178,7 +178,7 @@ const runners: { [N in LookupName]: Runner<N> } = {
       rfpsOfVendor(ctx.db, v.id),
     ]);
     const self = vendorRow(detail);
-    const contacts = detail.contacts.map((c) => [c.name, c.jobTitle, c.email, c.phone].filter(Boolean).join(", ") + (c.isPrimary ? " (primary contact)" : ""));
+    const contacts = detail.contacts.map((c) => [c.name, c.roles.join(" and "), c.email, c.phone].filter(Boolean).join(", ") + (c.isPrimary ? " (primary contact)" : ""));
     return {
       title: title("Vendor", detail.name),
       href: self.href,

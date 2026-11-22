@@ -289,7 +289,7 @@ export function AgreementPage() {
             </Section>
           )}
         </div>
-        <History entityType="agreement" entityId={a.id} />
+        <History entityType="agreement" entityId={a.id} limit={5} />
       </div>
 
       {dialog === "edit" && <AgreementForm agreement={a} onClose={() => setDialog(null)} onSaved={(x) => saved(`Saved ${x.title}`)} />}

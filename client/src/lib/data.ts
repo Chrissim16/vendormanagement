@@ -1,3 +1,4 @@
+import type { ContactRole } from "../../../shared/vendors";
 import { useQuery } from "@tanstack/react-query";
 import type { Warning } from "../../../shared/vendors";
 import { api } from "./api";
@@ -10,6 +11,8 @@ export interface Person {
 export const personName = (p: Person) => p.displayName ?? p.email;
 
 /** Colleagues who can own a vendor or an agreement. */
+/** The shared list of contact roles (V-7), A to Z. */
+export const useContactRoles = () => useQuery({ queryKey: ["contact-roles"], queryFn: () => api<ContactRole[]>("/contact-roles"), staleTime: 30_000 });
 export const usePeople = () => useQuery({ queryKey: ["people"], queryFn: () => api<Person[]>("/people"), staleTime: 60_000 });
 
 /** Everything that needs attention today. Shown in the header count and on the warnings page. */

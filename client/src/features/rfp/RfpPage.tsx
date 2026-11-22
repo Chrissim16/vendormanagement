@@ -31,6 +31,8 @@ const tabs: { id: RfpTab; label: string }[] = [
   { id: "responses", label: "Responses" },
   { id: "scoring", label: "Scoring" },
   { id: "decision", label: "Decision" },
+  // The history has its own tab at every stage, so it never pushes the demand down (Q-11).
+  { id: "history", label: "History" },
 ];
 
 /** Where the RFP stands on its way from drafting to decided (Q-11). */
@@ -113,7 +115,6 @@ function Overview({ rfp, onEdit, onCancel }: { rfp: RfpDetail; onEdit: () => voi
           a candidate.
         </p>
       </Section>
-      <History entityType="rfp" entityId={rfp.id} />
     </>
   );
 }
@@ -184,6 +185,7 @@ export function RfpPage() {
           {tab === "responses" && <ResponsesTab rfp={rfp} />}
           {tab === "scoring" && <ScoringTab rfp={rfp} />}
           {tab === "decision" && <DecisionTab rfp={rfp} />}
+          {tab === "history" && <History entityType="rfp" entityId={rfp.id} />}
         </div>
       </Tabs>
 

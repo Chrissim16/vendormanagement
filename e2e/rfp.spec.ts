@@ -92,7 +92,6 @@ test.describe("Q-1 demand", () => {
     await expect(demand).toContainText("A way to plan cash across the entities.");
     for (const fact of ["€ 45,000.00", "Group treasurer", "10 Nov 2026", "31 Mar 2027", "Mira Okafor", "Written answers 70%, demo and interview 30%"])
       await expect(demand).toContainText(fact);
-    await expect(page.getByText(`Added${""}`).first()).toBeVisible();
     await expectAccessible(page);
 
     // The demand can be changed; the history says what changed.
@@ -101,7 +100,15 @@ test.describe("Q-1 demand", () => {
     await edit.getByLabel("Sponsor").fill("Head of treasury");
     await edit.getByRole("button", { name: "Save demand" }).click();
     await expect(demand).toContainText("Head of treasury");
+    // Q-11 the history is on its own tab, the last one, after Decision.
+    await expect(page.getByText("Sponsor from Group treasurer to Head of treasury")).toHaveCount(0);
+    const tabs = page.getByRole("tablist", { name: "Parts of this RFP" }).getByRole("tab");
+    await expect(tabs.last()).toHaveText("History");
+    await expect(tabs.nth(-2)).toHaveText("Decision");
+    await tabs.last().click();
     await expect(page.getByText("Sponsor from Group treasurer to Head of treasury")).toBeVisible();
+    await expect(page).toHaveURL(/tab=history/);
+    await expect(page.getByRole("list", { name: "History" }).getByRole("listitem").last()).toContainText("Added");
   });
 });
 
