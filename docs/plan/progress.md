@@ -17,12 +17,48 @@ Newest entry first. Written for the owner, in plain language.
 | M8 Contract reading | Done here; how well a real AI reads a contract is unproven until tried with the company's model |
 | M10 Vendor details, contact roles, history tabs | Done |
 | M11 RFP editor, review rounds, company template | Done here; the company's own template, real Word and the AI's rewriting are unproven until tried at work |
-| M12 Any currency | Written down 22 Nov 2026, not built yet; built before M9 |
+| M12 Any currency | Done here; how well a real AI reads amounts in other currencies is unproven until tried with the company's model |
 | M9 Move to Databricks | Not started; done at work |
 
-**Next:** M12 Any currency, your change request of 22 Nov 2026. After that, M9 Move to Databricks, which is done at work and needs you.
+**Next:** M9 Move to Databricks, which is done at work and needs you. Everything that can be built outside the company is now built.
 
 ## Log
+
+### 2026-11-22 M12 Any currency done
+The app now handles any currency, with the euro as the main one.
+
+What you can do in it:
+
+- **Keep the list of currencies (admin).** Settings has a section "Currencies and exchange rates". It starts with euros, pounds, US dollars and Swedish, Norwegian and Danish kronor. "Add a currency" takes any standard currency with cents, such as Swiss francs, with its rate. A currency without cents (the yen) or with three decimals is refused, with the reason. A currency can be removed only while nothing uses it; otherwise the page says what still does. The euro is always 1.
+- **Set each rate as 1 euro = so much**, the way banks publish it. While you type, the row shows what € 100.00 comes to, so a rate typed the wrong way round shows at once. Each row says who set the rate and when. Until someone does, the row has a pill "Starting rate, not yet set by an admin", and every euro total that uses that rate says so too. Every change is in the list's history.
+- **Use any listed currency** for an agreement, a day rate, an RFP budget, or a row in the Excel import. A currency box shows "SEK · Swedish krona". Amounts show €, £ and $ with their sign, and every other currency with its code (SEK 85,000.00), so kronor of different countries cannot be mixed up.
+- **See totals in euros first.** The Money page, the dashboard, the monthly report, briefings (on screen and in the PDFs), a vendor's Money tab and Ask all show one euro total marked "converted to euros". A line beneath it gives each currency ("€ 120,000.00 · $ 30,000.00 · SEK 85,000.00"), followed by the rates used. Lists show euros with the original in brackets: € 27,777.78 ($ 30,000.00). Both file downloads have a column in euros.
+- **Unchanged:** an invoice is always in its agreement's currency, so a SOW's budget against invoiced is never converted. Changing a rate changes only converted figures; no amount you typed changes. A briefing keeps the figures and rates of the day it was made.
+- **Contract reading and Ask know every listed currency.** A contract amount in dollars or kronor is offered with its currency. An amount written only as "kr", or in a currency not on the list, is left out; for the second, the page names the currency so you know what an admin could add.
+
+The sample data has four more invented vendors billing in Swedish kronor, Norwegian kroner, US dollars and Danish kroner. The pound's rate looks set by an admin; the other four keep their starting rates, so you can see the notices.
+
+How it was checked: an independent tester went through every point in the running app. They worked out several converted totals by hand (each currency, the twelve-month total and a month), changed rates and compared again to the cent, and confirmed that a briefing kept its old figures. They also tried every refusal both on screen and directly, as a member and as an admin, plus the keyboard, dark mode and a narrow window. Every criterion passed. An independent reviewer read all the code and found one thing that had to be fixed and several that should be; all are fixed, each with a test, and the full set of automated checks passes. The ones that mattered:
+
+- **The real AI would have ignored dollars and kronor in contracts.** The instructions for the company's model still said only euros and pounds exist; the stand-in ignores those instructions, so nothing showed here. They now ask for any currency's code, and say that "kr" alone gives no currency.
+- **A rate like "17,250" would have been read as 17.25,** a thousand times off. A comma before three digits is now refused with a request to write the rate with a point.
+- **An amount typed with another currency could slip in.** "SEK 285,000" on a euro agreement, or in a euro row of the import, would have been saved as € 285,000. Now the sign or code must match the record's currency; the import says which currency was typed.
+- **Ask could have refused good answers.** It treated "€" and "EUR" as different currencies, and read "in 2026 USD invoices" as an amount. Both are fixed.
+- **Two sample names resembled real companies;** they are renamed.
+
+Smaller fixes from testing: an amount never breaks across two lines; a vendor's Money tab now names the rates used.
+
+Needs your attention:
+
+- **No real AI model has been tried, again.** There are three new invented test cases for reading amounts in other currencies. The two the stand-in can take pass; the one with kronor written as "285 000" waits for the company's model.
+- **Check the four starting rates** (dollar and the three kronor) in Settings and save the real ones before relying on euro totals.
+
+Decided on your behalf (see `docs/open-questions.md`, Q114 to Q119):
+
+- Which pages show euros with the original in brackets: totals and money lists; a record's own page shows its own currency.
+- Amounts written with spaces between the thousands ("SEK 1 250 000") are read as one number.
+- A monthly report is worked out afresh at today's rates, like all its figures; only a briefing is kept as it was. The requirement said otherwise and was corrected.
+- An ambiguous rate ("17,250"), and an amount typed in another currency than its record's, are refused rather than guessed.
 
 ### 2026-11-22 Change request: any currency, euro as the main one
 You asked for the app to handle any currency, not only euros and pounds, with euro always the main one. After your answers it is written down as requirement M-8 and planned as M12, after M10 and M11 and before the move to Databricks.
@@ -466,6 +502,12 @@ architecture and plan were rewritten to match. The plan now has ten milestones.
 First version of the brief, requirements, plan and agent workflow. No application code yet.
 
 ## Follow-ups
+- M12: when the currency list replaced the pound rate, the saved pound rate counted as "set by an admin" whenever the settings had been saved, also when only the warning days were changed. Nothing like that exists at work yet, so it was left; check the pound's rate there once.
+- M12: briefings made before the currency list say they were converted at the pound rate of the day of the change, not of the day they were made. Their euro figures are right. Nothing like that exists at work yet.
+- M12: the rate field takes at most 99,999.9999 of a currency for one euro, so the Lebanese pound and the Iranian rial cannot be added at today's market rates.
+- M12: the agreement list sorts by value in euros but shows each value in its own currency, as every record's page does.
+- M12: a contract amount written next to a year ("in 2027 EUR 9,000") can be read as the year; such a value is then left out, never taken.
+- M12: the file downloads give amounts in euros but do not say which rates were starting rates.
 - The check of the RFP list's search (Q-11) failed once during a full run on 22 Nov 2026, while the machine was busy, and passed in every run since, alone and in full. Probably the search box and the "All" button changing the address at nearly the same moment. To be watched.
 - Pressing Tab past the last button of a dialog moves on to the browser itself before coming back. That is how the browser's own dialogs work and it predates M10, but the design guide says focus stays inside; to be looked at.
 - At a very narrow window (a phone) the vendor form is cramped and the vendor list scrolls sideways. The app is made for a laptop screen.

@@ -123,6 +123,9 @@ wrong. Answered questions move to the bottom.
 | Q114 | Where are amounts shown in euros with the original in brackets? | In totals and in the lists that add up money: the Money page (by vendor, by month, the invoice list), the dashboard, the monthly report, briefings and Ask. A record's own page (an agreement, an invoice on a SOW, a day rate) shows its own currency only, and a SOW's budget against invoiced is never converted. | M12 |
 | Q115 | A contract writes thousands with a space ("SEK 1 250 000" or "7 400,00 kr") | Read as one number, never just its last part. | M12 |
 | Q116 | In the sample data, which rates look set by an admin? | The pound's (1 EUR = 0.8547 GBP). The dollar and the three kronor keep their starting rates, so you can see what that looks like. | M12 |
+| Q117 | Does a monthly report keep the rates of the day it was made? | No. Like every figure in it, the report is worked out afresh, at today's rates, and says when its figures have changed since its summary was written. Only a briefing is kept as it was. A summary saved before this change will be marked as written for other figures once, because the figures it was checked against now name the currencies; nothing like that has been saved at work yet. | M12 |
+| Q118 | A rate typed with a comma before three digits ("17,250") | Refused, with a request to write it with a point and no thousands separator, because it could mean 17.25 or 17,250. "0,855" is read as 0.855. | M12 |
+| Q119 | An amount typed with another currency's sign or code ("SEK 285,000" on a euro agreement, or in the import) | Refused, never read as the record's own currency. In the import the row says which currency was typed. | M12 |
 
 ## To check at work before M9
 

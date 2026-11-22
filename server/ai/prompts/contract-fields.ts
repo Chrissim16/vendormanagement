@@ -16,7 +16,7 @@ export interface ContractFieldsInput {
  */
 export const contractFields: Prompt<ContractFieldsInput, ContractReading> = {
   kind: "contract_fields",
-  version: "contract-fields/2",
+  version: "contract-fields/3",
   tier: "strong",
   maxTokens: 1500,
   system: [
@@ -25,7 +25,7 @@ export const contractFields: Prompt<ContractFieldsInput, ContractReading> = {
     "- title: the name the document gives the agreement or the work, as it is written, without the vendor's name.",
     "- signedOn: the day it was signed. startDate: the day the term or the work starts. endDate: the day the term or the work ends, or for a subscription the day it renews.",
     "- noticePeriodDays: how many days' notice ends or cancels it, as a whole number, only when the document gives it in days. A notice period given in months or in working days is left as null: do not convert it.",
-    "- amount: the budget of a statement of work, or the yearly fee of a subscription, as a plain number without a currency sign or thousands separators (48000 or 48000.50). Not a day rate, a monthly fee or a part payment. currency: EUR or GBP, the currency that amount is written in. When the amount is in any other currency, give null for both.",
+    "- amount: the budget of a statement of work, or the yearly fee of a subscription, as a plain number without a currency sign or thousands separators (48000 or 48000.50). Not a day rate, a monthly fee or a part payment. Write thousands without separators also when the document uses spaces (285 000 is 285000). currency: the three-letter code of the currency that amount is written in, for example EUR, GBP, USD, SEK, NOK or DKK (€ is EUR, £ is GBP, $ is USD). When the document does not say which currency, for example when it writes only \"kr\", give null for both.",
     "Dates are written YYYY-MM-DD. Read a date such as 03/04/2027 as day then month.",
     `For every value give the passage it comes from: one or two sentences copied from the document exactly, character for character, at most ${MAX_PASSAGE} characters. The passage must itself state the value: the whole date, the amount with its currency, the number of days in the sentence about notice, the title. Start and end the passage at the start and end of a sentence, never in the middle of a word or a number. A value whose passage does not state it is thrown away.`,
     "When the document does not state a value, give null for it. Do not work a value out (an end date from a start date and a term, a yearly fee from a monthly one), do not guess, and do not use what such contracts usually say.",

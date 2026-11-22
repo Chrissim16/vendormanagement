@@ -3,8 +3,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { formatDay } from "../../../../shared/dates";
-import { currenciesIn, formatMoney, isMixed, moneyLine, parseAmount, type Currency, type Money } from "../../../../shared/money";
-import { CurrencyOptions, wholeAmounts } from "../../platform/Money";
+import { currenciesIn, formatMoney, isMixed, moneyLine, parseAmount, type Currency, type Money, type Rate } from "../../../../shared/money";
+import { ConvertedNote, CurrencyOptions, wholeAmounts } from "../../platform/Money";
 import type { Invoice, RateLine } from "../../../../shared/sow";
 import type { Page } from "../../../../shared/types";
 import { api, messageOf } from "../../lib/api";
@@ -17,12 +17,12 @@ function RateForm({ vendorId, roles, onClose, onSaved }: { vendorId: string; rol
   const today = useToday();
   const form = useForm(
     { role: "", rate: "", currency: "EUR" as Currency, validFrom: today },
-    ({ rate, ...v }) => api<RateLine[]>(`/vendors/${vendorId}/rate-card`, { body: { ...v, dayRateMinor: parseAmount(rate) } }),
-    { onSaved, check: (v) => ({ rate: parseAmount(v.rate) == null ? "Enter a day rate like 1,250.00." : "" }) },
+    ({ rate, ...v }) => api<RateLine[]>(`/vendors/${vendorId}/rate-card`, { body: { ...v, dayRateMinor: parseAmount(rate, v.currency) } }),
+    { onSaved, check: (v) => ({ rate: parseAmount(v.rate, v.currency) == null ? "Enter a day rate like 1,250.00." : "" }) },
   );
   const { values: v, set } = form;
   const shown = { errors: { ...form.errors, rate: form.errors.rate || form.errors.dayRateMinor || "" } };
-  const minor = v.rate ? parseAmount(v.rate) : null;
+  const minor = v.rate ? parseAmount(v.rate, v.currency) : null;
   return (
     <Dialog title="Add day rate" onClose={onClose}>
       <form onSubmit={form.submit} noValidate className="flex flex-col gap-5">
@@ -62,7 +62,7 @@ export function VendorMoney({ vendorId, vendorName }: { vendorId: string; vendor
   const card = useQuery({ queryKey: ["rate-card", vendorId], queryFn: () => api<RateLine[]>(`/vendors/${vendorId}/rate-card`) });
   const invoices = useQuery({
     queryKey: ["invoices", { vendorId, summary: true }],
-    queryFn: () => api<Page<Invoice> & { sums: Money }>("/invoices", { query: { vendorId, pageSize: 1 } }),
+    queryFn: () => api<Page<Invoice> & { sums: Money; rates: Rate[] }>("/invoices", { query: { vendorId, pageSize: 1 } }),
   });
   const remove = useMutation({
     mutationFn: (l: RateLine) => api(`/rate-card/${l.id}`, { method: "DELETE" }),
@@ -101,6 +101,7 @@ export function VendorMoney({ vendorId, vendorName }: { vendorId: string; vendor
             </Link>
           </p>
         )}
+        {invoices.data && invoices.data.total > 0 && <ConvertedNote rates={invoices.data.rates} />}
       </section>
       <section className="flex flex-col gap-3">
         <div className="flex items-center gap-3">

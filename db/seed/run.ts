@@ -274,12 +274,12 @@ function sampleVendors(today: Day): SeedVendor[] {
       agreements: [sub("Planning cloud", 320, 285_000_00, { currency: "SEK" }), ...paper(-400)],
     },
     {
-      vendor: { name: "Fjordline Analytics", type: "software", scoringEnabled: false, country: "NO", addressLine1: "Fjordlinjeveien 9", postalCode: "0150", city: "Oslo" },
+      vendor: { name: "Brannholt Analytics", type: "software", scoringEnabled: false, country: "NO", addressLine1: "Brannholtveien 9", postalCode: "0150", city: "Oslo" },
       owner: "jonas@example.test",
       agreements: [sub("Forecasting service", 280, 196_000_00, { currency: "NOK" }), ...paper(-380)],
     },
     {
-      vendor: { name: "Copperleaf Labs", type: "software", scoringEnabled: false, country: "US", addressLine1: "40 Copperleaf Avenue", postalCode: "10001", city: "New York" },
+      vendor: { name: "Wexmoor Labs", type: "software", scoringEnabled: false, country: "US", addressLine1: "40 Wexmoor Avenue", postalCode: "10001", city: "New York" },
       owner: "sanne@example.test",
       agreements: [sub("Contract analytics", 340, 30_000_00, { currency: "USD" }), ...paper(-300)],
     },
@@ -347,12 +347,12 @@ const sampleDelivery: Record<string, Delivery> = {
   "Planning cloud": { invoices: [["NV-2026-03", 285_000_00, -180]] },
   "Forecasting service": {
     invoices: [
-      ["FL-1041", 49_000_00, -200],
-      ["FL-1077", 49_000_00, -110],
-      ["FL-1102", 49_000_00, -20],
+      ["BH-1041", 49_000_00, -200],
+      ["BH-1077", 49_000_00, -110],
+      ["BH-1102", 49_000_00, -20],
     ],
   },
-  "Contract analytics": { invoices: [["CL-5530", 30_000_00, -25]] },
+  "Contract analytics": { invoices: [["WM-5530", 30_000_00, -25]] },
   "Advisory retainer": {
     invoices: [
       ["HA-301", 30_000_00, -150],

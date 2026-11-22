@@ -120,7 +120,7 @@ describe("E-1 the AI proposes field values, each with its passage", () => {
         rows: object[];
       }
     ).rows;
-    expect(stored).toEqual([{ kind: "contract_fields", subject_type: "document", subject_id: doc.id, prompt_version: "contract-fields/2", status: "proposed" }]);
+    expect(stored).toEqual([{ kind: "contract_fields", subject_type: "document", subject_id: doc.id, prompt_version: "contract-fields/3", status: "proposed" }]);
   });
 
   it("E-1 what the document does not say stays empty and is named; a kind that differs is shown and cannot be taken over", async () => {

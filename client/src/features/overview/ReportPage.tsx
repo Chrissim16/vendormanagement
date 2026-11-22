@@ -159,7 +159,7 @@ export function ReportPage() {
           >
             <div className="text-ink-2">
               <p className="num">
-                {d!.spend.total.eurMinor === 0
+                {!Object.keys(d!.spend.total.amounts).length
                   ? `Nothing was invoiced in ${monthName(month)}.`
                   : `Invoiced in ${monthName(month)}: ${money(d!.spend.total.eurMinor)}` +
                     (isMixed(d!.spend.total.amounts) ? ` in euros, converted (${wholeAmounts(moneyLine(d!.spend.total.amounts))}).` : ".")}

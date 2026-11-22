@@ -76,13 +76,13 @@ function MilestoneForm({ sow, milestone: m, onClose, onSaved }: { sow: Agreement
     ({ amount, ...v }) =>
       api(m ? `/milestones/${m.id}` : `/agreements/${sow.id}/milestones`, {
         method: m ? "PATCH" : "POST",
-        body: { ...v, deliveredOn: v.status === "delivered" ? v.deliveredOn || null : null, amountMinor: fixed && amount ? parseAmount(amount) : null },
+        body: { ...v, deliveredOn: v.status === "delivered" ? v.deliveredOn || null : null, amountMinor: fixed && amount ? parseAmount(amount, sow.currency) : null },
       }),
-    { onSaved, check: (v) => ({ amount: fixed && v.amount && parseAmount(v.amount) == null ? AMOUNT : "" }) },
+    { onSaved, check: (v) => ({ amount: fixed && v.amount && parseAmount(v.amount, sow.currency) == null ? AMOUNT : "" }) },
   );
   const { values: v, set } = form;
   const shown = { errors: { ...form.errors, amount: form.errors.amount || form.errors.amountMinor || "" } };
-  const minor = v.amount ? parseAmount(v.amount) : null;
+  const minor = v.amount ? parseAmount(v.amount, sow.currency) : null;
   return (
     <Dialog title={m ? `Edit ${m.title}` : "Add milestone"} onClose={onClose}>
       <form onSubmit={form.submit} noValidate className="flex flex-col gap-5">
@@ -138,13 +138,13 @@ function ChangeForm({ sow, change: c, onClose, onSaved }: { sow: AgreementDetail
     ({ amount, direction, ...v }) =>
       api(c ? `/change-requests/${c.id}` : `/agreements/${sow.id}/change-requests`, {
         method: c ? "PATCH" : "POST",
-        body: { ...v, newEndDate: v.newEndDate || null, budgetChangeMinor: amount ? (parseAmount(amount) ?? 0) * (direction === "less" ? -1 : 1) : null },
+        body: { ...v, newEndDate: v.newEndDate || null, budgetChangeMinor: amount ? (parseAmount(amount, sow.currency) ?? 0) * (direction === "less" ? -1 : 1) : null },
       }),
-    { onSaved, check: (v) => ({ amount: v.amount && parseAmount(v.amount) == null ? AMOUNT : "" }) },
+    { onSaved, check: (v) => ({ amount: v.amount && parseAmount(v.amount, sow.currency) == null ? AMOUNT : "" }) },
   );
   const { values: v, set } = form;
   const shown = { errors: { ...form.errors, amount: form.errors.amount || form.errors.budgetChangeMinor || "" } };
-  const minor = v.amount ? parseAmount(v.amount) : null;
+  const minor = v.amount ? parseAmount(v.amount, sow.currency) : null;
   return (
     <Dialog title={c ? `Edit ${c.title}` : "Add change request"} onClose={onClose}>
       <form onSubmit={form.submit} noValidate className="flex flex-col gap-5">

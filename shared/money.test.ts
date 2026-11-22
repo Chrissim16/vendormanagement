@@ -32,7 +32,10 @@ describe("M-8 rates, typed as 1 EUR = so much", () => {
     expect(parseRate("11,49")).toBe(114900);
     expect(parseRate("1")).toBe(10000);
     expect(parseRate("16450.5")).toBe(164_505_000);
-    for (const bad of ["", "0", "0.0000", "1.17355", "abc", "-1", "1.1.7", "123456"]) expect(parseRate(bad), bad).toBeNull();
+    for (const bad of ["", "0", "0.0000", "1.17355", "abc", "-1", "1.1.7", "123456", "17,250", "1,085"]) expect(parseRate(bad), bad).toBeNull();
+    // A comma before three digits is refused (thousands or decimals?), except after a nought, where it can only be decimals.
+    expect(parseRate("0,855")).toBe(8550);
+    expect(parseRate("1.085")).toBe(10850);
   });
   it("shows a rate with two to four decimals", () => {
     expect(formatRate(8550)).toBe("0.855");
@@ -110,5 +113,15 @@ describe("M-8 amounts in any currency", () => {
     expect(parseAmount("US$ 9,000")).toBe(9_000_00);
     expect(parseAmount("dkk 12")).toBe(12_00);
     expect(parseAmount("12 kronor")).toBeNull();
+  });
+  it("refuses an amount typed in another currency than the record's, and letters that are no currency", () => {
+    expect(parseAmount("SEK 285,000", "SEK")).toBe(285_000_00);
+    expect(parseAmount("SEK 285,000", "EUR")).toBeNull();
+    expect(parseAmount("£ 100", "EUR")).toBeNull();
+    expect(parseAmount("€ 100", "EUR")).toBe(100_00);
+    expect(parseAmount("100 eur", "EUR")).toBe(100_00);
+    expect(parseAmount("12 500,50", "NOK")).toBe(12_500_50);
+    expect(parseAmount("abc12")).toBeNull();
+    expect(parseAmount("EUR 5 USD")).toBeNull();
   });
 });

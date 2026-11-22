@@ -23,6 +23,23 @@ const aiMode = (request: APIRequestContext, mode: string) => request.post("/api/
 test.describe("E-1 contract reading", () => {
   test.beforeEach(async ({ context }) => signInAs(context, MEMBER));
 
+  test("E-1 M-8 an amount in US dollars is offered with its currency; one in a currency not on the list is left out and named", async ({ page, request }) => {
+    const { a, doc } = await setUp(request, ["Order form (invented sample)", "Subscription: Forecasting tool", "The annual fee is USD 9,000.00, invoiced yearly in advance."]);
+    await page.goto(`/agreements/${a.id}`);
+    await page.getByRole("button", { name: `Read with AI: ${doc.fileName}` }).click();
+    const panel = page.getByRole("group", { name: `AI reading of ${doc.fileName}` });
+    const row = (field: string) => panel.getByRole("row").filter({ has: page.getByRole("rowheader", { name: field, exact: true }) });
+    await expect(row("Annual value")).toContainText("$ 9,000.00");
+    await expect(row("Currency")).toContainText("US dollar (USD)");
+
+    const francs = await attachPdf(request, a.id, "Francs order form (invented).pdf", ["Order form (invented sample)", "The annual fee is CHF 12,000.00, invoiced yearly."]);
+    await page.reload();
+    await page.getByRole("button", { name: `Read with AI: ${francs.fileName}` }).click();
+    const other = page.getByRole("group", { name: `AI reading of ${francs.fileName}` });
+    await expect(other).toContainText("The amount is in CHF, which is not on the app's list of currencies, so it was left out. An admin can add it in Settings.");
+    await expectAccessible(page);
+  });
+
   test("E-1 the AI proposes values with their passages; only the ticked ones are saved, and only when confirmed", async ({ page, request }) => {
     const { a, doc } = await setUp(request);
     await page.goto(`/agreements/${a.id}`);

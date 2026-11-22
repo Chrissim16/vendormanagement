@@ -68,8 +68,8 @@ export function AgreementForm({
         endReason: v.endReason || null,
         parentMsaId: v.parentMsaId || null,
         pricing: v.pricing || null,
-        budgetMinor: budget ? parseAmount(budget) : null,
-        annualValueMinor: annualValue ? parseAmount(annualValue) : null,
+        budgetMinor: budget ? parseAmount(budget, v.currency) : null,
+        annualValueMinor: annualValue ? parseAmount(annualValue, v.currency) : null,
         noticePeriodDays: v.noticePeriodDays === "" ? null : Number(v.noticePeriodDays),
         renewalTermMonths: v.renewalTermMonths === "" ? null : Number(v.renewalTermMonths),
       };
@@ -80,8 +80,8 @@ export function AgreementForm({
       check: (v) => ({
         vendorId: v.vendorId ? "" : "Choose a vendor.",
         kind: v.kind ? "" : "Choose what kind of agreement this is.",
-        budget: v.budget && parseAmount(v.budget) == null ? AMOUNT : "",
-        annualValue: v.annualValue && parseAmount(v.annualValue) == null ? AMOUNT : "",
+        budget: v.budget && parseAmount(v.budget, v.currency) == null ? AMOUNT : "",
+        annualValue: v.annualValue && parseAmount(v.annualValue, v.currency) == null ? AMOUNT : "",
         noticePeriodDays: /^\d*$/.test(v.noticePeriodDays) ? "" : "Enter a number of days.",
         renewalTermMonths: /^\d*$/.test(v.renewalTermMonths) ? "" : "Enter a number of months.",
       }),
@@ -90,7 +90,7 @@ export function AgreementForm({
   const { values: v, set } = form;
   // What the app understood from a typed amount, shown before saving so "1.234" is never a surprise.
   const reading = (typed: string) => {
-    const minor = typed ? parseAmount(typed) : null;
+    const minor = typed ? parseAmount(typed, v.currency) : null;
     return minor == null ? undefined : `Read as ${formatMoney(minor, v.currency)}`;
   };
   // Changing the kind empties the fields that belonged to the old kind, so nothing unseen is sent.

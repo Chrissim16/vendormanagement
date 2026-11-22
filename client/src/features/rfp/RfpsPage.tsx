@@ -66,7 +66,7 @@ export function DemandForm({ rfp, onClose, onSaved }: { rfp?: RfpDetail; onClose
       const { budget, writtenWeight, demoWeight, ...rest } = v;
       const body = {
         ...rest,
-        budgetMinor: budget ? parseAmount(budget) : null,
+        budgetMinor: budget ? parseAmount(budget, v.currency) : null,
         ...(weightsLocked ? {} : { writtenWeight: Number(writtenWeight), demoWeight: Number(demoWeight) }),
       };
       return api<RfpDetail>(rfp ? `/rfps/${rfp.id}` : "/rfps", { method: rfp ? "PATCH" : "POST", body });
@@ -79,7 +79,7 @@ export function DemandForm({ rfp, onClose, onSaved }: { rfp?: RfpDetail; onClose
         return {
           title: v.title.trim() ? "" : "Give the RFP a title.",
           need: v.need.trim() ? "" : "Describe what is needed.",
-          budget: v.budget && parseAmount(v.budget) == null ? AMOUNT : "",
+          budget: v.budget && parseAmount(v.budget, v.currency) == null ? AMOUNT : "",
           demandApprovedOn: v.demandApprovedOn && v.demandApprovedOn > today && v.demandApprovedOn !== rfp?.demandApprovedOn ? "The approval date cannot be in the future." : "",
           writtenWeight: pct(v.writtenWeight) ? "" : PERCENT,
           demoWeight: !pct(v.demoWeight) ? PERCENT : pct(v.writtenWeight) && sum !== 100 ? `The two parts must add up to 100. They now add up to ${sum}.` : "",
@@ -88,7 +88,7 @@ export function DemandForm({ rfp, onClose, onSaved }: { rfp?: RfpDetail; onClose
     },
   );
   const { values: v, set } = form;
-  const minor = v.budget ? parseAmount(v.budget) : null;
+  const minor = v.budget ? parseAmount(v.budget, v.currency) : null;
   // A person who no longer has access is not in the list, but must still show as the current owner.
   const owners = [...(people.data ?? [])];
   if (rfp && !owners.some((p) => p.id === rfp.ownerUserId)) owners.push({ id: rfp.ownerUserId, email: rfp.ownerName, displayName: rfp.ownerName });

@@ -31,7 +31,7 @@ describe("C-1 what an answer may say", () => {
   });
   it("a figure that was not looked up is refused, also one hidden in a title", () => {
     expect(check("17 SOWs end this quarter.", ["A1"])).toContain("17");
-    expect(check("Together they are worth € 184,000.00.", ["A1", "A2"])).toContain("€184000");
+    expect(check("Together they are worth € 184,000.00.", ["A1", "A2"])).toContain("EUR184000");
     // The digits of a title count only when the whole title is quoted.
     expect(check("The budget is 999,999.", ["A2"])).toContain("999999");
   });
@@ -41,7 +41,7 @@ describe("C-1 what an answer may say", () => {
     expect(check("31 SOWs end this quarter.", ["A1"], true, pounds)).toContain("31");
     expect(check("21 SOWs end this quarter.", ["A1"], true, pounds)).toContain("21");
     expect(check("15 SOWs end, worth € 64,000.00 in total.", ["A1"], true, pounds)).toEqual(expect.stringContaining("15"));
-    expect(check("It is worth € 64,000.00.", ["A2"], true, pounds)).toContain("€64000");
+    expect(check("It is worth € 64,000.00.", ["A2"], true, pounds)).toContain("EUR64000");
     expect(check("It is worth £ 64,000.00 and ends on 15 December 2026.", ["A2"], true, pounds)).toBeNull();
     expect(check("It ends on 16 Dec 2026.", ["A2"], true, pounds)).toContain("16 dec 2026");
     expect(check("Both end in Dec 2026, in 2026, one on 9 Dec.", ["A1", "A2"], true, pounds)).toBeNull();

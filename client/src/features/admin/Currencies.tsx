@@ -4,7 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { formatDay } from "../../../../shared/dates";
 import { ISO_CURRENCIES, isoCurrency } from "../../../../shared/iso-currencies";
-import { EUR, formatMoney, formatRate, parseRate, type ListedCurrency } from "../../../../shared/money";
+import { ambiguousRate, EUR, formatMoney, formatRate, parseRate, type ListedCurrency } from "../../../../shared/money";
 import { api, messageOf } from "../../lib/api";
 import { personName, useCurrencies, usePeople } from "../../lib/data";
 import { FormFooter, useForm } from "../../platform/form";
@@ -13,7 +13,14 @@ import { Button, ConfirmButton, ErrorState, Field, Loading, Pill, TextInput } fr
 
 const RATE_HINT = "Enter a rate like 11.49, with at most four decimals.";
 /** What is wrong with a typed rate, or "" when it can be saved. */
-const rateProblem = (text: string) => (parseRate(text) != null ? "" : /^\s*\d{6,}/.test(text) ? "Use at most 99,999.9999." : RATE_HINT);
+const rateProblem = (text: string) =>
+  parseRate(text) != null
+    ? ""
+    : ambiguousRate(text)
+      ? "A comma before three digits could mean thousands or decimals. Write the rate with a point for the decimals and no thousands separator, for example 17250 or 1.085."
+      : /^\s*\d{6,}/.test(text)
+        ? "Use at most 99,999.9999."
+        : RATE_HINT;
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /** What still uses a currency, in words: "2 agreements and 1 rate card line", or "Not in use". */

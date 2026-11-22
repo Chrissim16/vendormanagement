@@ -111,7 +111,7 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 - A currency can be removed only while no agreement, rate card line or RFP uses it; otherwise the page says what still uses it. Adding, changing and removing a currency or a rate are in the audit log.
 - Agreements, rate card lines, RFP budgets and the Excel import accept any currency on the list, and nothing else. An invoice is always in its agreement's currency, as before, so a SOW's budget against invoiced is never converted.
 - Every total across currencies (Money page, dashboard, monthly report, briefing, Ask) is one euro total marked as converted, with a line beneath it naming the amount in each currency that appears in it, for example "€ 120,000.00 · $ 30,000.00 · SEK 85,000.00". Lists show each amount in euros, with the original in brackets where it was not in euros.
-- Changing a rate changes converted totals only; no stored amount changes. A briefing or report keeps the figures and rates of the day it was made.
+- Changing a rate changes converted totals only; no stored amount changes. A briefing keeps the figures and rates of the day it was made. The monthly report is worked out afresh, at the current rates, like all its figures, and says when they have changed since its summary was written (D-2).
 - Amounts are shown with € for euros, £ for pounds and $ for US dollars, and with the code for every other currency (SEK 85,000.00), so kronor of different countries cannot be confused.
 - Contract reading (E-1) and Ask (C-1) recognise amounts in every currency on the list. An amount in a currency not on the list, or written only as "kr" without saying which kronor, is left out and named as left out.
 

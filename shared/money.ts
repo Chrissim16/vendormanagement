@@ -30,18 +30,30 @@ export const STARTING_CURRENCIES: readonly { code: string; name: string; unitsPe
 const SIGNS: Record<string, string> = { EUR: "€", GBP: "£", USD: "$" };
 export const currencySign = (currency: Currency) => SIGNS[currency] ?? currency;
 
+const SIGN_CODES: Record<string, string> = { "€": "EUR", "£": "GBP", $: "USD", US$: "USD" };
+const MARKED = /^(US\$|[€£$]|[A-Za-z]{3})?([^A-Za-z€£$]*?)([€£$]|[A-Za-z]{3})?$/;
+
+/** The currency an amount is typed with ("SEK 85,000", "€ 12,500", "12,500 usd"), or null when it carries none. Undefined when what is written is not a currency at all. */
+export function typedCurrency(input: string): Currency | null | undefined {
+  const m = MARKED.exec(input.replace(/\s/g, ""));
+  if (!m) return undefined;
+  const codes = [m[1], m[3]].filter(Boolean).map((w) => SIGN_CODES[w!] ?? w!.toUpperCase());
+  if (codes.some((c) => !isCurrencyCode(c)) || new Set(codes).size > 1) return undefined;
+  return codes[0] ?? null;
+}
+
 /**
  * Reads an amount as people type it and returns whole cents, or null when it is not an
  * amount. Accepts 12500, 12,500.00, 12.500,00 and 12 500,5, with or without a currency
- * sign or code in front or behind (€ 12,500, 12,500 SEK). A single separator followed by
- * exactly three digits is read as a thousands separator (1.234 is one thousand two
- * hundred and thirty-four).
+ * sign or code in front or behind (€ 12,500, 12,500 SEK). A sign or code must be the
+ * record's own `currency` when one is given: "SEK 285,000" is not a euro amount. A single
+ * separator followed by exactly three digits is read as a thousands separator (1.234 is
+ * one thousand two hundred and thirty-four).
  */
-export function parseAmount(input: string): number | null {
-  const s = input
-    .replace(/[\s€£$]/g, "")
-    .replace(/^(?:[A-Za-z]{3}|US)(?=\d)/, "")
-    .replace(/(?<=\d)[A-Za-z]{3}$/, "");
+export function parseAmount(input: string, currency?: Currency): number | null {
+  const typed = typedCurrency(input);
+  if (typed === undefined || (typed && currency && typed !== currency)) return null;
+  const s = MARKED.exec(input.replace(/\s/g, ""))![2]!;
   if (!/^\d[\d.,]*$/.test(s)) return null;
   const lastDot = s.lastIndexOf(".");
   const lastComma = s.lastIndexOf(",");
@@ -86,8 +98,12 @@ export const amountForInput = (minor: number | null | undefined) => (minor == nu
 /** The most of one currency a euro may buy, as typed: 99,999.9999. */
 export const MAX_UNITS_PER_EUR_E4 = 999_999_999;
 
+/** A comma before exactly three digits could be thousands ("17,250" for the rupiah) or decimals: a rate typed so is not read, rather than read 1,000 times wrong. "0,855" can only be decimals. */
+export const ambiguousRate = (input: string) => /^\s*(?!0,)\d+,\d{3}\s*$/.test(input);
+
 /** Reads a rate as typed ("11.49" or "11,49": so many of the currency for one euro) into ten-thousandths, or null. At most four decimals. */
 export function parseRate(input: string): number | null {
+  if (ambiguousRate(input)) return null;
   const s = input.trim().replace(",", ".");
   if (!/^\d{1,5}(\.\d{1,4})?$/.test(s)) return null;
   const [whole, frac = ""] = s.split(".");

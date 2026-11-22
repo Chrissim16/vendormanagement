@@ -36,13 +36,13 @@ export function InvoiceForm({
     ({ amount, ...v }) =>
       api<Invoice>(invoice ? `/invoices/${invoice.id}` : "/invoices", {
         method: invoice ? "PATCH" : "POST",
-        body: { ...v, milestoneId: v.milestoneId || null, amountMinor: parseAmount(amount) },
+        body: { ...v, milestoneId: v.milestoneId || null, amountMinor: parseAmount(amount, currency) },
       }),
     {
       onSaved,
       check: (v) => ({
         agreementId: v.agreementId ? "" : "Choose the SOW or subscription this invoice is for.",
-        amount: parseAmount(v.amount) == null ? "Enter an amount like 12,500.00." : "",
+        amount: parseAmount(v.amount, currency) == null ? "Enter an amount like 12,500.00." : "",
       }),
     },
   );
@@ -70,7 +70,7 @@ export function InvoiceForm({
   });
   const milestones = (delivery.data?.milestones ?? []).filter((m) => m.status !== "cancelled" || m.id === invoice?.milestoneId);
   const shown = { errors: { ...form.errors, amount: form.errors.amount || form.errors.amountMinor || "" } };
-  const minor = v.amount ? parseAmount(v.amount) : null;
+  const minor = v.amount ? parseAmount(v.amount, currency) : null;
 
   return (
     <Dialog title={invoice ? `Edit invoice ${invoice.invoiceNumber}` : "Add invoice"} onClose={onClose}>

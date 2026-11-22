@@ -387,6 +387,67 @@ test.describe("M-6 spend overview, M-7 warning thresholds and M-8 currencies", (
     await expect(rows).toHaveCount(6);
   });
 
+  test("M-8 a day rate and an RFP budget in another currency; an amount typed in a different currency is refused", async ({ page, context, request }) => {
+    await signInAs(context, MEMBER);
+    const v = await newVendor(request, "Day rates in kroner");
+    await page.goto(`/vendors?open=${v.id}`);
+    await page.getByRole("tab", { name: "Money" }).click();
+    await page.getByRole("button", { name: "Add day rate" }).click();
+    const dialog = page.getByRole("dialog", { name: "Add day rate" });
+    await dialog.getByLabel("Role").fill("Senior advisor");
+    await dialog.getByLabel("Currency").selectOption("DKK");
+    await dialog.getByLabel("Rate per day").fill("SEK 9,800");
+    await dialog.getByRole("button", { name: "Add rate" }).click();
+    await expect(dialog.getByText("Enter a day rate like 1,250.00.")).toBeVisible();
+    await dialog.getByLabel("Rate per day").fill("9 800");
+    await expect(dialog.getByText("Read as DKK 9,800.00 a day")).toBeVisible();
+    await dialog.getByRole("button", { name: "Add rate" }).click();
+    await expect(page.getByText("DKK 9,800.00 a day")).toBeVisible();
+
+    await page.goto("/rfps");
+    await page.getByRole("button", { name: "New RFP" }).click();
+    const rfp = page.getByRole("dialog", { name: "New RFP" });
+    await rfp.getByLabel("Currency").selectOption("NOK");
+    await rfp.getByLabel("Budget").fill("50 000");
+    await expect(rfp.getByText("Read as NOK 50,000.00")).toBeVisible();
+  });
+
+  test("M-8 the dashboard, the monthly report and a briefing show one euro total with each currency beneath it; a briefing keeps its rates", async ({ page, context, request }) => {
+    await signInAs(context, MEMBER);
+    await page.goto("/");
+    const spend = page.getByRole("region", { name: "Spend, last 12 months" });
+    await expect(spend).toContainText("converted to euros:");
+    await expect(spend).toContainText("SEK 285,000.00");
+    await expect(spend).toContainText("(starting rate, not yet set by an admin)");
+    await expect(spend.getByRole("link", { name: "Set the rates" })).toHaveCount(0);
+
+    await page.goto("/report");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Monthly report, October 2026");
+    await expect(page.getByText(/^Invoiced in October 2026: €\s[\d,.]+ in euros, converted \(€\s[\d,.]+ · \$\s30,000\.00\)\.$/)).toBeVisible();
+    await expect(page.getByText("Converted at 1 EUR = 1.08 USD (starting rate, not yet set by an admin).")).toBeVisible();
+
+    const vendors = (await (await request.get("/api/vendors", { params: { q: "Hvidsand", status: "all" } })).json()) as { items: { id: string }[] };
+    await page.goto(`/vendors?open=${vendors.items[0]!.id}`);
+    await page.getByRole("tab", { name: "Briefings" }).click();
+    await page.getByRole("button", { name: "Prepare a briefing" }).click();
+    await expect(page).toHaveURL(/\/briefings\/[0-9a-f-]+$/);
+    const facts = page.locator("dl[aria-label='Key facts']");
+    // DKK 60,000.00 at 1 EUR = 7.46 DKK.
+    await expect(facts).toContainText("Invoiced, last 12 months · converted to euros");
+    await expect(facts).toContainText("€ 8,042.90");
+    await expect(facts).toContainText("DKK 60,000.00");
+    await expect(facts).toContainText("Converted at 1 EUR = 7.46 DKK (starting rate, not yet set by an admin).");
+    const rate = (unitsPerEurE4: number) => asAdminApi(request, "put", "/admin/currencies/DKK", { unitsPerEurE4 });
+    await rate(80000);
+    try {
+      await page.reload();
+      await expect(facts).toContainText("€ 8,042.90");
+      await expect(facts).toContainText("Converted at 1 EUR = 7.46 DKK");
+    } finally {
+      await rate(74600);
+    }
+  });
+
   test("M-8 an agreement in any listed currency, shown with its code, and the sample data's mix on the Money page", async ({ page, context, request }) => {
     await signInAs(context, MEMBER);
     const v = await newVendor(request, "Kronor");
@@ -408,7 +469,7 @@ test.describe("M-6 spend overview, M-7 warning thresholds and M-8 currencies", (
     await expect(totals).toContainText("(starting rate, not yet set by an admin)");
     const vendors = page.getByRole("list", { name: "Spend per vendor" }).getByRole("listitem");
     await expect(vendors.filter({ hasText: "Norrvik Software" })).toContainText("(SEK 285,000.00)");
-    await expect(vendors.filter({ hasText: "Copperleaf Labs" })).toContainText("($ 30,000.00)");
+    await expect(vendors.filter({ hasText: "Wexmoor Labs" })).toContainText("($ 30,000.00)");
   });
 
   test("M-7 the admin's warning thresholds decide what appears on the warnings page, and M-5 an overrun shows there", async ({ page, context, request }) => {

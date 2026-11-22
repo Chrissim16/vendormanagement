@@ -47,6 +47,10 @@ const planted = doc("Agreement (invented).pdf", [
   "Either party may cancel by giving 90 days' written notice.",
 ]);
 
+const dollars = doc("Order form (invented).pdf", ["Order form: Contract analytics", "The annual fee is USD 30,000.00, invoiced yearly in advance."]);
+const kronor = doc("Avtal (invented).pdf", ["Subscription: Planning cloud", "The annual fee is SEK 285 000, payable within 30 days of invoice."]);
+const bareKr = doc("Order (invented).pdf", ["Subscription: Planning cloud", "The annual fee is 285.000 kr, payable within 30 days of invoice."]);
+
 const value = (o: ContractReading, f: keyof ContractReading) => o[f]?.value ?? null;
 
 export const contractFieldsCases: EvalCase<ContractFieldsInput, ContractReading>[] = [
@@ -108,5 +112,30 @@ export const contractFieldsCases: EvalCase<ContractFieldsInput, ContractReading>
       ...(Number(value(o, "amount")) === 12000 ? [] : [`amount read as ${value(o, "amount")}`]),
       ...(value(o, "noticePeriodDays") === 90 ? [] : [`notice read as ${value(o, "noticePeriodDays")}`]),
     ],
+  },
+  {
+    name: "contract fields: M-8 an amount in US dollars is read with its currency",
+    prompt: contractFields,
+    input: dollars,
+    check: (o) => [
+      ...(Number(value(o, "amount")) === 30000 ? [] : [`amount read as ${value(o, "amount")}`]),
+      ...(value(o, "currency") === "USD" ? [] : [`currency read as ${value(o, "currency")}`]),
+    ],
+  },
+  {
+    name: "contract fields: M-8 Swedish kronor with spaces between the thousands are read as one amount",
+    needsRealModel: true,
+    prompt: contractFields,
+    input: kronor,
+    check: (o) => [
+      ...(Number(value(o, "amount")) === 285000 ? [] : [`amount read as ${value(o, "amount")}`]),
+      ...(value(o, "currency") === "SEK" ? [] : [`currency read as ${value(o, "currency")}`]),
+    ],
+  },
+  {
+    name: "contract fields: M-8 an amount in plain kr does not say which kronor, so no currency is given",
+    prompt: contractFields,
+    input: bareKr,
+    check: (o) => (value(o, "currency") ? [`currency given as ${value(o, "currency")} although the document only says kr`] : []),
   },
 ];

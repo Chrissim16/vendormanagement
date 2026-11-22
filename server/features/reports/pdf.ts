@@ -43,7 +43,7 @@ function draw(report: ManagementReport, generatedOn: string, rows: Rows, pages: 
       pdf.heading("Spend against budgets");
       const t = d.spend.total;
       pdf.paragraph(
-        t.eurMinor === 0
+        !Object.keys(t.amounts).length
           ? `Nothing was invoiced in ${monthName(d.month)}.`
           : `Invoiced in ${monthName(d.month)}: ${totalInWords(t, d.spend.rates)}${isMixed(t.amounts) ? "" : "."}`,
       );

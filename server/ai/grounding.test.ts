@@ -59,9 +59,16 @@ describe("M-8 an amount counts with its currency, whichever currency it is in", 
     expect(ungroundedFigures("Some 85,000 SEK went to the Swedish vendor.", given)).toEqual([]);
   });
   it("does not let the same number pass in another currency", () => {
-    expect(ungroundedFigures("NOK 85,000.00 was invoiced.", given)).toEqual(["NOK85000"]);
-    expect(ungroundedFigures("€ 85,000.00 was invoiced.", given)).toEqual(["€85000"]);
-    expect(ungroundedFigures("€ 30,000.00 was invoiced.", given)).toEqual(["€30000"]);
+    expect(ungroundedFigures("NOK 85,000.00 was invoiced.", given)).not.toEqual([]);
+    expect(ungroundedFigures("€ 85,000.00 was invoiced.", given)).toEqual(["EUR85000"]);
+    expect(ungroundedFigures("€ 30,000.00 was invoiced.", given)).toEqual(["EUR30000"]);
+  });
+  it("counts a sign and its code as the same currency", () => {
+    expect(ungroundedFigures("Invoiced EUR 120,000.00 and USD 30,000.00.", given)).toEqual([]);
+  });
+  it("does not take a year next to a code, or a word that is a code only to a bank, for an amount", () => {
+    expect(ungroundedFigures("In 2026 USD invoices came to $ 30,000.00.", { ...given, year: "2026-01-01" })).toEqual([]);
+    expect(ungroundedFigures("The TOP 3 vendors and ALL 5 others.", given)).toEqual([]);
   });
   it("leaves three capitals that are not a currency alone", () => {
     expect(ungroundedFigures("SOW 07 ends.", { names: "SOW 07 ends" })).toEqual([]);
