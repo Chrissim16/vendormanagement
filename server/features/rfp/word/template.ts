@@ -1,8 +1,23 @@
 import type JSZip from "jszip";
 import type { Mark, Place, TemplateFound } from "../../../../shared/wordTemplate";
 import { AppError } from "../../../platform/errors";
-import { BodyWriter, type BodyStyles } from "./body";
-import { attr, bodyFont, decodeXml, escapeXml, openWord, part, readRelationships, readStyles, styleNamed, WORD_MAIN, WORD_TEMPLATE_MAIN, writeCustomProperties } from "./ooxml";
+import { BodyWriter, LIST_MARK, type BodyStyles } from "./body";
+import {
+  attr,
+  bodyFont,
+  decodeXml,
+  elements,
+  escapeXml,
+  openWord,
+  part,
+  readRelationships,
+  readStyles,
+  styleNamed,
+  TOKENS,
+  WORD_MAIN,
+  WORD_TEMPLATE_MAIN,
+  writeCustomProperties,
+} from "./ooxml";
 
 /**
  * Q-14: every RFP Word file is made from a Word template: the company's, once an admin
@@ -24,19 +39,31 @@ export const templateRefused = (why: "unreadable" | "macros") =>
   );
 
 const MARK_RE = /\[(title|date|version)\]/gi;
-const SEGMENTS = /<w:t(?=[\s>/])([^>]*?)(?:\/>|>([\s\S]*?)<\/w:t>)|<w:p(?=[\s>/])[^>]*>|<\/w:p>/g;
 
 /**
  * Fills the marks in one part of a document. Word often splits typed text over several
  * pieces ("[", "Title", "]"), so the pieces of each paragraph are read as one text, and
- * the value goes where the mark began. Returns the part and the marks it held.
+ * the value goes where the mark began. Returns the part and the marks it held. The part
+ * is read once from left to right, so no file takes more than a moment.
  */
 export function fillMarks(xml: string, values: Partial<Record<Mark, string>> | null): { xml: string; found: Set<Mark> } {
   const found = new Set<Mark>();
   const groups: { start: number; end: number; text: string }[][] = [[]];
-  for (const m of xml.matchAll(SEGMENTS)) {
-    if (m[0].startsWith("<w:p") || m[0] === "</w:p>") groups.push([]);
-    else groups[groups.length - 1]!.push({ start: m.index, end: m.index + m[0].length, text: decodeXml(m[2] ?? "") });
+  let open: { start: number; text: string } | null = null;
+  for (const m of xml.matchAll(TOKENS)) {
+    if (m[5] !== undefined) {
+      if (open) open.text += m[5];
+      continue;
+    }
+    const [, close, name, , self] = m;
+    if (name === "w:p") groups.push([]);
+    else if (name === "w:t") {
+      if (!close && !self) open = { start: m.index, text: "" };
+      else if (close && open) {
+        groups[groups.length - 1]!.push({ start: open.start, end: m.index + m[0].length, text: decodeXml(open.text) });
+        open = null;
+      }
+    }
   }
   const edits: { start: number; end: number; xml: string }[] = [];
   for (const g of groups) {
@@ -70,8 +97,62 @@ async function headerFooterParts(zip: JSZip): Promise<{ name: string; kind: "hea
     .filter((p) => zip.file(p.name));
 }
 
-const hasContent = (xml: string) => /<w:t(?=[\s>])[^>]*>[^<]*\S/.test(xml) || /<w:drawing\b|<w:pict\b|<w:object\b/.test(xml);
-const bodyOf = (doc: string) => /<w:body>([\s\S]*)<\/w:body>/.exec(doc)?.[1] ?? "";
+const hasContent = (xml: string) => [...elements(xml, "w:t")].some((t) => /\S/.test(t.inner)) || /<w:drawing\b|<w:pict\b|<w:object\b/.test(xml);
+const bodyOf = (doc: string) => {
+  const from = doc.indexOf("<w:body>");
+  const to = doc.lastIndexOf("</w:body>");
+  return from >= 0 && to > from ? doc.slice(from + "<w:body>".length, to) : "";
+};
+
+/**
+ * Where the body's own last section settings start: the last `w:sectPr` directly in the
+ * body, not one inside a tracked change of section settings, and not one that ends a
+ * paragraph. The RFP's text goes in front of it. Without one, in front of `</w:body>`.
+ */
+export function finalSectionAt(doc: string): number {
+  const close = doc.lastIndexOf("</w:body>");
+  if (close < 0) return -1;
+  let depth = 0;
+  let last: { start: number; end: number } | null = null;
+  let start = -1;
+  for (const m of doc.matchAll(/<(\/?)w:sectPr(?=[\s>/])[^<>]*?(\/?)>/g)) {
+    if (m.index > close) break;
+    if (m[1]) {
+      depth--;
+      if (depth === 0) last = { start, end: m.index + m[0].length };
+    } else if (m[2]) {
+      if (depth === 0) last = { start: m.index, end: m.index + m[0].length };
+    } else {
+      if (depth === 0) start = m.index;
+      depth++;
+    }
+  }
+  return last && !doc.slice(last.end, close).trim() ? last.start : close;
+}
+
+/** Whether what comes before the RFP's text ends with a paragraph that carries a section break, which starts a new page by itself. */
+function endsWithSectionBreak(before: string): boolean {
+  const end = before.lastIndexOf("</w:sectPr>");
+  if (end < 0) return false;
+  const rest = before.slice(end + "</w:sectPr>".length);
+  return /^\s*<\/w:pPr>/.test(rest) && !/<w:p[\s>]/.test(rest) && /<\/w:p>\s*$/.test(rest);
+}
+
+/** Word's own comments and tracked changes in a template would go out in every file, also to vendors. */
+export async function leftovers(zip: JSZip): Promise<string[]> {
+  const out: string[] = [];
+  const parts = ["word/document.xml", ...(await headerFooterParts(zip)).map((p) => p.name)];
+  let comments = false;
+  let changes = false;
+  for (const name of parts) {
+    const xml = (await part(zip, name)) ?? "";
+    if (/<w:commentReference\b|<w:commentRangeStart\b/.test(xml)) comments = true;
+    if (/<w:(ins|del|moveFrom|moveTo)\s[^<>]*w:author=/.test(xml)) changes = true;
+  }
+  if (comments || zip.file("word/comments.xml")) out.push("comments");
+  if (changes) out.push("tracked changes");
+  return out;
+}
 
 function bodyStyles(stylesXml: string | null): { styles: BodyStyles; names: TemplateFound["styles"]; numbered: { bullet: string | null; number: string | null } } {
   const all = readStyles(stylesXml);
@@ -136,22 +217,26 @@ const ownList = (id: number, ordered: boolean) =>
  */
 async function addLists(zip: JSZip, lists: boolean[], styleNum: { bullet: string | null; number: string | null }): Promise<string[]> {
   if (!lists.length) return [];
-  let xml = await part(zip, "word/numbering.xml");
+  // The template may keep its numbering under another name; its relationship says where.
+  const rel = readRelationships(await part(zip, "word/_rels/document.xml.rels")).find((r) => r.type === "numbering");
+  const name = rel ? `word/${rel.target.replace(/^\/?word\//, "").replace(/^\//, "")}` : "word/numbering.xml";
+  let xml = await part(zip, name);
   if (!xml) {
     xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:numbering xmlns:w="${W_NS}"></w:numbering>`;
     let types = (await part(zip, "[Content_Types].xml"))!;
-    if (!types.includes('PartName="/word/numbering.xml"')) types = types.replace("</Types>", `<Override PartName="/word/numbering.xml" ContentType="${NUMBERING_TYPE}"/></Types>`);
+    if (!types.includes(`PartName="/${name}"`)) types = types.replace("</Types>", `<Override PartName="/${name}" ContentType="${NUMBERING_TYPE}"/></Types>`);
     zip.file("[Content_Types].xml", types);
     let rels =
       (await part(zip, "word/_rels/document.xml.rels")) ??
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`;
-    if (!rels.includes(NUMBERING_REL))
-      rels = rels.replace("</Relationships>", `<Relationship Id="rIdVmNumbering" Type="${NUMBERING_REL}" Target="numbering.xml"/></Relationships>`);
+    if (!rel) rels = rels.replace("</Relationships>", `<Relationship Id="rIdVmNumbering" Type="${NUMBERING_REL}" Target="${name.slice("word/".length)}"/></Relationships>`);
     zip.file("word/_rels/document.xml.rels", rels);
   }
-  const abstractOf = new Map([...xml.matchAll(/<w:num\b[^>]*w:numId="(\d+)"[^>]*>[\s\S]*?<w:abstractNumId w:val="(\d+)"/g)].map((m) => [m[1]!, m[2]!]));
-  let nextAbstract = Math.max(-1, ...[...xml.matchAll(/w:abstractNumId="(\d+)"/g)].map((m) => Number(m[1]))) + 1;
-  let nextNum = Math.max(0, ...[...xml.matchAll(/<w:num\b[^>]*w:numId="(\d+)"/g)].map((m) => Number(m[1]))) + 1;
+  const nums = [...elements(xml, "w:num")];
+  const abstractOf = new Map(nums.map((m) => [attr(m.attrs, "w:numId") ?? "", attr(elements(m.inner, "w:abstractNumId").next().value?.attrs ?? "", "w:val") ?? ""] as const));
+  const abstracts = [...elements(xml, "w:abstractNum")];
+  let nextAbstract = Math.max(-1, ...abstracts.map((m) => Number(attr(m.attrs, "w:abstractNumId")) || 0)) + 1;
+  let nextNum = Math.max(0, ...nums.map((m) => Number(attr(m.attrs, "w:numId")) || 0)) + 1;
   const newAbstracts: string[] = [];
   const own: Partial<Record<"bullet" | "number", string>> = {};
   const abstractFor = (ordered: boolean) => {
@@ -165,20 +250,18 @@ async function addLists(zip: JSZip, lists: boolean[], styleNum: { bullet: string
     return own[kind]!;
   };
   const ids: string[] = [];
-  const nums = lists.map((ordered) => {
+  const added = lists.map((ordered) => {
     const id = String(nextNum++);
     ids.push(id);
     return `<w:num w:numId="${id}"><w:abstractNumId w:val="${abstractFor(ordered)}"/><w:lvlOverride w:ilvl="0"><w:startOverride w:val="1"/></w:lvlOverride></w:num>`;
   });
   // Every abstract list comes before the first list that uses one, as Word requires.
-  const lastAbstract = xml.lastIndexOf("</w:abstractNum>");
-  const firstNum = xml.search(/<w:num\b/);
-  const at = lastAbstract >= 0 ? lastAbstract + "</w:abstractNum>".length : firstNum >= 0 ? firstNum : xml.lastIndexOf("</w:numbering>");
+  const at = abstracts.length ? abstracts[abstracts.length - 1]!.end : nums.length ? nums[0]!.start : xml.lastIndexOf("</w:numbering>");
   xml = xml.slice(0, at) + newAbstracts.join("") + xml.slice(at);
   const cleanup = xml.indexOf("<w:numIdMacAtCleanup");
   const end = cleanup >= 0 ? cleanup : xml.lastIndexOf("</w:numbering>");
-  xml = xml.slice(0, end) + nums.join("") + xml.slice(end);
-  zip.file("word/numbering.xml", xml);
+  xml = xml.slice(0, end) + added.join("") + xml.slice(end);
+  zip.file(name, xml);
   return ids;
 }
 
@@ -200,25 +283,21 @@ export async function openTemplate(data: Buffer): Promise<OpenTemplate> {
       doc = fillMarks(doc, o.marks).xml;
       for (const p of await headerFooterParts(zip)) zip.file(p.name, fillMarks((await part(zip, p.name))!, o.marks).xml);
       const ids = await addLists(zip, body.lists, numbered);
-      const bodyXml = body.toString().replace(/\{\{num:(\d+)\}\}/g, (_, n: string) => ids[Number(n)] ?? "0");
-      const close = doc.lastIndexOf("</w:body>");
-      if (close < 0) throw templateRefused("unreadable");
-      const finalSect = doc.lastIndexOf("<w:sectPr", close);
-      const sectEnd = finalSect >= 0 ? doc.indexOf("</w:sectPr>", finalSect) : -1;
+      const bodyXml = body.toString().replace(LIST_MARK, (_, n: string) => ids[Number(n)] ?? "0");
       // The body's own last section settings close the body; the RFP's text goes in front of them.
-      const insertAt = finalSect >= 0 && sectEnd >= 0 && !doc.slice(sectEnd + "</w:sectPr>".length, close).trim() ? finalSect : close;
+      const insertAt = finalSectionAt(doc);
+      if (insertAt < 0 || doc.indexOf("<w:body>") < 0) throw templateRefused("unreadable");
       const before = doc.slice(doc.indexOf("<w:body>") + "<w:body>".length, insertAt);
       // A cover page that ends with a section break of its own already starts the text on a new page.
-      const endsWithBreak = /<w:sectPr\b[\s\S]*?<\/w:sectPr>\s*<\/w:pPr>(?:(?!<w:p[\s>])[\s\S])*<\/w:p>\s*$/.test(before);
-      const lead = hasContent(before) && !endsWithBreak ? '<w:p><w:r><w:br w:type="page"/></w:r></w:p>' : "";
+      const lead = hasContent(before) && !endsWithSectionBreak(before) ? '<w:p><w:r><w:br w:type="page"/></w:r></w:p>' : "";
       doc = doc.slice(0, insertAt) + lead + bodyXml + doc.slice(insertAt);
       zip.file("word/document.xml", doc);
       let types = (await part(zip, "[Content_Types].xml"))!;
       types = types.split(WORD_TEMPLATE_MAIN).join(WORD_MAIN);
       zip.file("[Content_Types].xml", types);
       const core = await part(zip, "docProps/core.xml");
-      if (core && /<dc:title\b/.test(core))
-        zip.file("docProps/core.xml", core.replace(/<dc:title\b[^>]*>[\s\S]*?<\/dc:title>|<dc:title\s*\/>/, `<dc:title>${escapeXml(o.title)}</dc:title>`));
+      const title = core ? elements(core, "dc:title").next().value : undefined;
+      if (core && title) zip.file("docProps/core.xml", core.slice(0, title.start) + `<dc:title>${escapeXml(o.title)}</dc:title>` + core.slice(title.end));
       if (o.properties) await writeCustomProperties(zip, o.properties);
       return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
     },
@@ -228,3 +307,36 @@ export async function openTemplate(data: Buffer): Promise<OpenTemplate> {
 /** For tests and the settings page: the style names a template's paragraphs use, by id. */
 export const styleIdName = (stylesXml: string | null) => new Map([...readStyles(stylesXml).values()].map((s) => [s.id, s.name]));
 export { attr };
+
+/**
+ * Q-14: what an upload must pass besides being readable. A template with comments or
+ * tracked changes would hand them to every reader, vendors included; and a trial file is
+ * made from it, so that a template the app cannot make a sound file from is refused at once.
+ */
+export async function checkTemplate(data: Buffer): Promise<void> {
+  const zip = await openWord(data, templateRefused);
+  const left = await leftovers(zip);
+  if (left.length)
+    throw new AppError(
+      400,
+      "template_has_remarks",
+      `That template still has ${left.join(" and ")} in it, which would end up in every RFP Word file, also the copies for vendors. Open it in Word, accept or reject every change and delete every comment, save it, and upload it again.`,
+    );
+  const t = await openTemplate(data);
+  const w = new BodyWriter(t.styles);
+  w.heading(1, [{ text: "Trial" }]);
+  w.list(true, [[{ text: "one" }]]);
+  w.table([[[{ text: "a" }]], [[{ text: "b" }]]]);
+  const made = await t.finish(w, { title: "Trial", marks: { title: "Trial", date: "1 Jan 2027", version: "Version 1" } });
+  const JSZipModule = (await import("jszip")).default;
+  const doc = await (await JSZipModule.loadAsync(made)).file("word/document.xml")?.async("string");
+  const at = doc?.indexOf("Trial</w:t>") ?? -1;
+  const end = doc?.lastIndexOf("</w:body>") ?? -1;
+  const sect = doc ? finalSectionAt(doc) : -1;
+  if (!doc || at < 0 || end < at || (sect >= 0 && sect < at))
+    throw new AppError(
+      400,
+      "template_unusable",
+      "The app could not make a sound Word file from that template. Save it again in Word as a Word Template (.dotx) and upload that; if it still fails, try it without its last section break.",
+    );
+}

@@ -436,3 +436,65 @@ test.describe("Q-12 the AI rewrites a section", () => {
     expect(res.status()).toBe(409);
   });
 });
+
+test.describe("Q-13 files of another RFP or another version", () => {
+  /** An RFP in review with a first round, and its review copy. */
+  async function withRound(request: APIRequestContext) {
+    const rfp = await drafted(request);
+    await call(request, "post", `/rfps/${rfp.id}/stage`, { to: "in_review" });
+    const { roundId } = await call<{ roundId: string }>(request, "post", `/rfps/${rfp.id}/review-rounds`);
+    const copy = Buffer.from(await (await request.get(`${BASE}/api/rfp-review-rounds/${roundId}/review-copy.docx`, { headers: { "x-dev-user": MEMBER, cookie: "" } })).body());
+    return { rfp, copy };
+  }
+
+  test("Q-13 a review copy of another RFP is refused, and one of an earlier version goes to its own round with a note that says so", async ({ page, context, request }) => {
+    const mine = await withRound(request);
+    const other = await withRound(request);
+    // A change, so the next download is version 2.
+    await request.patch(`${BASE}/api/rfps/${mine.rfp.id}`, { headers: { "x-dev-user": MEMBER, cookie: "" }, data: { need: "A changed need, for a second version." } });
+    await call(request, "post", `/rfps/${mine.rfp.id}/review-rounds`);
+    await signInAs(context, MEMBER);
+    await open(page, mine.rfp, "review");
+    await page.getByLabel("Choose a returned Word file for version 2").setInputFiles({ name: "Other RFP.docx", mimeType: "application/octet-stream", buffer: other.copy });
+    await expect(page.getByText("That file is a review copy of another RFP. Upload it on that RFP's Review tab.")).toBeVisible();
+
+    const { annotate } = await import("../server/features/rfp/word/annotate");
+    const back = await annotate(mine.copy, [{ comment: "Still fine?", on: "as described in the introduction", author: "Ann Berg", under: "Scope and requirements" }]);
+    await page.getByLabel("Choose a returned Word file for version 2").setInputFiles({ name: "Ann on version 1.docx", mimeType: "application/octet-stream", buffer: back });
+    await expect(page.getByRole("status").filter({ hasText: "Ann on version 1.docx is a copy of version 1, not 2, so it was added to version 1's round." })).toBeVisible();
+    await expect(page.getByRole("list", { name: "Files returned for version 1" })).toContainText("Ann on version 1.docx");
+    await expect(page.getByRole("list", { name: "Open remarks on Scope and requirements" })).toContainText("version 1");
+  });
+
+  test("Q-13 an edit is not taken over on the Review tab while the document has unsaved changes", async ({ page, context, request }) => {
+    const { rfp, copy } = await withRound(request);
+    const { annotate } = await import("../server/features/rfp/word/annotate");
+    const res = await request.post(`${BASE}/api/rfps/${rfp.id}/review-rounds`, { headers: { "x-dev-user": MEMBER, cookie: "" } });
+    const { roundId } = (await res.json()) as { roundId: string };
+    await request.post(`${BASE}/api/rfp-review-rounds/${roundId}/files`, {
+      headers: { "x-dev-user": MEMBER, cookie: "" },
+      multipart: {
+        file: {
+          name: "back.docx",
+          mimeType: "application/octet-stream",
+          buffer: await annotate(copy, [{ replace: "confidential", by: "strictly confidential", author: "Priya Raman", under: "Confidentiality and terms" }]),
+        },
+      },
+    });
+    await signInAs(context, MEMBER);
+    await open(page, rfp, "document");
+    await page.getByRole("textbox", { name: "Text of section 1" }).pressSequentially(" Typed.");
+    await page.getByRole("tab", { name: "Review" }).click();
+    await expect(page.getByText("The document has changes on the Document tab that are not saved.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Take over this edit" })).toBeDisabled();
+    await page.getByRole("button", { name: "Go to the document" }).click();
+    await page.getByRole("button", { name: "Save document" }).click();
+    await expect(page.getByText("Document saved")).toBeVisible();
+    await page.getByRole("tab", { name: "Review" }).click();
+    await page.getByRole("button", { name: "Take over this edit" }).click();
+    await expect(page.getByText("Edit taken over into the section")).toBeVisible();
+    const after = await call(request, "get", `/rfps/${rfp.id}`);
+    expect(after.sections[0]!.body).toContain("Typed.");
+    expect(after.sections[5]!.body).toContain("strictly confidential");
+  });
+});

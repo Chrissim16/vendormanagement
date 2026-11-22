@@ -62,7 +62,7 @@ function SignoffForm({ rfp, onClose, onSaved }: { rfp: RfpDetail; onClose: () =>
 }
 
 /** Q-3, Q-13: the review copy and its rounds, the reviewers' remarks from Word, what each reviewer decided, and the step to approved. */
-export function ReviewTab({ rfp }: { rfp: RfpDetail }) {
+export function ReviewTab({ rfp, unsaved = false, onDocument }: { rfp: RfpDetail; unsaved?: boolean; onDocument?: () => void }) {
   const [adding, setAdding] = useState(false);
   const adopt = useAdoptRfp(rfp.id);
   const stage = useRfpChange(rfp.id, (to: "drafting" | "in_review" | "approved") => api<RfpDetail>(`/rfps/${rfp.id}/stage`, { body: { to } }), {
@@ -83,7 +83,16 @@ export function ReviewTab({ rfp }: { rfp: RfpDetail }) {
       </Section>
 
       <Section title="Reviewers' remarks from Word">
-        <OpenRemarks rfp={rfp} />
+        {unsaved && (
+          <div role="status" className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl bg-sunk px-5 py-4">
+            <p className="min-w-0 flex-1 text-ink-2">
+              The document has changes on the Document tab that are not saved. Save or discard them first: taking an edit over changes the document, and saving afterwards would
+              undo it.
+            </p>
+            {onDocument && <Button onClick={onDocument}>Go to the document</Button>}
+          </div>
+        )}
+        <OpenRemarks rfp={rfp} unsaved={unsaved} />
       </Section>
 
       <Section

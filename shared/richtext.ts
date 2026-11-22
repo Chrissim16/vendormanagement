@@ -155,8 +155,10 @@ export function parseBlocks(md: string | null | undefined): Block[] {
     }
     if (TABLE_ROW.test(line)) {
       const rows: string[][] = [];
+      const header = i;
       while (i < lines.length && TABLE_ROW.test(lines[i]!)) {
-        if (!(rows.length === 1 && RULE_ROW.test(lines[i]!))) rows.push(cellsOf(lines[i]!));
+        // Only the line right under the header row can be the rule; a later row of dashes is a row of the table.
+        if (!(i === header + 1 && RULE_ROW.test(lines[i]!))) rows.push(cellsOf(lines[i]!));
         i++;
       }
       const width = Math.max(...rows.map((r) => r.length));
@@ -197,11 +199,11 @@ export function inlineToMarkdown(untidy: Run[], inTable = false): string {
     const trail = r.text.length > lead.length ? /\s*$/.exec(r.text)![0] : "";
     const core = r.text.slice(lead.length, r.text.length - trail.length);
     // Marks that end, end before the spaces; marks that begin, begin after them.
-    if (core && bold && !r.bold) {
+    if (bold && !r.bold) {
       out += "**";
       bold = false;
     }
-    if (core && italic && !r.italic) {
+    if (italic && !r.italic) {
       out += "*";
       italic = false;
     }

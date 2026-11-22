@@ -2,7 +2,7 @@ import clsx from "clsx";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { applySuggestedEdit, remarkKindLabels, resolutionLabels, type ReviewerRemark, type ReviewRound } from "../../../../shared/review";
+import { applySuggestedEdit, applyToHeading, remarkKindLabels, resolutionLabels, type ReviewerRemark, type ReviewRound } from "../../../../shared/review";
 import { contentEditable, type RfpDetail } from "../../../../shared/rfp";
 import { api, messageOf } from "../../lib/api";
 import { personName, usePeople } from "../../lib/data";
@@ -25,7 +25,7 @@ export function takeOverProblem(rfp: RfpDetail, m: ReviewerRemark): string | nul
   if (m.kind !== "suggested_edit") return null;
   const s = rfp.sections.find((x) => x.id === m.sectionId);
   if (!s) return "Not placed in a section, so it cannot be taken over as it is.";
-  const result = applySuggestedEdit(s.body, m);
+  const result = m.inHeading ? applyToHeading(s.heading, m) : applySuggestedEdit(s.body, m);
   if (result.ok) return null;
   return result.why === "more_than_once"
     ? "These words stand more than once in the section, so the app cannot tell which to change. Make the change by hand."
@@ -72,6 +72,7 @@ export function RemarkCard({
         <span className="font-semibold">{m.author}</span>
         <span className="text-[13px] text-ink-2">
           version {m.version}
+          {m.inHeading && " · in the heading"}
           {showPlace && ` · ${placed ? `in ${placed.heading}` : `under "${m.foundUnder}" in the file, not placed`}`}
         </span>
         {!open && (
@@ -157,7 +158,7 @@ export function RemarkCard({
 }
 
 /** Q-13: the open remarks next to the sections they are in, and those the app could not place. Asking the AI to rewrite for one opens its section on the Document tab. */
-export function OpenRemarks({ rfp }: { rfp: RfpDetail }) {
+export function OpenRemarks({ rfp, unsaved }: { rfp: RfpDetail; unsaved?: boolean }) {
   const navigate = useNavigate();
   const onRewrite = (m: ReviewerRemark) => navigate(`?tab=document&rewrite=${m.sectionId}&remark=${m.id}`);
   const open = rfp.review.remarks.filter((m) => m.status === "open");
@@ -183,7 +184,7 @@ export function OpenRemarks({ rfp }: { rfp: RfpDetail }) {
             <h3 className="font-semibold">{s.heading}</h3>
             <ul aria-label={`Open remarks on ${s.heading}`} className="flex flex-col gap-2">
               {mine.map((m) => (
-                <RemarkCard key={m.id} rfp={rfp} remark={m} onRewrite={onRewrite} />
+                <RemarkCard key={m.id} rfp={rfp} remark={m} onRewrite={onRewrite} unsaved={unsaved} />
               ))}
             </ul>
           </div>
@@ -198,7 +199,7 @@ export function OpenRemarks({ rfp }: { rfp: RfpDetail }) {
           </p>
           <ul aria-label="Remarks not placed" className="flex flex-col gap-2">
             {unplaced.map((m) => (
-              <RemarkCard key={m.id} rfp={rfp} remark={m} showPlace />
+              <RemarkCard key={m.id} rfp={rfp} remark={m} showPlace unsaved={unsaved} />
             ))}
           </ul>
         </div>
@@ -207,9 +208,12 @@ export function OpenRemarks({ rfp }: { rfp: RfpDetail }) {
   );
 }
 
+const count = (n: number, one: string) => `${n} ${n === 1 ? one : `${one}s`}`;
+
 function RoundCard({ rfp, round }: { rfp: RfpDetail; round: ReviewRound }) {
   const name = usePersonName();
   const [problem, setProblem] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const upload = useRfpChange(
     rfp.id,
     async (file: File) => {
@@ -217,8 +221,10 @@ function RoundCard({ rfp, round }: { rfp: RfpDetail; round: ReviewRound }) {
         `/rfp-review-rounds/${round.id}/files`,
         { method: "POST", file },
       );
-      const said = `${r.read.comments} ${r.read.comments === 1 ? "comment" : "comments"} and ${r.read.edits} suggested ${r.read.edits === 1 ? "edit" : "edits"} read${r.read.reviewers.length ? ` from ${r.read.reviewers.join(", ")}` : ""}.${r.read.notPlaced ? ` ${r.read.notPlaced} could not be placed in a section.` : ""}`;
-      toast.success(r.otherVersion ? `That file is a copy of version ${r.version}, so it was added to version ${r.version}'s round. ${said}` : said, { duration: 8000 });
+      const said = `${count(r.read.comments, "comment")} and ${count(r.read.edits, "suggested edit")} read${r.read.reviewers.length ? ` from ${r.read.reviewers.join(", ")}` : ""}.${r.read.notPlaced ? ` ${r.read.notPlaced} could not be placed in a section.` : ""}`;
+      // A file of another version is put in that version's round; that stays said on the page, not only in a passing message.
+      setNotice(r.otherVersion ? `${file.name} is a copy of version ${r.version}, not ${round.version}, so it was added to version ${r.version}'s round. ${said}` : null);
+      toast.success(r.otherVersion ? `Added to version ${r.version}'s round. ${said}` : said, { duration: 8000 });
       return r.rfp;
     },
     { quiet: true, after: () => setProblem(null) },
@@ -255,6 +261,11 @@ function RoundCard({ rfp, round }: { rfp: RfpDetail; round: ReviewRound }) {
         )}
       </div>
       {problem && <ErrorState message={problem} />}
+      {notice && (
+        <p role="status" className="rounded-xl bg-[var(--tint)] px-4 py-2 text-[13.5px]">
+          {notice}
+        </p>
+      )}
       {round.files.length > 0 && (
         <ul aria-label={`Files returned for version ${round.version}`} className="flex flex-col gap-1.5">
           {round.files.map((f) => {
@@ -266,7 +277,8 @@ function RoundCard({ rfp, round }: { rfp: RfpDetail; round: ReviewRound }) {
                   {f.fileName}
                 </a>
                 <span className="text-ink-2">
-                  {kb(f.sizeBytes)} · {remarks.filter((m) => m.kind === "comment").length} comments, {remarks.filter((m) => m.kind === "suggested_edit").length} suggested edits
+                  {kb(f.sizeBytes)} · {count(remarks.filter((m) => m.kind === "comment").length, "comment")},{" "}
+                  {count(remarks.filter((m) => m.kind === "suggested_edit").length, "suggested edit")}
                   {reviewers.length ? ` by ${reviewers.join(", ")}` : ""} · uploaded by {name(f.uploadedBy)} on <span className="num">{formatDate(f.uploadedAt.slice(0, 10))}</span>
                 </span>
                 {editable && (

@@ -32,12 +32,51 @@ export async function openWord(data: Buffer, refuse: (why: "unreadable" | "macro
   return zip;
 }
 
+/** One part of a Word file as text. A part larger than any real document is refused, never cut: a cut part would be written back damaged. */
 export async function part(zip: JSZip, name: string): Promise<string | null> {
   const f = zip.file(name);
   if (!f) return null;
   const s = await f.async("string");
-  return s.length > MAX_PART_CHARS ? s.slice(0, MAX_PART_CHARS) : s;
+  if (s.length > MAX_PART_CHARS)
+    throw new AppError(400, "file_too_large", "That Word file holds far more than any real document. Upload the template or review copy as Word saved it.");
+  return s;
 }
+
+/**
+ * Every element with the given name, as its attributes and what is inside it, found by
+ * plain searching from left to right: no file, however it is built, takes more than a
+ * moment. An element that is never closed ends the search. Elements of this name inside
+ * one another are not expected where this is used.
+ */
+export function* elements(xml: string, name: string): Generator<{ attrs: string; inner: string; start: number; end: number }> {
+  const open = `<${name}`;
+  const close = `</${name}>`;
+  let at = 0;
+  for (;;) {
+    const start = xml.indexOf(open, at);
+    if (start < 0) return;
+    const after = xml[start + open.length];
+    const tagEnd = xml.indexOf(">", start);
+    if (tagEnd < 0) return;
+    if (after !== " " && after !== ">" && after !== "/" && after !== "\n" && after !== "\t" && after !== "\r") {
+      at = start + open.length;
+      continue;
+    }
+    const attrs = xml.slice(start + open.length, xml[tagEnd - 1] === "/" ? tagEnd - 1 : tagEnd);
+    if (xml[tagEnd - 1] === "/") {
+      yield { attrs, inner: "", start, end: tagEnd + 1 };
+      at = tagEnd + 1;
+      continue;
+    }
+    const end = xml.indexOf(close, tagEnd);
+    if (end < 0) return;
+    yield { attrs, inner: xml.slice(tagEnd + 1, end), start, end: end + close.length };
+    at = end + close.length;
+  }
+}
+
+/** The tags of an XML text one by one, and the text between them. Linear: a tag's attributes stop at the next "<". */
+export const TOKENS = /<(\/?)([\w:]+)([^<>]*?)(\/?)>|([^<]+)/g;
 
 const entities: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
 export const decodeXml = (s: string) =>
@@ -68,6 +107,8 @@ export interface StyleInfo {
   type: string;
   /** The list the style numbers its paragraphs with, if it has one. */
   numId: string | null;
+  /** The style makes a paragraph a top-level heading (outline level 1 in Word's terms). */
+  outline: boolean;
 }
 /**
  * The styles of a document by their built-in name ("heading 1", "list bullet"), lower
@@ -77,15 +118,15 @@ export interface StyleInfo {
 export function readStyles(stylesXml: string | null): Map<string, StyleInfo> {
   const out = new Map<string, StyleInfo>();
   if (!stylesXml) return out;
-  for (const m of stylesXml.matchAll(/<w:style\b([^>]*)>([\s\S]*?)<\/w:style>/g)) {
-    const id = attr(m[1]!, "w:styleId");
-    const type = attr(m[1]!, "w:type") ?? "paragraph";
-    const nameTag = /<w:name\b[^>]*>/.exec(m[2]!)?.[0];
-    const name = nameTag ? attr(nameTag, "w:val") : null;
+  for (const m of elements(stylesXml, "w:style")) {
+    const id = attr(m.attrs, "w:styleId");
+    const type = attr(m.attrs, "w:type") ?? "paragraph";
+    const nameTag = elements(m.inner, "w:name").next().value;
+    const name = nameTag ? attr(nameTag.attrs, "w:val") : null;
     if (!id || !name) continue;
-    const numTag = /<w:numId\b[^>]*>/.exec(m[2]!)?.[0];
+    const numTag = elements(m.inner, "w:numId").next().value;
     const key = `${type}:${name.toLowerCase()}`;
-    if (!out.has(key)) out.set(key, { id, name, type, numId: numTag ? attr(numTag, "w:val") : null });
+    if (!out.has(key)) out.set(key, { id, name, type, numId: numTag ? attr(numTag.attrs, "w:val") : null, outline: /<w:outlineLvl w:val="0"\s*\/>/.test(m.inner) });
   }
   return out;
 }
@@ -93,16 +134,16 @@ export const styleNamed = (styles: Map<string, StyleInfo>, name: string, type = 
 
 /** The font the document's ordinary text is set in, as far as the styles say. */
 export function bodyFont(stylesXml: string | null, themeXml: string | null): string | null {
-  const defaults = stylesXml ? /<w:docDefaults>[\s\S]*?<\/w:docDefaults>/.exec(stylesXml)?.[0] : null;
-  const normal = stylesXml ? [...stylesXml.matchAll(/<w:style\b[^>]*>([\s\S]*?)<\/w:style>/g)].find((m) => /<w:name w:val="Normal"\s*\/>/i.test(m[1]!))?.[1] : null;
+  const defaults = stylesXml ? elements(stylesXml, "w:docDefaults").next().value?.inner : null;
+  const normal = stylesXml ? [...elements(stylesXml, "w:style")].find((m) => /<w:name w:val="Normal"\s*\/>/i.test(m.inner))?.inner : null;
   for (const block of [normal, defaults]) {
-    const fonts = block ? /<w:rFonts\b[^>]*>/.exec(block)?.[0] : null;
+    const fonts = block ? elements(block, "w:rFonts").next().value?.attrs : null;
     const named = fonts ? attr(fonts, "w:ascii") : null;
     if (named) return named;
     const themed = fonts ? attr(fonts, "w:asciiTheme") : null;
     if (themed && themeXml) {
-      const which = themed.startsWith("major") ? "majorFont" : "minorFont";
-      const latin = new RegExp(`<a:${which}>[\\s\\S]*?<a:latin\\b[^>]*>`).exec(themeXml)?.[0];
+      const group = elements(themeXml, themed.startsWith("major") ? "a:majorFont" : "a:minorFont").next().value?.inner;
+      const latin = group ? elements(group, "a:latin").next().value?.attrs : null;
       const face = latin ? attr(latin, "typeface") : null;
       if (face) return face;
     }
@@ -113,10 +154,10 @@ export function bodyFont(stylesXml: string | null, themeXml: string | null): str
 /** The parts of the main document's relationships, as id, type and target. */
 export function readRelationships(relsXml: string | null): { id: string; type: string; target: string }[] {
   if (!relsXml) return [];
-  return [...relsXml.matchAll(/<Relationship\b[^>]*>/g)].map((m) => ({
-    id: attr(m[0], "Id") ?? "",
-    type: (attr(m[0], "Type") ?? "").split("/").pop() ?? "",
-    target: attr(m[0], "Target") ?? "",
+  return [...elements(relsXml, "Relationship")].map((m) => ({
+    id: attr(m.attrs, "Id") ?? "",
+    type: (attr(m.attrs, "Type") ?? "").split("/").pop() ?? "",
+    target: attr(m.attrs, "Target") ?? "",
   }));
 }
 
@@ -130,23 +171,30 @@ export async function readCustomProperties(zip: JSZip): Promise<Record<string, s
   const xml = await part(zip, "docProps/custom.xml");
   const out: Record<string, string> = {};
   if (!xml) return out;
-  for (const m of xml.matchAll(/<property\b([^>]*)>([\s\S]*?)<\/property>/g)) {
-    const name = attr(m[1]!, "name");
-    const value = /<vt:\w+>([\s\S]*?)<\/vt:\w+>/.exec(m[2]!)?.[1];
+  for (const m of elements(xml, "property")) {
+    const name = attr(m.attrs, "name");
+    const value = /^\s*<vt:\w+>([^<]*)<\/vt:\w+>/.exec(m.inner)?.[1];
     if (name && value != null) out[name] = decodeXml(value);
   }
   return out;
 }
 
-/** Sets the given custom properties as text, keeping the file's own other ones. */
+/** Sets the given custom properties as text. The file's own other properties are kept exactly as they were. */
 export async function writeCustomProperties(zip: JSZip, props: Record<string, string>): Promise<void> {
-  const all = { ...(await readCustomProperties(zip)), ...props };
-  const body = Object.entries(all)
-    .map(([name, value], i) => `<property fmtid="${FMTID}" pid="${i + 2}" name="${escapeXml(name)}"><vt:lpwstr>${escapeXml(value)}</vt:lpwstr></property>`)
-    .join("");
+  const xml = await part(zip, "docProps/custom.xml");
+  const kept: string[] = [];
+  let pid = 1;
+  for (const m of xml ? elements(xml, "property") : []) {
+    if (Object.hasOwn(props, attr(m.attrs, "name") ?? "")) continue;
+    kept.push(xml!.slice(m.start, m.end));
+    pid = Math.max(pid, Number(attr(m.attrs, "pid")) || 1);
+  }
+  const ours = Object.entries(props).map(
+    ([name, value]) => `<property fmtid="${FMTID}" pid="${++pid}" name="${escapeXml(name)}"><vt:lpwstr>${escapeXml(value)}</vt:lpwstr></property>`,
+  );
   zip.file(
     "docProps/custom.xml",
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">${body}</Properties>`,
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">${[...kept, ...ours].join("")}</Properties>`,
   );
   let types = (await part(zip, "[Content_Types].xml"))!;
   if (!types.includes('PartName="/docProps/custom.xml"')) types = types.replace("</Types>", `<Override PartName="/docProps/custom.xml" ContentType="${CUSTOM_TYPE}"/></Types>`);
@@ -155,7 +203,7 @@ export async function writeCustomProperties(zip: JSZip, props: Record<string, st
     (await part(zip, "_rels/.rels")) ??
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`;
   if (!rels.includes(CUSTOM_REL)) {
-    const taken = new Set([...rels.matchAll(/Id="([^"]+)"/g)].map((m) => m[1]));
+    const taken = new Set(readRelationships(rels).map((r) => r.id));
     let n = 1;
     while (taken.has(`rIdVm${n}`)) n++;
     rels = rels.replace("</Relationships>", `<Relationship Id="rIdVm${n}" Type="${CUSTOM_REL}" Target="docProps/custom.xml"/></Relationships>`);

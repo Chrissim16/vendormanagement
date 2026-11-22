@@ -19,6 +19,13 @@ export function numbersIn(text: string): string[] {
   return (text.match(/\d[\d.,]*/g) ?? []).map(normal);
 }
 
+/**
+ * What the model was given, as text. Written out as JSON, a line break becomes the two
+ * characters "\n", which would glue an "n" to a figure at the start of a line ("\n21 Mar
+ * 2027" read as "n21"); those are turned back into spaces.
+ */
+const asText = (given: unknown) => (typeof given === "string" ? given : JSON.stringify(given).replace(/\\[nrt]/g, " "));
+
 /** A text with every one of the given names taken out, longest first, so the digits inside a name ("SOW 07") are not read as figures. */
 function without(text: string, names: string[]): string {
   let out = text;
@@ -36,7 +43,7 @@ function without(text: string, names: string[]): string {
  * counts things the reader can see.
  */
 export function ungrounded(text: string, given: unknown, names: string[] = []): string[] {
-  const known = new Set(numbersIn(without(typeof given === "string" ? given : JSON.stringify(given), names.map((n) => JSON.stringify(n).slice(1, -1)).concat(names))));
+  const known = new Set(numbersIn(without(asText(given), names.map((n) => JSON.stringify(n).slice(1, -1)).concat(names))));
   return [...new Set(numbersIn(without(text, names)).filter((n) => !/^\d$/.test(n) && !known.has(n)))];
 }
 
@@ -77,7 +84,7 @@ function tokens(text: string) {
  */
 export function ungroundedFigures(text: string, given: unknown, names: string[] = []): string[] {
   const typed = names.filter((n) => /\p{L}/u.test(n));
-  const source = tokens(without(typeof given === "string" ? given : JSON.stringify(given), typed.map((n) => JSON.stringify(n).slice(1, -1)).concat(typed)));
+  const source = tokens(without(asText(given), typed.map((n) => JSON.stringify(n).slice(1, -1)).concat(typed)));
   const said = tokens(without(text, typed));
   const [dates, money, years, plain] = [new Set(source.dates), new Set(source.money), new Set(source.years), new Set(numbersIn(source.rest))];
   return [

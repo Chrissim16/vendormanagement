@@ -27,7 +27,15 @@ const runXml = (r: Line | Run) => {
   return `<w:r>${props ? `<w:rPr>${props}</w:rPr>` : ""}<w:t xml:space="preserve">${escapeXml(r.text)}</w:t></w:r>`;
 };
 
-/** Collects the body of a document. A list's numbering is filled in when the file is put together, as `{{num:n}}`. */
+/**
+ * Where a list's numbering goes until the file is put together. Its control characters
+ * can never stand in text, which `escapeXml` strips of them, so no words can be taken for it.
+ */
+const LIST_MARK_OPEN = "\u0001num:";
+// eslint-disable-next-line no-control-regex -- the control character is the point: text can never hold it.
+export const LIST_MARK = /\u0001num:(\d+)\u0001/g;
+
+/** Collects the body of a document. A list's numbering is filled in when the file is put together. */
 export class BodyWriter {
   private out: string[] = [];
   /** One entry per list written, in order: whether it is numbered. */
@@ -58,7 +66,8 @@ export class BodyWriter {
     if (style) return this.paragraph(runs, { style });
     const size = { 1: 32, 2: 26, 3: 23 }[level];
     this.out.push(
-      `<w:p><w:pPr><w:keepNext/><w:spacing w:before="${level === 1 ? 360 : 240}" w:after="120"/></w:pPr>${runs
+      // The outline level makes it a heading for Word's navigation, and lets the app find its sections again in a returned copy.
+      `<w:p><w:pPr><w:keepNext/><w:spacing w:before="${level === 1 ? 360 : 240}" w:after="120"/><w:outlineLvl w:val="${level - 1}"/></w:pPr>${runs
         .map((r) => `<w:r><w:rPr><w:b/>${r.italic ? "<w:i/>" : ""}<w:sz w:val="${size}"/></w:rPr><w:t xml:space="preserve">${escapeXml(r.text)}</w:t></w:r>`)
         .join("")}</w:p>`,
     );
@@ -69,7 +78,7 @@ export class BodyWriter {
     const style = (ordered ? this.styles.listNumber : this.styles.listBullet) ?? this.styles.listParagraph;
     for (const it of items)
       this.out.push(
-        `<w:p><w:pPr>${style ? `<w:pStyle w:val="${escapeXml(style)}"/>` : ""}<w:numPr><w:ilvl w:val="0"/><w:numId w:val="{{num:${n}}}"/></w:numPr></w:pPr>${it.map(runXml).join("")}</w:p>`,
+        `<w:p><w:pPr>${style ? `<w:pStyle w:val="${escapeXml(style)}"/>` : ""}<w:numPr><w:ilvl w:val="0"/><w:numId w:val="${LIST_MARK_OPEN}${n}\u0001"/></w:numPr></w:pPr>${it.map(runXml).join("")}</w:p>`,
       );
   }
 

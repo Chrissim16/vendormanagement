@@ -476,3 +476,29 @@ describe("Q-12 an AI rewrite of a section", () => {
     expect((await askRewrite(intro.id, { instruction: "Shorter" })).body.error.code).toBe("rfp_approved");
   });
 });
+
+describe("Q-13 an edit a reviewer made in a heading", () => {
+  it("is taken over into the heading, never into the text", async () => {
+    const r = await inReview();
+    const { roundId } = await round(r.id);
+    const up = ok<Uploaded>(await upload(roundId, await annotate(await copyOf(roundId), [{ replace: "Scope", by: "Scope of work", author: "Ann Berg", under: "Scope" }])), 201);
+    expect(up.rfp.review.remarks[0]).toMatchObject({ inHeading: true, sectionId: up.rfp.sections[1]!.id });
+    const after = ok<RfpDetail>(await act(up.rfp.review.remarks[0]!.id, { action: "take_over" }));
+    expect(after.sections[1]).toMatchObject({ heading: "Scope of work", body: "The tool covers all travel." });
+  });
+});
+
+describe("Q-12 a rewrite of a section with dates in a table", () => {
+  it("is not refused for the dates the section already holds", async () => {
+    const r = await create();
+    const saved = ok<RfpDetail>(
+      await save(r.id, {
+        sections: [{ heading: "Timeline", body: "Steps:\n\n| Step | When |\n| --- | --- |\n| Decision | 21 Mar 2027 |" }],
+        criteria: [{ key: "k", name: "Fit", weight: 100, part: "written" }],
+        questions: [{ text: "Why?", criterionKey: "k" }],
+      }),
+    );
+    const asked = ok<RfpDetail>(await askRewrite(saved.sections[0]!.id, { instruction: "Make it shorter" }), 201);
+    expect(asked.sections[0]!.rewrite!.output.body).toContain("21 Mar 2027");
+  });
+});

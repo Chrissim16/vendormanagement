@@ -180,7 +180,7 @@ export function RfpPage() {
         <div className="flex flex-col gap-10">
           {tab === "overview" && <Overview rfp={rfp} onEdit={() => setDialog("edit")} onCancel={() => setDialog("cancel")} />}
           {tab === "document" && <DocumentTab rfp={rfp} keep={kept} />}
-          {tab === "review" && <ReviewTab rfp={rfp} />}
+          {tab === "review" && <ReviewTab rfp={rfp} unsaved={!!kept.current} onDocument={() => setUrl({ tab: "document" }, { push: true })} />}
           {tab === "candidates" && <CandidatesTab rfp={rfp} />}
           {tab === "responses" && <ResponsesTab rfp={rfp} />}
           {tab === "scoring" && <ScoringTab rfp={rfp} />}

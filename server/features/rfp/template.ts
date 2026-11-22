@@ -7,7 +7,7 @@ import { AppError } from "../../platform/errors";
 import type { Db, Queryable, StoragePort } from "../../platform/ports/types";
 import { plainTemplate } from "./word/plain";
 import type { TemplateFound, WordTemplateInfo } from "../../../shared/wordTemplate";
-import { analyseTemplate } from "./word/template";
+import { analyseTemplate, checkTemplate } from "./word/template";
 
 /** Q-14: the company's Word template, which an admin uploads on the settings page. */
 
@@ -58,6 +58,7 @@ export async function uploadTemplate(ctx: { db: Db; storage: StoragePort }, file
   if (file.data.length > MAX_TEMPLATE_BYTES)
     throw new AppError(400, "file_too_large", "That template is larger than 10 MB. A template with a logo is usually far smaller; check that it holds no large pictures.");
   const found = await analyseTemplate(file.data);
+  await checkTemplate(file.data);
   const key = `templates/${randomUUID()}.${ext}`;
   await ctx.storage.put(key, file.data, "application/octet-stream");
   try {

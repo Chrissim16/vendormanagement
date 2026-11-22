@@ -1,4 +1,3 @@
-import type { JSONContent } from "@tiptap/core";
 import { Extension } from "@tiptap/core";
 import { ListItem } from "@tiptap/extension-list";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
@@ -8,7 +7,8 @@ import StarterKit from "@tiptap/starter-kit";
 import clsx from "clsx";
 import { Bold, Columns3, Heading2, Heading3, Italic, List, ListOrdered, Rows3, Table2, Trash2 } from "lucide-react";
 import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
-import { normalise, parseBlocks, tidyRuns, toMarkdown, type Block, type Run } from "../../../shared/richtext";
+import { normalise, parseBlocks, toMarkdown } from "../../../shared/richtext";
+import { blocksToDoc, docToBlocks } from "../../../shared/richtextDoc";
 
 /**
  * The editor for formatted text (Q-12), a pattern of its own (design guide, "Formatted
@@ -18,67 +18,6 @@ import { normalise, parseBlocks, tidyRuns, toMarkdown, type Block, type Run } fr
  * what the Word file holds. Tab moves between table cells and otherwise leaves the editor,
  * so the keyboard is never caught in it.
  */
-
-// ---------- Between the editor's document and the app's blocks
-
-const runsOf = (nodes: JSONContent[] | undefined): Run[] =>
-  (nodes ?? []).flatMap((n) => {
-    if (n.type === "text")
-      return [
-        {
-          text: n.text ?? "",
-          ...(n.marks?.some((m) => m.type === "bold") ? { bold: true as const } : {}),
-          ...(n.marks?.some((m) => m.type === "italic") ? { italic: true as const } : {}),
-        },
-      ];
-    if (n.type === "hardBreak") return [{ text: " " }];
-    // A paragraph inside a list item or a cell: its words, one after the other.
-    return [...runsOf(n.content), { text: " " }];
-  });
-
-export function docToBlocks(doc: JSONContent): Block[] {
-  const out: Block[] = [];
-  for (const n of doc.content ?? []) {
-    if (n.type === "paragraph") {
-      const runs = tidyRuns(runsOf(n.content));
-      if (runs.length) out.push({ kind: "paragraph", runs });
-    } else if (n.type === "heading") {
-      const runs = tidyRuns(runsOf(n.content));
-      if (runs.length) out.push({ kind: "heading", level: n.attrs?.level === 3 ? 3 : 2, runs });
-    } else if (n.type === "bulletList" || n.type === "orderedList") {
-      // A list pasted in with levels is kept as one level.
-      const flat = (list: JSONContent): Run[][] =>
-        (list.content ?? []).flatMap((li) => [
-          tidyRuns(runsOf((li.content ?? []).filter((c) => c.type !== "bulletList" && c.type !== "orderedList"))),
-          ...(li.content ?? []).filter((c) => c.type === "bulletList" || c.type === "orderedList").flatMap(flat),
-        ]);
-      const items = flat(n).filter((it) => it.length);
-      if (items.length) out.push({ kind: "list", ordered: n.type === "orderedList", items });
-    } else if (n.type === "table") {
-      const rows = (n.content ?? []).map((tr) => (tr.content ?? []).map((cell) => tidyRuns(runsOf(cell.content))));
-      const width = Math.max(0, ...rows.map((r) => r.length));
-      if (width) out.push({ kind: "table", rows: rows.map((r) => Array.from({ length: width }, (_, i) => r[i] ?? [])) });
-    }
-  }
-  return out;
-}
-
-const textNodes = (runs: Run[]): JSONContent[] =>
-  runs.map((r) => ({ type: "text", text: r.text, ...(r.bold || r.italic ? { marks: [...(r.bold ? [{ type: "bold" }] : []), ...(r.italic ? [{ type: "italic" }] : [])] } : {}) }));
-const para = (runs: Run[]): JSONContent => ({ type: "paragraph", ...(runs.length ? { content: textNodes(runs) } : {}) });
-
-export function blocksToDoc(blocks: Block[]): JSONContent {
-  const content = blocks.map((b): JSONContent => {
-    if (b.kind === "paragraph") return para(b.runs);
-    if (b.kind === "heading") return { type: "heading", attrs: { level: b.level }, content: textNodes(b.runs) };
-    if (b.kind === "list") return { type: b.ordered ? "orderedList" : "bulletList", content: b.items.map((it) => ({ type: "listItem", content: [para(it)] })) };
-    return {
-      type: "table",
-      content: b.rows.map((row, r) => ({ type: "tableRow", content: row.map((cell) => ({ type: r === 0 ? "tableHeader" : "tableCell", content: [para(cell)] })) })),
-    };
-  });
-  return { type: "doc", content: content.length ? content : [{ type: "paragraph" }] };
-}
 
 const markdownOf = (editor: Editor) => toMarkdown(docToBlocks(editor.getJSON()));
 

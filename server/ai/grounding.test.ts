@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { numbersIn, ungrounded } from "./grounding";
+import { numbersIn, ungrounded, ungroundedFigures } from "./grounding";
 
 describe("figures in AI writing must be figures the app provided", () => {
   const given = { budget: "€ 54,000.00", used: "67%", rating: "4.0 out of 5", ends: "9 Dec 2026", sow: "SOW 07", days: "in 18 days" };
@@ -42,5 +42,12 @@ describe("Q-12 the AI's rewrite of a section quotes no figure it was not given",
     expect(rfpSectionRewrite.check!(input, { body: "1. About 400 staff\n2. From 1 March, in 12 countries, within 30 days." })).toBeNull();
     expect(rfpSectionRewrite.check!(input, { body: "About 450 staff." })).toContain("450");
     expect(rfpSectionRewrite.check!(input, { body: "From 2 March." })).toContain("2 mar");
+  });
+});
+
+describe("a figure at the start of a line in what the model was given", () => {
+  it("counts as given, as it does in the middle of a line", () => {
+    expect(ungroundedFigures("Decision by 21 Mar 2027.", { body: "| Decision |\n21 Mar 2027 |" })).toEqual([]);
+    expect(ungrounded("We have 400 staff.", { body: "Line one\n400 staff" })).toEqual([]);
   });
 });

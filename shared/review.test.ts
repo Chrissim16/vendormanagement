@@ -39,3 +39,29 @@ describe("Q-13 taking a suggested edit over", () => {
     expect(applySuggestedEdit("Add here.", edit("", "x", "", ""))).toEqual({ ok: false, why: "not_found" });
   });
 });
+
+describe("Q-13 a suggested edit never changes part of a word, nor words the reviewer did not touch", () => {
+  it("does not take a number inside another number, nor a word inside another word", () => {
+    // The words around "30" changed: "30" alone is not distinctive enough to be looked for.
+    expect(applySuggestedEdit("Support within 45 days. We have 300 users.", edit("30", "60", "within ", " days."))).toEqual({ ok: false, why: "not_found" });
+    expect(applySuggestedEdit("Yesterday we met.", edit("", " and no", "Yes", ""))).toEqual({ ok: false, why: "not_found" });
+    expect(applySuggestedEdit("We have 30 users and 300 seats.", edit("30", "40", "", " users"))).toEqual({ ok: true, body: "We have 40 users and 300 seats." });
+  });
+  it("still finds distinctive words whose surroundings changed", () => {
+    expect(applySuggestedEdit("All of it is confidential, now.", edit("confidential", "strictly confidential", "is ", " and"))).toEqual({
+      ok: true,
+      body: "All of it is strictly confidential, now.",
+    });
+  });
+  it("applies an edit of a heading to the heading", async () => {
+    const { applyToHeading } = await import("./review");
+    expect(applyToHeading("Scope", edit("", " of work", "Scope", ""))).toEqual({ ok: true, heading: "Scope of work" });
+    expect(applyToHeading("Scope and goals", edit("goals", "aims", "and ", ""))).toEqual({ ok: true, heading: "Scope and aims" });
+  });
+});
+
+describe("words added next to bold words", () => {
+  it("take the marks of the words before them", () => {
+    expect(applySuggestedEdit("Plain with **bold** end.", edit("", "really ", "Plain with ", "bold"))).toEqual({ ok: true, body: "Plain with really **bold** end." });
+  });
+});

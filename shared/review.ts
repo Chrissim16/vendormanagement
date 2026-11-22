@@ -21,6 +21,8 @@ export interface ReviewerRemark {
   author: string;
   /** The section it is placed in, or null: not placed. */
   sectionId: string | null;
+  /** A suggested edit made in the section's heading; taken over into the heading. */
+  inHeading: boolean;
   /** The heading it stands under in the file, or "Cover page". */
   foundUnder: string;
   anchorText: string | null;
@@ -55,15 +57,39 @@ export const openRemarks = (remarks: Pick<ReviewerRemark, "status">[]) => remark
 
 export type EditOutcome = { ok: true; body: string } | { ok: false; why: "not_found" | "more_than_once" };
 
-/** Where a text stands in a section: which piece (paragraph, item, cell) and where in it. */
-function occurrences(units: Run[][], needle: string): { unit: number; at: number }[] {
+const WORD = /[\p{L}\p{N}_]/u;
+/** Whether a match from `at` of `length` characters starts and ends on the edge of a word, so it never takes part of a word. */
+const onWordEdges = (text: string, at: number, length: number, needle: string) =>
+  (!WORD.test(needle[0] ?? "") || !WORD.test(text[at - 1] ?? "")) && (!WORD.test(needle[needle.length - 1] ?? "") || !WORD.test(text[at + length] ?? ""));
+
+/** Where a text stands in a section, as whole words: which piece (paragraph, item, cell) and where in it. */
+function occurrences(texts: string[], needle: string): { unit: number; at: number }[] {
   const out: { unit: number; at: number }[] = [];
   if (!needle) return out;
-  units.forEach((runs, unit) => {
-    const text = runsText(runs);
-    for (let at = text.indexOf(needle); at >= 0; at = text.indexOf(needle, at + 1)) out.push({ unit, at });
+  texts.forEach((text, unit) => {
+    for (let at = text.indexOf(needle); at >= 0; at = text.indexOf(needle, at + 1)) if (onWordEdges(text, at, needle.length, needle)) out.push({ unit, at });
   });
   return out;
+}
+
+/** The removed words alone are distinctive enough to find them without the words around them: two words or more, or a word of six letters or more. */
+const distinctive = (removed: string) => removed.trim().split(/\s+/).length >= 2 || (removed.match(/\p{L}/gu)?.length ?? 0) >= 6;
+
+/** Where to make an edit in some pieces of text: by its words with those around them, or else by the removed words alone when they are distinctive. */
+type Place = { why: "not_found" | "more_than_once" } | { unit: number; start: number; end: number; why?: never };
+function locate(texts: string[], e: { removedText: string | null; addedText: string | null; beforeText: string | null; afterText: string | null }): Place {
+  const removed = e.removedText ?? "";
+  const before = e.beforeText ?? "";
+  const after = e.afterText ?? "";
+  if (!removed && !e.addedText) return { why: "not_found" };
+  const tries = [{ needle: before + removed + after, lead: before.length }];
+  if (removed && (before || after) && distinctive(removed)) tries.push({ needle: removed, lead: 0 });
+  for (const t of tries) {
+    const found = occurrences(texts, t.needle);
+    if (found.length > 1) return { why: "more_than_once" };
+    if (found.length === 1) return { unit: found[0]!.unit, start: found[0]!.at + t.lead, end: found[0]!.at + t.lead + removed.length };
+  }
+  return { why: "not_found" };
 }
 
 /** The runs with the characters from `start` to `end` replaced by `text`, which takes the marks of the run it lands in. */
@@ -76,7 +102,12 @@ function replaceIn(runs: Run[], start: number, end: number, text: string): Run[]
     const to = pos + r.text.length;
     pos = to;
     if (to <= start || from >= end) {
-      // Insertion exactly at the start of this run, when nothing is removed: before it, in its marks.
+      // Words added where nothing is removed take the marks of the words before them, as in Word; at the very start, those of the first words.
+      if (!placed && start === end && to === start && start > 0) {
+        out.push({ ...r, text: r.text + text });
+        placed = true;
+        continue;
+      }
       if (!placed && from === start && start === end) {
         out.push({ ...r, text });
         placed = true;
@@ -120,30 +151,27 @@ export function applySuggestedEdit(
 ): EditOutcome {
   const blocks = parseBlocks(body);
   const units = editableUnits(blocks);
-  const removed = e.removedText ?? "";
-  const added = e.addedText ?? "";
-  const before = e.beforeText ?? "";
-  const after = e.afterText ?? "";
-  if (!removed && !added) return { ok: false, why: "not_found" };
-  const tries = [{ needle: before + removed + after, lead: before.length }];
-  if (removed && (before || after)) tries.push({ needle: removed, lead: 0 });
-  for (const t of tries) {
-    const found = occurrences(
-      units.map((u) => u.runs),
-      t.needle,
-    );
-    if (found.length > 1) return { ok: false, why: "more_than_once" };
-    if (found.length === 1) {
-      const { unit, at } = found[0]!;
-      const start = at + t.lead;
-      const u = units[unit]!;
-      u.set(replaceIn(u.runs, start, start + removed.length, added));
-      // A paragraph or item left without words goes; a table cell may be empty.
-      const cleaned = blocks
-        .map((b) => (b.kind === "list" ? { ...b, items: b.items.filter((it) => it.length) } : b))
-        .filter((b) => (b.kind === "list" ? b.items.length > 0 : b.kind === "table" ? true : b.runs.length > 0));
-      return { ok: true, body: toMarkdown(cleaned) };
-    }
-  }
-  return { ok: false, why: "not_found" };
+  const place = locate(
+    units.map((u) => runsText(u.runs)),
+    e,
+  );
+  if (place.why) return { ok: false, why: place.why };
+  const u = units[place.unit]!;
+  u.set(replaceIn(u.runs, place.start, place.end, e.addedText ?? ""));
+  // A paragraph or item left without words goes; a table cell may be empty.
+  const cleaned = blocks
+    .map((b) => (b.kind === "list" ? { ...b, items: b.items.filter((it) => it.length) } : b))
+    .filter((b) => (b.kind === "list" ? b.items.length > 0 : b.kind === "table" ? true : b.runs.length > 0));
+  return { ok: true, body: toMarkdown(cleaned) };
+}
+
+/** A reviewer's edit of a section's heading, by the same rule. */
+export function applyToHeading(
+  heading: string,
+  e: { removedText: string | null; addedText: string | null; beforeText: string | null; afterText: string | null },
+): { ok: true; heading: string } | { ok: false; why: "not_found" | "more_than_once" } {
+  const place = locate([heading], e);
+  if (place.why) return { ok: false, why: place.why };
+  const next = (heading.slice(0, place.start) + (e.addedText ?? "") + heading.slice(place.end)).replace(/\s+/g, " ").trim();
+  return next ? { ok: true, heading: next } : { ok: false, why: "not_found" };
 }

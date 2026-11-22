@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { rfpReviewerRemarks, rfpReviewFiles, rfpReviewRounds, rfpSections } from "../../../db/schema";
-import { applySuggestedEdit, remarkKindLabels, resolutionLabels, type ReviewerRemark } from "../../../shared/review";
+import { applySuggestedEdit, applyToHeading, remarkKindLabels, resolutionLabels, type ReviewerRemark } from "../../../shared/review";
 import { normalise } from "../../../shared/richtext";
 import { contentEditable, isOpen, type RfpDetail } from "../../../shared/rfp";
 import type { User } from "../../../shared/types";
@@ -89,7 +89,9 @@ export async function makeRound(ctx: RfpContext, rfpId: string, by: User): Promi
     made = true;
     return { "Review round": { from: last ? `version ${last.version}` : null, to: `version ${version}: review copy made` } };
   }).catch(async (e) => {
-    if (stored) await ctx.storage.remove(key).catch(() => undefined);
+    // The file goes only when the round was not saved; a failure after saving leaves both.
+    if (stored && !(await ctx.db.select({ id: rfpReviewRounds.id }).from(rfpReviewRounds).where(eq(rfpReviewRounds.storageKey, key))).length)
+      await ctx.storage.remove(key).catch(() => undefined);
     throw e;
   });
   return { rfp, roundId, made };
@@ -187,6 +189,7 @@ export async function uploadReturned(
       author: m.author,
       sectionId: placeOf(m, content, current),
       foundUnder: m.foundUnder,
+      inHeading: m.inHeading,
       anchorText: m.anchorText,
       text: m.text,
       removedText: m.removedText,
@@ -208,7 +211,8 @@ export async function uploadReturned(
       },
     };
   }).catch(async (e) => {
-    if (stored) await ctx.storage.remove(key).catch(() => undefined);
+    if (stored && !(await ctx.db.select({ id: rfpReviewFiles.id }).from(rfpReviewFiles).where(eq(rfpReviewFiles.storageKey, key))).length)
+      await ctx.storage.remove(key).catch(() => undefined);
     throw e;
   });
   return { rfp, version: round.version, otherVersion: round.id !== target.id, read: summary };
@@ -296,6 +300,26 @@ export async function actOnRemark(ctx: RfpContext, remarkId: string, input: unkn
       throw new AppError(409, "not_an_edit", "A comment has no edit to take over. Change the text, or ask the AI to, and mark the comment as dealt with.");
     const s = r.sections.find((x) => x.id === m.sectionId);
     if (!s) throw new AppError(409, "not_placed", "This suggested edit is not placed in a section. Place it first, or make the change by hand.");
+    if (m.inHeading) {
+      // An edit the reviewer made in the heading changes the heading.
+      const h = applyToHeading(s.heading, m);
+      if (!h.ok)
+        throw new AppError(
+          409,
+          "edit_not_applicable",
+          `The words this edit changes are no longer in the heading "${s.heading}" as it is now. Make the change by hand and mark it as dealt with.`,
+        );
+      if (r.sections.some((x) => x.id !== s.id && x.heading.toLowerCase() === h.heading.toLowerCase()))
+        throw new AppError(409, "edit_not_applicable", `Another section is already called "${h.heading}". Make the change by hand and mark it as dealt with.`);
+      await tx.update(rfpSections).set({ heading: h.heading }).where(eq(rfpSections.id, s.id));
+      await resolveRemarks(tx, [remarkId], "taken_over", by, ctx.now());
+      return {
+        [`heading of section ${s.heading}`]: { from: s.heading, to: h.heading },
+        [name]: { from: "open", to: `dealt with: ${resolutionLabels.taken_over}` },
+        ...(await settleDraft(ctx, tx, r, by)),
+        ...(await supersedeApprovals(tx, r)),
+      };
+    }
     const result = applySuggestedEdit(s.body, m);
     if (!result.ok)
       throw new AppError(

@@ -1,5 +1,6 @@
 import type JSZip from "jszip";
-import { attr, decodeXml, part, readStyles } from "./ooxml";
+import { AppError } from "../../../platform/errors";
+import { attr, decodeXml, elements, part, readStyles, TOKENS } from "./ooxml";
 
 /**
  * Q-13: reads the comments and tracked changes from a review copy a reviewer sent back,
@@ -18,6 +19,8 @@ export interface RawRemark {
   /** Which of the headings with that text (0 for the first), when a heading occurs more than once. */
   occurrence: number;
   position: number;
+  /** A suggested edit made in the heading itself, not in the section's text. */
+  inHeading: boolean;
   anchorText: string | null;
   text: string | null;
   removedText: string | null;
@@ -40,6 +43,7 @@ type Seg = Text | Mark;
 const isMark = (s: Seg): s is Mark => s.kind === "start" || s.kind === "end" || s.kind === "ref";
 interface Para {
   style: string | null;
+  outline: boolean;
   segs: Seg[];
 }
 
@@ -67,20 +71,20 @@ async function readComments(zip: JSZip): Promise<Map<string, { author: string; t
   const xml = await part(zip, "word/comments.xml");
   if (!xml) return out;
   const lastPara = new Map<string, string>();
-  for (const m of xml.matchAll(/<w:comment\b([^>]*)>([\s\S]*?)<\/w:comment>/g)) {
-    const id = attr(m[1]!, "w:id");
+  for (const m of elements(xml, "w:comment")) {
+    const id = attr(m.attrs, "w:id");
     if (id == null) continue;
-    const paras = [...m[2]!.matchAll(/<w:p\b([^>]*)>([\s\S]*?)<\/w:p>/g)];
-    const text = paras.map((p) => [...p[2]!.matchAll(/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g)].map((t) => decodeXml(t[1]!)).join("")).join("\n");
-    const paraId = paras.length ? attr(paras[paras.length - 1]![1]!, "w14:paraId") : null;
+    const paras = [...elements(m.inner, "w:p")];
+    const text = paras.map((p) => [...elements(p.inner, "w:t")].map((t) => decodeXml(t.inner)).join("")).join("\n");
+    const paraId = paras.length ? attr(paras[paras.length - 1]!.attrs, "w14:paraId") : null;
     if (paraId) lastPara.set(paraId, id);
-    out.set(id, { author: attr(m[1]!, "w:author") || "Unknown reviewer", text: squash(text.replace(/\n/g, " \n ")).replace(/ \n /g, "\n"), parent: null });
+    out.set(id, { author: attr(m.attrs, "w:author") || "Unknown reviewer", text: squash(text.replace(/\n/g, " \n ")).replace(/ \n /g, "\n"), parent: null });
   }
   // A reply names the paragraph of the comment it answers (commentsExtended).
   const ext = await part(zip, "word/commentsExtended.xml");
-  for (const m of ext?.matchAll(/<w15:commentEx\b([^>]*)\/?>/g) ?? []) {
-    const id = lastPara.get(attr(m[1]!, "w15:paraId") ?? "");
-    const parent = lastPara.get(attr(m[1]!, "w15:paraIdParent") ?? "");
+  for (const m of ext ? elements(ext, "w15:commentEx") : []) {
+    const id = lastPara.get(attr(m.attrs, "w15:paraId") ?? "");
+    const parent = lastPara.get(attr(m.attrs, "w15:paraIdParent") ?? "");
     if (id && parent && out.has(id)) out.get(id)!.parent = parent;
   }
   return out;
@@ -90,7 +94,8 @@ async function readComments(zip: JSZip): Promise<Map<string, { author: string; t
 export async function readRemarks(zip: JSZip): Promise<RawRemark[]> {
   const xml = (await part(zip, "word/document.xml")) ?? "";
   const styles = readStyles(await part(zip, "word/styles.xml"));
-  const heading1 = new Set([...styles.values()].filter((s) => s.type === "paragraph" && s.name.toLowerCase() === "heading 1").map((s) => s.id));
+  // A top-level heading: Heading 1, another style at the top outline level, or a paragraph that says so itself (the app writes that where a template has no Heading 1).
+  const heading1 = new Set([...styles.values()].filter((s) => s.type === "paragraph" && (s.name.toLowerCase() === "heading 1" || s.outline)).map((s) => s.id));
   const comments = await readComments(zip);
 
   const paras: Para[] = [];
@@ -99,6 +104,9 @@ export async function readRemarks(zip: JSZip): Promise<RawRemark[]> {
   let pending: Seg[] = [];
   let textKind: "t" | "del" | null = null;
   let inPPrChange = 0;
+  // Word keeps a text box twice, once for older readers (mc:Fallback); that copy is skipped.
+  let inFallback = 0;
+  let inRun = 0;
   const cur = () => stack[stack.length - 1];
   const push = (s: Seg) => (cur() ? cur()!.segs.push(s) : pending.push(s));
   const addText = (raw: string, del: boolean) => {
@@ -108,7 +116,7 @@ export async function readRemarks(zip: JSZip): Promise<RawRemark[]> {
   };
 
   const body = xml.indexOf("<w:body");
-  const re = /<(\/?)([\w:]+)([^>]*?)(\/?)>|([^<]+)/g;
+  const re = new RegExp(TOKENS.source, "g");
   re.lastIndex = Math.max(0, body);
   for (let m = re.exec(xml); m; m = re.exec(xml)) {
     if (m[5] !== undefined) {
@@ -117,14 +125,28 @@ export async function readRemarks(zip: JSZip): Promise<RawRemark[]> {
     }
     const [, close, name, attrs, selfClose] = m;
     if (name === "w:body" && close) break;
+    if (name === "mc:Fallback" && !selfClose) {
+      inFallback += close ? -1 : 1;
+      continue;
+    }
+    if (inFallback) continue;
     if (inPPrChange && name !== "w:pPrChange") continue;
     switch (name) {
+      case "w:r":
+        if (!selfClose) inRun += close ? -1 : 1;
+        break;
+      case "w:outlineLvl":
+        if (cur() && attr(attrs!, "w:val") === "0") cur()!.outline = true;
+        break;
+      case "w:noBreakHyphen":
+        if (inRun && !close) addText("-", false);
+        break;
       case "w:p":
         if (close) {
           const p = stack.pop();
           if (p) paras.push(p);
         } else if (!selfClose) {
-          stack.push({ style: null, segs: pending });
+          stack.push({ style: null, outline: false, segs: pending });
           pending = [];
         }
         break;
@@ -150,9 +172,11 @@ export async function readRemarks(zip: JSZip): Promise<RawRemark[]> {
         textKind = close || selfClose ? null : "del";
         break;
       case "w:tab":
+      case "w:ptab":
       case "w:br":
       case "w:cr":
-        if (!close) {
+        // A tab stop in a paragraph's settings is not a character; only one in a run is.
+        if (!close && inRun) {
           const change = changes[changes.length - 1];
           push({ kind: change?.kind ?? "same", text: " ", author: change?.author ?? "" });
         }
@@ -183,7 +207,8 @@ export async function readRemarks(zip: JSZip): Promise<RawRemark[]> {
   for (const p of paras) {
     let original = "";
     for (const s of p.segs) if (!isMark(s) && s.kind !== "ins") original += s.text;
-    if (p.style && heading1.has(p.style) && squash(original)) {
+    const isHeading = ((p.style && heading1.has(p.style)) || p.outline) && !!squash(original);
+    if (isHeading) {
       heading = squash(original);
       occurrence = seen.get(heading) ?? 0;
       seen.set(heading, occurrence + 1);
@@ -204,6 +229,7 @@ export async function readRemarks(zip: JSZip): Promise<RawRemark[]> {
         position: position++,
         anchorText: null,
         text: null,
+        inHeading: isHeading,
         removedText: clip(g.removed),
         addedText: clip(g.added),
         beforeText: wordsBefore(original, g.start),
@@ -245,6 +271,7 @@ export async function readRemarks(zip: JSZip): Promise<RawRemark[]> {
       foundUnder: start?.under ?? COVER,
       occurrence: start?.occurrence ?? 0,
       position: start?.position ?? position++,
+      inHeading: false,
       anchorText: anchor ? clip(anchor, 600) : null,
       text: clip(c.text || ""),
       removedText: null,
@@ -253,5 +280,11 @@ export async function readRemarks(zip: JSZip): Promise<RawRemark[]> {
       afterText: null,
     });
   }
-  return out.sort((a, b) => a.position - b.position).slice(0, MAX_REMARKS);
+  if (out.length > MAX_REMARKS)
+    throw new AppError(
+      400,
+      "too_many_remarks",
+      `That file holds ${out.length} comments and tracked changes, more than the ${MAX_REMARKS} the app reads from one file. Ask the reviewer to accept or reject the changes they no longer mean, and to send it again.`,
+    );
+  return out.sort((a, b) => a.position - b.position);
 }

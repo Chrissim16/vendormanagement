@@ -108,3 +108,11 @@ describe("any text the editor can hold", () => {
     }
   });
 });
+
+describe("a table row of dashes", () => {
+  it("is kept when it is not the line right under the header", () => {
+    const t = parseBlocks("| Item | Price |\n| --- | --- |\n| - | - |\n| Licence | 10 |")[0] as Extract<Block, { kind: "table" }>;
+    expect(t.rows).toHaveLength(3);
+    expect(t.rows[1]).toEqual([[{ text: "-" }], [{ text: "-" }]]);
+  });
+});

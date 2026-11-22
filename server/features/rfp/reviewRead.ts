@@ -41,6 +41,7 @@ export async function reviewOf(db: Queryable, rfpId: string): Promise<{ rounds: 
         author: m.author,
         sectionId: m.sectionId,
         foundUnder: m.foundUnder,
+        inHeading: m.inHeading,
         anchorText: m.anchorText,
         text: m.text,
         removedText: m.removedText,

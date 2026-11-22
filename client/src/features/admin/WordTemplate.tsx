@@ -29,7 +29,11 @@ function Found({ found }: { found: TemplateFound }) {
     {
       label: "Pictures",
       ok: found.pictures > 0,
-      text: found.pictures ? `${found.pictures === 1 ? "One picture" : `${found.pictures} pictures`}, such as the logo, kept where they are.` : "None, so no logo.",
+      text: found.pictures
+        ? found.pictures === 1
+          ? "One picture, such as a logo, kept where it is."
+          : `${found.pictures} pictures, such as the logo, kept where they are.`
+        : "None, so no logo.",
     },
     { label: "Font", ok: !!found.font, text: found.font ? `The text is set in ${found.font}, as in the template.` : "The template does not name one; Word's own is used." },
     {

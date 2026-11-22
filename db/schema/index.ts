@@ -879,6 +879,8 @@ export const rfpReviewerRemarks = pgTable(
     text: text("text"),
     removedText: text("removed_text"),
     addedText: text("added_text"),
+    /** A suggested edit made in the section's heading itself; taken over into the heading, not the text. */
+    inHeading: boolean("in_heading").notNull().default(false),
     /** A few words around a suggested edit, as in the file, so that it is found in the right place. */
     beforeText: text("before_text"),
     afterText: text("after_text"),

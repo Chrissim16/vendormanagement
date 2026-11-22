@@ -19,7 +19,7 @@ const content: WordContent = {
   demoWeight: 30,
   sections: [
     { id: "s1", heading: "Introduction", body: "We **invite** you.\n\n## Background\n\n- one\n- two\n\n1. first\n2. second\n\n| Item | Detail |\n| --- | --- |\n| Users | 250 |" },
-    { id: "s2", heading: "Process", body: "1. again from one\n2. two" },
+    { id: "s2", heading: "Process", body: "1. again from one\n2. two\n\nThe tool covers all travel." },
   ],
   criteria: [
     { id: "k1", name: "Fit", weight: 100, part: "written" },
@@ -167,5 +167,89 @@ describe("Q-12 Q-14 the RFP as a Word file made from a template", () => {
     expect(zip.file("word/numbering.xml")).toBeTruthy();
     expect(await zip.file("[Content_Types].xml")!.async("string")).toContain('PartName="/word/numbering.xml"');
     expect(await zip.file("word/_rels/document.xml.rels")!.async("string")).toContain("numbering.xml");
+  });
+});
+
+describe("a crafted file cannot hold the app up", () => {
+  it("reads unclosed or endless tags in a moment, however many there are", async () => {
+    const { readStyles, readCustomProperties, elements } = await import("./ooxml");
+    const many = '<w:style a="1">'.repeat(200_000);
+    let t = performance.now();
+    readStyles(`<w:styles>${many}</w:styles>`);
+    fillMarks(`<w:p>${"<w:t>[".repeat(200_000)}`, { title: "x" });
+    fillMarks("<a<a".repeat(200_000), null);
+    expect([...elements("<w:comment x".repeat(200_000), "w:comment")]).toEqual([]);
+    const zip = new JSZip();
+    zip.file("docProps/custom.xml", "<property a>".repeat(200_000));
+    await readCustomProperties(zip);
+    expect(performance.now() - t).toBeLessThan(2000);
+    t = performance.now();
+    const { readRemarks } = await import("./review");
+    const doc = new JSZip();
+    doc.file("word/document.xml", `<w:document><w:body>${"<w:p<w:r".repeat(200_000)}</w:body></w:document>`);
+    doc.file("word/comments.xml", '<w:comment w:id="1">'.repeat(100_000));
+    await readRemarks(doc);
+    expect(performance.now() - t).toBeLessThan(2000);
+  });
+});
+
+describe("Q-14 awkward templates", () => {
+  it("puts the RFP's text before the body's own last section settings, also when those carry a tracked change or are empty", async () => {
+    const { finalSectionAt } = await import("./template");
+    const changed = '<w:body><w:p/><w:sectPr><w:pgSz/><w:sectPrChange w:author="A"><w:sectPr><w:pgSz/></w:sectPr></w:sectPrChange></w:sectPr></w:body>';
+    expect(finalSectionAt(changed)).toBe(changed.indexOf("<w:sectPr>"));
+    const empty = "<w:body><w:p/><w:sectPr/></w:body>";
+    expect(finalSectionAt(empty)).toBe(empty.indexOf("<w:sectPr/>"));
+    const inParagraph = "<w:body><w:p><w:pPr><w:sectPr><w:pgSz/></w:sectPr></w:pPr></w:p></w:body>";
+    expect(finalSectionAt(inParagraph)).toBe(inParagraph.indexOf("</w:body>"));
+  });
+
+  it("refuses a template with comments or tracked changes left in it", async () => {
+    const { checkTemplate } = await import("./template");
+    const withChange = await handMade({ body: '<w:p><w:ins w:id="1" w:author="Someone"><w:r><w:t>[Title]</w:t></w:r></w:ins></w:p>' });
+    await expect(checkTemplate(withChange)).rejects.toMatchObject({ code: "template_has_remarks" });
+    await expect(checkTemplate(await exampleTemplate())).resolves.toBeUndefined();
+  });
+
+  it("keeps the template's own document properties as they were, and uses its numbering wherever it keeps it", async () => {
+    const zip = await JSZip.loadAsync(await exampleTemplate());
+    zip.file(
+      "docProps/custom.xml",
+      '<?xml version="1.0"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="2" name="Department"><vt:lpwstr></vt:lpwstr></property><property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="3" name="Approved"><vt:bool>true</vt:bool></property></Properties>',
+    );
+    let types = await zip.file("[Content_Types].xml")!.async("string");
+    types = types.replace("</Types>", '<Override PartName="/docProps/custom.xml" ContentType="application/vnd.openxmlformats-officedocument.custom-properties+xml"/></Types>');
+    zip.file("[Content_Types].xml", types);
+    // Its numbering under another name.
+    const numbering = await zip.file("word/numbering.xml")!.async("string");
+    zip.remove("word/numbering.xml");
+    zip.file("word/numbers.xml", numbering);
+    zip.file("[Content_Types].xml", (await zip.file("[Content_Types].xml")!.async("string")).replace("/word/numbering.xml", "/word/numbers.xml"));
+    zip.file("word/_rels/document.xml.rels", (await zip.file("word/_rels/document.xml.rels")!.async("string")).replace('Target="numbering.xml"', 'Target="numbers.xml"'));
+    const made = await JSZip.loadAsync(
+      await rfpWord(content, { template: await zip.generateAsync({ type: "nodebuffer" }), today: "2026-11-22", version: 1, review: { rfpId: "r" } }),
+    );
+    const custom = await made.file("docProps/custom.xml")!.async("string");
+    expect(custom).toContain('name="Department"><vt:lpwstr></vt:lpwstr>');
+    expect(custom).toContain('name="Approved"><vt:bool>true</vt:bool>');
+    expect(custom).toContain('name="Vendor Management RFP"');
+    expect(made.file("word/numbering.xml")).toBeNull();
+    expect(await made.file("word/numbers.xml")!.async("string")).toContain("<w:startOverride");
+  });
+
+  it("writes a heading as a heading where the template has no heading style, so a returned copy is still placed", async () => {
+    const t = await handMade({ body: "<w:p><w:r><w:t>[Title]</w:t></w:r></w:p>" });
+    const doc = await rfpWord(content, { template: t, today: "2026-11-22", version: 1, review: { rfpId: "r" } });
+    const { annotate } = await import("./annotate");
+    const { readRemarks } = await import("./review");
+    const remarks = await readRemarks(await JSZip.loadAsync(await annotate(doc, [{ comment: "Hm", on: "covers all travel", author: "A" }])));
+    expect(remarks[0]).toMatchObject({ foundUnder: "Process" });
+  });
+
+  it("never takes words in the text for a list's numbering", async () => {
+    const t = await exampleTemplate();
+    const odd = { ...content, sections: [{ id: "s", heading: "Odd", body: "Literally {{num:0}} here.\n\n- a" }] };
+    const xml = await xmlOf(await rfpWord(odd, { template: t, today: "2026-11-22", version: 1 }));
+    expect(xml).toContain("Literally {{num:0}} here.");
   });
 });

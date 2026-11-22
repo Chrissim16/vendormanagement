@@ -1,0 +1,1 @@
+ALTER TABLE "rfp_reviewer_remarks" ADD COLUMN "in_heading" boolean DEFAULT false NOT NULL;

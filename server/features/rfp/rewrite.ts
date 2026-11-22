@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { rfpSections } from "../../../db/schema";
-import { normalise } from "../../../shared/richtext";
+import { normalise, parseBlocks, TABLE_LIMITS } from "../../../shared/richtext";
 import { contentEditable, isOpen, rewriteAskSchema, rewriteReviewSchema, type RfpDetail } from "../../../shared/rfp";
 import type { User } from "../../../shared/types";
 import { ask, recordSuggestion, replaced, reviewSuggestion } from "../../ai";
@@ -104,6 +104,12 @@ export async function reviewRewrite(ctx: RfpContext, sectionId: string, input: u
       throw new AppError(409, "rewrite_outdated", "The section was changed after the AI rewrote it, so using the rewrite would undo that change. Reject it, or ask the AI again.");
     const body = normalise(v.body ?? rw.output.body);
     if (!body) throw new AppError(400, "invalid", "The rewrite has no text left. Write something, or reject it.", { body: "Write the text of the section." });
+    // The rules of a saved section hold for a rewrite too.
+    if (parseBlocks(body).some((b) => b.kind === "table" && (b.rows.length > TABLE_LIMITS.rows || (b.rows[0]?.length ?? 0) > TABLE_LIMITS.columns)))
+      throw new AppError(400, "invalid", `A table has at most ${TABLE_LIMITS.rows} rows and ${TABLE_LIMITS.columns} columns. Make it smaller before using the text.`, {
+        body: `A table has at most ${TABLE_LIMITS.rows} rows and ${TABLE_LIMITS.columns} columns.`,
+      });
+    if (body.length > 20_000) throw new AppError(400, "invalid", "The text is longer than a section may be (20,000 characters).", { body: "At most 20,000 characters." });
     const status = body === normalise(rw.output.body) ? "accepted" : "edited";
     await tx.update(rfpSections).set({ body, bodyFormat: "markdown" }).where(eq(rfpSections.id, sectionId));
     await reviewSuggestion(tx, rw.id, status, by.email, ctx.now());

@@ -21,7 +21,9 @@ export async function annotate(docx: Buffer, notes: Annotation[]): Promise<Buffe
   let id = 0;
   const date = "2026-11-20T10:00:00Z";
   for (const n of notes) {
-    const from = n.under ? xml.indexOf(`>${escapeXml(n.under)}<`) : xml.indexOf("<w:body>");
+    // From the start of the heading's paragraph, so that the heading itself can be edited too.
+    const heading = n.under ? xml.indexOf(`>${escapeXml(n.under)}<`) : xml.indexOf("<w:body>");
+    const from = n.under && heading >= 0 ? xml.lastIndexOf("<w:p>", heading) : heading;
     if (from < 0) throw new Error(`No heading "${n.under}" in the file`);
     const find = "comment" in n ? n.on : n.replace;
     RUN.lastIndex = from;
