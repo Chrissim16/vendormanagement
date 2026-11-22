@@ -18,6 +18,7 @@ Fields marked `*` are required. Every table also has `id`, `created_at`, `create
 `status*` (prospect | active | on_hold | offboarded), `owner_user_id*`, `website`, `country`, `description`, `notes`,
 `scoring_enabled*` (default yes), `nda_required*` (default yes), `dpa_required*` (default yes).
 - A vendor with an active agreement cannot be offboarded.
+- Owners (vendor, agreement, RFP) must be active users. A user who owns any record cannot be deactivated until the records are handed over. A new agreement defaults to its vendor's owner.
 - RFP candidates are vendors with status `prospect`.
 
 **Contact**: `vendor_id*`, `name*`, `job_title`, `email`, `phone`, `is_primary*`. At most one primary per vendor.

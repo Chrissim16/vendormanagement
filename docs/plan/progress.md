@@ -21,6 +21,9 @@ Newest entry first. Written for the owner, in plain language.
 
 ## Log
 
+### 2026-11-22 Change request: handing over records when someone leaves
+Every vendor and agreement has an owner, but nothing stopped you deactivating a person and leaving their records ownerless. Now an admin cannot deactivate someone who owns records until a new owner is chosen, for all at once or one by one. Any member can change an owner day to day. New agreements start with their vendor's owner. An admin sees how many records each person owns. It sits in M1 and reworks the deactivate action and user page already built in M0. Added as V-5.
+
 ### 2026-11-21 Change request: bigger spreadsheet import
 Excel import was already planned for vendors and agreements. It now also loads contacts, and in the money milestone, rate cards and past invoices. Any team member can run it, not only the admin. Existing records are skipped, never overwritten. Rejected rows can be downloaded with the reasons, fixed and uploaded again. The template gets example rows and a help sheet, because your data is not in one clean spreadsheet. Nothing already built changes. M1 grows a little (contacts, rejected-rows file, help sheet) and M2 gains one requirement.
 

@@ -35,6 +35,14 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 
 **V-4 Offboarding.** Refused while the vendor has an active agreement, naming the agreement.
 
+**V-5 Owners and handover.**
+- Any member can change the owner of a vendor, an agreement or (from M6) an RFP. The change is in the audit log.
+- A new agreement starts with its vendor's owner and can be set to someone else.
+- A person's page, visible to admins, shows how many vendors, agreements and RFPs they own.
+- An admin cannot deactivate a person who owns any record until a new active owner is chosen, for all their records at once or one record at a time. The screen names what is still owned.
+- After a deactivation no vendor, agreement or RFP has an inactive owner.
+- This replaces the plain deactivation of F-2 for people who own records; deactivating someone who owns nothing works as before.
+
 **A-1 Add an agreement.**
 - A member can add an MSA, SOW, subscription, NDA or DPA to a vendor. The form shows only the fields for that kind.
 - A SOW can be placed under an MSA of the same vendor, or left without one.

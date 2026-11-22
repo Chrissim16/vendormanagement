@@ -12,7 +12,7 @@ can click through. A milestone is done when:
 | # | Milestone | Requirements | Depends on |
 |---|---|---|---|
 | M0 | Foundation | F-1 to F-4 | none |
-| M1 | Vendors and agreements | V-1 to V-4, A-1 to A-8 | M0 |
+| M1 | Vendors and agreements | V-1 to V-5, A-1 to A-8 | M0 |
 | M2 | SOW delivery and money | M-1 to M-8 | M1 |
 | M3 | Performance from Jira | J-1 to J-5 | M1 |
 | M4 | Scorecards and AI scoring | P-1 to P-7, AI-1, AI-2 | M2, M3 |
@@ -36,6 +36,7 @@ X-1 to X-6 apply to every milestone. M2 and M3 touch different features and may 
 
 ## M1 Vendors and agreements
 Starts with the patterns moved from M0: the form pattern with field errors and kept input, the file upload component, and the PDF helper. Adds TanStack Table if the vendor list needs more than the M0 table offers.
+Owner changes and the handover step before deactivating a person; this reworks the user page and the deactivate action built in M0 (F-2). The RFP part of V-5 is added in M6.
 Vendors, contacts, the five agreement kinds with status, MSA to SOW structure, documents, subscriptions with renewals and decisions, warnings page and header count, Excel import (vendors, contacts and agreements, with template help sheet, preview, skip of existing records and a downloadable file of rejected rows).
 
 ## M2 SOW delivery and money
