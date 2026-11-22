@@ -462,7 +462,7 @@ describe("B-1 vendor briefing", () => {
     // Spend equals the vendor's line on the Money page.
     const money = (await t.as(MEMBER).get("/api/spend")).body as Spend;
     const line = money.byVendor.find((v) => v.vendorId === ids["Quillon Consulting"])!;
-    expect(f.spend.total).toEqual({ EUR: line.EUR, GBP: line.GBP, eurMinor: line.eurMinor });
+    expect(f.spend.total).toEqual({ amounts: line.amounts, eurMinor: line.eurMinor });
     expect(f.milestones).toEqual([expect.objectContaining({ sowTitle: "SOW 02 Close process review", title: "Recommendations", dueDate: "2026-12-01", daysLate: 0 })]);
     // Flags: the vendor's own warnings and risk flags, as the warnings page has them.
     const mine = (await warnings()).filter((w) => w.vendorId === ids["Quillon Consulting"]);

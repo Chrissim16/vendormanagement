@@ -61,7 +61,7 @@ export async function reportData(ctx: OverviewContext, month: Month): Promise<Re
     month,
     asAt,
     running,
-    spend: { total: spend.total, byVendor: spend.byVendor, gbpToEurE4: spend.gbpToEurE4 },
+    spend: { total: spend.total, byVendor: spend.byVendor, rates: spend.rates },
     sows,
     ending: ending.map((e) => ({
       agreementId: e.agreementId,

@@ -24,7 +24,7 @@ import { audit } from "../../platform/audit";
 import { AppError, notFound } from "../../platform/errors";
 import { failFields, isUniqueViolation } from "../../platform/http";
 import type { Db, Queryable, Tx } from "../../platform/ports/types";
-import { getSettings } from "../settings/service";
+import { getSettings, requireListed } from "../settings/service";
 import * as repo from "./repo";
 
 type Sow = NonNullable<Awaited<ReturnType<typeof repo.lockSow>>>;
@@ -256,6 +256,7 @@ export async function saveRateLine(db: Db, target: { vendorId: string } | { line
         });
       } else {
         const value = rateLineSchema.parse(input);
+        await requireListed(tx, value.currency);
         if (lines.some((l) => l.role.toLowerCase() === value.role.toLowerCase() && l.validFrom === value.validFrom)) failFields({ validFrom: SAME_DAY });
         // Keep one spelling of a role per vendor.
         value.role = lines.find((l) => l.role.toLowerCase() === value.role.toLowerCase())?.role ?? value.role;

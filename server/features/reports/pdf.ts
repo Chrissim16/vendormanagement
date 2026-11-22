@@ -1,10 +1,9 @@
 import { agreementName } from "../../../shared/agreements";
 import { formatDay } from "../../../shared/dates";
-import { formatMoney } from "../../../shared/money";
+import { formatMoney, isMixed, totalInWords } from "../../../shared/money";
 import { REPORT_ENDING_DAYS, trendWords, type ManagementReport } from "../../../shared/overview";
 import { formatMetric, formatTarget, metricInfo, monthName } from "../../../shared/performance";
 import { formatScore, quarterName } from "../../../shared/scorecards";
-import { formatRate } from "../../../shared/sow";
 import { makePdf } from "../../platform/pdf";
 
 /** The most rows each table of the report takes to begin with. */
@@ -46,8 +45,7 @@ function draw(report: ManagementReport, generatedOn: string, rows: Rows, pages: 
       pdf.paragraph(
         t.eurMinor === 0
           ? `Nothing was invoiced in ${monthName(d.month)}.`
-          : `Invoiced in ${monthName(d.month)}: ${formatMoney(t.eurMinor, "EUR")}` +
-              (t.GBP > 0 ? ` in euros (${formatMoney(t.EUR, "EUR")} plus ${formatMoney(t.GBP, "GBP")} converted at ${formatRate(d.spend.gbpToEurE4)}).` : "."),
+          : `Invoiced in ${monthName(d.month)}: ${totalInWords(t, d.spend.rates)}${isMixed(t.amounts) ? "" : "."}`,
       );
       if (d.sows.length) {
         pdf.table(

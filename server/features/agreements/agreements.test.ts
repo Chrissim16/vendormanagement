@@ -133,10 +133,16 @@ describe("A-3 agreement list", () => {
     const dated = ends.filter(Boolean);
     expect(dated).toEqual([...dated].sort());
     expect(ends.slice(dated.length).every((e: string | null) => e === null)).toBe(true);
+    // M-8: values are compared in euros, each currency at its rate.
+    const rates = new Map(((await t.as(MEMBER).get("/api/currencies")).body as { code: string; unitsPerEurE4: number }[]).map((c) => [c.code, c.unitsPerEurE4]));
     const values = (await t.as(MEMBER).get("/api/agreements").query({ sort: "value", dir: "desc", pageSize: "200" })).body.items.map(
-      (a: { budgetMinor: number | null; annualValueMinor: number | null }) => a.budgetMinor ?? a.annualValueMinor,
+      (a: { budgetMinor: number | null; annualValueMinor: number | null; currency: string }) => {
+        const v = a.budgetMinor ?? a.annualValueMinor;
+        return v == null ? null : (v * 10000) / rates.get(a.currency)!;
+      },
     );
     const priced = values.filter((x: number | null) => x != null);
+    expect(priced.length).toBeGreaterThan(5);
     expect(priced).toEqual([...priced].sort((a: number, b: number) => b - a));
     expect((await t.as(MEMBER).get("/api/agreements").query({ sort: "nope" })).status).toBe(400);
   });

@@ -2,7 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { amountForInput, currencies, formatMoney, parseAmount } from "../../../../shared/money";
+import { amountForInput, formatMoney, parseAmount } from "../../../../shared/money";
+import { CurrencyOptions } from "../../platform/Money";
 import { contentEditable, contentLocked, type RfpDetail, type RfpRow } from "../../../../shared/rfp";
 import type { Page } from "../../../../shared/types";
 import { api } from "../../lib/api";
@@ -124,10 +125,8 @@ export function DemandForm({ rfp, onClose, onSaved }: { rfp?: RfpDetail; onClose
             onChange={(e) => set("budget", e.target.value, ["budgetMinor"])}
             hint={minor == null ? "Stays inside the team; it is never put in the RFP." : `Read as ${formatMoney(minor, v.currency)}`}
           />
-          <SelectField form={form} name="currency" label="Currency" value={v.currency} onChange={(e) => set("currency", e.target.value as (typeof currencies)[number])}>
-            {currencies.map((c) => (
-              <option key={c}>{c}</option>
-            ))}
+          <SelectField form={form} name="currency" label="Currency" value={v.currency} onChange={(e) => set("currency", e.target.value)}>
+            <CurrencyOptions value={v.currency} />
           </SelectField>
           <TextField form={form} name="sponsor" label="Sponsor" value={v.sponsor} maxLength={200} onChange={(e) => set("sponsor", e.target.value)} placeholder="Who asked for it" />
           <SelectField form={form} name="ownerUserId" label="Owner" value={v.ownerUserId} onChange={(e) => set("ownerUserId", e.target.value)}>

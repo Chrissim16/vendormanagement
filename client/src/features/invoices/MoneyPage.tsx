@@ -4,13 +4,14 @@ import { useEffect, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { toast } from "sonner";
 import { addMonths, formatDay, isDay } from "../../../../shared/dates";
-import { formatMoney, type Currency } from "../../../../shared/money";
-import { formatRate, type Invoice, type Spend } from "../../../../shared/sow";
+import { formatMoney, isMixed, moneyLine, type Money, type Rate } from "../../../../shared/money";
+import type { Invoice, Spend } from "../../../../shared/sow";
 import type { Page } from "../../../../shared/types";
 import type { Vendor } from "../../../../shared/vendors";
 import { api, messageOf, queryString } from "../../lib/api";
 import { pageNumber, useUrlState } from "../../lib/useUrlState";
 import { DataTable, Pager, type Column } from "../../platform/DataTable";
+import { ConvertedNote, ConvertedTotal, EurWithOriginal } from "../../platform/Money";
 import { useToday } from "../../platform/session";
 import { Button, EmptyState, ErrorState, Field, Loading, PageHeader, Select, TextInput } from "../../platform/ui";
 import { InvoiceForm } from "./InvoiceForm";
@@ -65,7 +66,7 @@ export function SpendPage() {
   });
   const s = q.data;
   const top = s ? ceiling(Math.max(...s.byMonth.map((m) => m.eurMinor), 0)) : 0;
-  const mixed = !!s && s.total.GBP > 0;
+  const mixed = !!s && isMixed(s.total.amounts);
   const widest = s ? Math.max(...s.byVendor.map((v) => v.eurMinor), 1) : 1;
 
   return (
@@ -129,24 +130,19 @@ export function SpendPage() {
       ) : (
         <>
           <dl aria-label="Totals" className="grid grid-cols-3 gap-4">
-            <div className="rounded-tile bg-sunk px-7 py-6">
-              <dt className="text-[13.5px] font-medium text-ink-2">In euros</dt>
-              <dd className="num mt-2 text-[30px] font-semibold leading-tight tracking-[-0.03em]">{eur(s!.total.EUR)}</dd>
+            <div className="col-span-2 rounded-tile bg-sunk px-7 py-6">
+              <ConvertedTotal label="Invoiced" money={s!.total} rates={s!.rates} />
             </div>
             <div className="rounded-tile bg-sunk px-7 py-6">
-              <dt className="text-[13.5px] font-medium text-ink-2">In pounds</dt>
-              <dd className="num mt-2 text-[30px] font-semibold leading-tight tracking-[-0.03em]">{formatMoney(s!.total.GBP, "GBP")}</dd>
-            </div>
-            <div className="rounded-tile bg-sunk px-7 py-6">
-              <dt className="text-[13.5px] font-medium text-ink-2">Together, in euros</dt>
-              <dd className="num mt-2 text-[30px] font-semibold leading-tight tracking-[-0.03em]">{eur(s!.total.eurMinor)}</dd>
-              <dd className="num mt-1 text-[12.5px] text-ink-2">{mixed ? `Pounds converted at ${formatRate(s!.gbpToEurE4)}` : "Nothing to convert"}</dd>
+              <dt className="text-[13.5px] font-medium text-ink-2">Vendors invoiced</dt>
+              <dd className="num mt-2 text-[30px] font-semibold leading-tight tracking-[-0.03em]">{s!.byVendor.length}</dd>
+              <dd className="mt-1 text-[12.5px] text-ink-2">{mixed ? `In ${Object.keys(s!.total.amounts).length} currencies` : "All in euros"}</dd>
             </div>
           </dl>
 
           <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-14">
             <section className="flex min-w-0 flex-col gap-4">
-              <h2 className="text-base font-semibold">By month{mixed && <span className="font-normal text-ink-2"> · pounds converted to euros</span>}</h2>
+              <h2 className="text-base font-semibold">By month{mixed && <span className="font-normal text-ink-2"> · converted to euros</span>}</h2>
               <div
                 role="img"
                 aria-label={`Spend per month, ${monthLabel(s!.byMonth[0]!.month)} to ${monthLabel(s!.byMonth.at(-1)!.month)}. The table below lists the same figures.`}
@@ -186,13 +182,7 @@ export function SpendPage() {
                       Month
                     </th>
                     <th scope="col" className="py-2 text-right font-medium">
-                      Euros
-                    </th>
-                    <th scope="col" className="py-2 text-right font-medium">
-                      Pounds
-                    </th>
-                    <th scope="col" className="py-2 text-right font-medium">
-                      Together, in euros
+                      {mixed ? "In euros, converted" : "In euros"}
                     </th>
                   </tr>
                 </thead>
@@ -203,9 +193,9 @@ export function SpendPage() {
                     .map((m) => (
                       <tr key={m.month} className="border-t border-line">
                         <td className="py-2.5">{monthLabel(m.month)}</td>
-                        <td className="py-2.5 text-right">{m.EUR ? eur(m.EUR) : "–"}</td>
-                        <td className="py-2.5 text-right">{m.GBP ? formatMoney(m.GBP, "GBP") : "–"}</td>
-                        <td className="py-2.5 text-right font-medium">{eur(m.eurMinor)}</td>
+                        <td className="py-2.5 text-right">
+                          <EurWithOriginal money={m} />
+                        </td>
                       </tr>
                     ))}
                 </tbody>
@@ -225,7 +215,9 @@ export function SpendPage() {
                       >
                         {v.vendorName}
                       </Link>
-                      <span className="num font-medium">{v.GBP && !v.EUR ? formatMoney(v.GBP, "GBP") : eur(v.eurMinor)}</span>
+                      <span className="text-right">
+                        <EurWithOriginal money={v} />
+                      </span>
                     </div>
                     <div aria-hidden className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--line)]">
                       <motion.div
@@ -235,11 +227,6 @@ export function SpendPage() {
                         transition={{ duration: 0.6, ease: [0.2, 0.8, 0.2, 1] }}
                       />
                     </div>
-                    {v.GBP > 0 && (
-                      <p className="num mt-1.5 text-[12.5px] text-ink-2">
-                        {v.EUR ? `${eur(v.EUR)} and ${formatMoney(v.GBP, "GBP")}, together ${eur(v.eurMinor)} in euros` : `${eur(v.eurMinor)} in euros`}
-                      </p>
-                    )}
                   </li>
                 ))}
               </ol>
@@ -251,7 +238,8 @@ export function SpendPage() {
   );
 }
 
-const columns: Column<Invoice>[] = [
+type ListedInvoice = Invoice & { eurMinor: number };
+const columns: Column<ListedInvoice>[] = [
   { key: "invoiceNumber", header: "Invoice", sort: "invoiceNumber", cell: (i) => i.invoiceNumber, className: "w-[16%]" },
   { key: "vendor", header: "Vendor", sort: "vendor", cell: (i) => <span className="text-ink-2">{i.vendorName}</span>, className: "w-[20%]" },
   {
@@ -266,7 +254,14 @@ const columns: Column<Invoice>[] = [
     ),
   },
   { key: "invoiceDate", fit: true, header: "Date", sort: "invoiceDate", cell: (i) => <span className="text-ink-2">{formatDay(i.invoiceDate)}</span> },
-  { key: "amount", fit: true, header: "Amount", sort: "amount", cell: (i) => formatMoney(i.amountMinor, i.currency), className: "text-right" },
+  {
+    key: "amount",
+    fit: true,
+    header: "Amount",
+    sort: "amount",
+    cell: (i) => <EurWithOriginal money={{ amounts: { [i.currency]: i.amountMinor }, eurMinor: i.eurMinor }} />,
+    className: "text-right",
+  },
 ];
 const PAGE_SIZE = 25;
 
@@ -284,7 +279,7 @@ export function InvoicesPage() {
   const filters = { q: url.q, vendorId: url.vendorId, from: isDay(url.from) ? url.from : "", to: isDay(url.to) ? url.to : "", sort: url.sort, dir: url.dir };
   const list = useQuery({
     queryKey: ["invoices", filters, page],
-    queryFn: () => api<Page<Invoice> & { sums: Record<Currency, number> }>("/invoices", { query: { ...filters, page, pageSize: PAGE_SIZE } }),
+    queryFn: () => api<Page<ListedInvoice> & { sums: Money; rates: Rate[] }>("/invoices", { query: { ...filters, page, pageSize: PAGE_SIZE } }),
     placeholderData: (p) => p,
   });
   const vendors = useQuery({ queryKey: ["vendors", "choices-all"], queryFn: () => api<Page<Vendor>>("/vendors", { query: { pageSize: 200, sort: "name", status: "all" } }) });
@@ -302,7 +297,7 @@ export function InvoicesPage() {
         context={
           !d || list.isPlaceholderData
             ? " "
-            : `${d.total} ${d.total === 1 ? "invoice" : "invoices"}${d.total ? `, ${[d.sums.EUR ? formatMoney(d.sums.EUR, "EUR") : "", d.sums.GBP ? formatMoney(d.sums.GBP, "GBP") : ""].filter(Boolean).join(" and ")}` : ""}`
+            : `${d.total} ${d.total === 1 ? "invoice" : "invoices"}${d.total ? `, ${formatMoney(d.sums.eurMinor, "EUR")}${isMixed(d.sums.amounts) ? ` in euros, converted (${moneyLine(d.sums.amounts)})` : ""}` : ""}`
         }
         title="Invoices"
       >
@@ -372,6 +367,7 @@ export function InvoicesPage() {
             onOpen={(i) => setDialog(i)}
           />
           <Pager page={page} pageSize={PAGE_SIZE} total={d!.total} onPage={(p) => setUrl({ page: String(p) })} />
+          <ConvertedNote rates={d!.rates} />
         </div>
       )}
       {dialog === "add" && <InvoiceForm onClose={() => setDialog(null)} onSaved={(i) => saved(`Added invoice ${i.invoiceNumber}`)} />}

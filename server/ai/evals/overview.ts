@@ -1,5 +1,6 @@
 import type { BriefingFacts, ReportData } from "../../../shared/overview";
 import { emptyCounts, monthMetrics } from "../../../shared/performance";
+import type { Money } from "../../../shared/money";
 import { budgetView } from "../../../shared/sow";
 import { ungrounded } from "../grounding";
 import { briefing, briefingNames, type BriefingOutput } from "../prompts/briefing";
@@ -8,7 +9,7 @@ import type { EvalCase } from "./index";
 
 // Everything here is invented: vendors, agreements, amounts and figures.
 
-const money = (EUR: number, GBP = 0) => ({ EUR, GBP, eurMinor: EUR + Math.round(GBP * 1.17) });
+const money = (EUR: number): Money => ({ amounts: EUR ? { EUR } : {}, eurMinor: EUR });
 const sow = (vendorName: string, title: string, budgetMinor: number, invoicedMinor: number) => ({
   agreementId: title,
   vendorId: vendorName,
@@ -25,7 +26,7 @@ const busyMonth: ReportData = {
   running: false,
   spend: {
     total: money(61_400_00),
-    gbpToEurE4: 11700,
+    rates: [],
     byVendor: [
       { vendorId: "a", vendorName: "Evaluation Vendor A (invented)", ...money(47_400_00) },
       { vendorId: "b", vendorName: "Evaluation Vendor B (invented)", ...money(14_000_00) },
@@ -76,7 +77,7 @@ const quietMonth: ReportData = {
   month: "2026-08",
   asAt: "2026-08-31",
   running: false,
-  spend: { total: money(0), gbpToEurE4: 11700, byVendor: [] },
+  spend: { total: money(0), rates: [], byVendor: [] },
   sows: [sow("Evaluation Vendor B (invented)", "SOW 03 Process review", 64_000_00, 14_000_00)],
   ending: [],
   scores: [],
@@ -147,7 +148,7 @@ const troubled: BriefingFacts = {
     { date: "2026-12-15", daysLeft: 24, what: "SOW 11 Reporting rebuild ends", agreementId: "s" },
   ],
   budgets: [{ agreementId: "s", title: "SOW 11 Reporting rebuild", currency: "EUR", endDate: "2026-12-15", budget: budgetView(120_000_00, 131_500_00, 80) }],
-  spend: { from: "2025-12-01", to: "2026-11-21", total: money(131_500_00) },
+  spend: { from: "2025-12-01", to: "2026-11-21", total: money(131_500_00), rates: [] },
   performance: {
     months: [{ month: "2026-10", cells: figures(884).cells }],
     trends: { first_response: "worse", first_line: "same", sla_breaches: "better", backlog_age: "none", csat: "none" },
@@ -175,7 +176,7 @@ const calm: BriefingFacts = {
   agreements: [troubled.agreements[0]!],
   dates: [],
   budgets: [],
-  spend: { from: "2025-12-01", to: "2026-11-21", total: money(0) },
+  spend: { from: "2025-12-01", to: "2026-11-21", total: money(0), rates: [] },
   performance: null,
   missed: [],
   score: null,

@@ -4,15 +4,15 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { agreementName } from "../../../../shared/agreements";
 import { formatDay } from "../../../../shared/dates";
-import { formatMoney } from "../../../../shared/money";
+import { formatMoney, isMixed, moneyLine } from "../../../../shared/money";
 import { REPORT_ENDING_DAYS, type ManagementReport } from "../../../../shared/overview";
 import { addMonth, formatMetric, formatTarget, isMonth, metricInfo, monthName, monthOf } from "../../../../shared/performance";
 import { formatScore, quarterName } from "../../../../shared/scorecards";
-import { formatRate } from "../../../../shared/sow";
 import { api, messageOf } from "../../lib/api";
 import { burst } from "../../lib/burst";
 import { useUrlState } from "../../lib/useUrlState";
 import { TextAreaField, useForm } from "../../platform/form";
+import { ConvertedNote } from "../../platform/Money";
 import { useToday } from "../../platform/session";
 import { Button, ErrorState, Loading, PageHeader, Pill } from "../../platform/ui";
 import { MonthSelect } from "../performance/parts";
@@ -105,7 +105,7 @@ export function ReportPage() {
   });
   const r = q.data;
   const d = r?.data;
-  const money = (minor: number, currency: "EUR" | "GBP" = "EUR") => formatMoney(minor, currency);
+  const money = (minor: number, currency = "EUR") => formatMoney(minor, currency);
   return (
     <>
       <PageHeader
@@ -157,14 +157,15 @@ export function ReportPage() {
               </Link>
             }
           >
-            <p className="num text-ink-2">
-              {d!.spend.total.eurMinor === 0
-                ? `Nothing was invoiced in ${monthName(month)}.`
-                : `Invoiced in ${monthName(month)}: ${money(d!.spend.total.eurMinor)}` +
-                  (d!.spend.total.GBP > 0
-                    ? ` in euros (${money(d!.spend.total.EUR)} plus ${money(d!.spend.total.GBP, "GBP")} converted at ${formatRate(d!.spend.gbpToEurE4)}).`
-                    : ".")}
-            </p>
+            <div className="text-ink-2">
+              <p className="num">
+                {d!.spend.total.eurMinor === 0
+                  ? `Nothing was invoiced in ${monthName(month)}.`
+                  : `Invoiced in ${monthName(month)}: ${money(d!.spend.total.eurMinor)}` +
+                    (isMixed(d!.spend.total.amounts) ? ` in euros, converted (${moneyLine(d!.spend.total.amounts)}).` : ".")}
+              </p>
+              <ConvertedNote rates={d!.spend.rates} />
+            </div>
             {d!.sows.length === 0 ? (
               <Nothing>No SOW with a budget ran in this month. A SOW appears here once it is active and has a budget.</Nothing>
             ) : (

@@ -3,7 +3,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { formatDay } from "../../../../shared/dates";
-import { currencies, formatMoney, parseAmount, type Currency } from "../../../../shared/money";
+import { currenciesIn, formatMoney, isMixed, moneyLine, parseAmount, type Currency, type Money } from "../../../../shared/money";
+import { CurrencyOptions } from "../../platform/Money";
 import type { Invoice, RateLine } from "../../../../shared/sow";
 import type { Page } from "../../../../shared/types";
 import { api, messageOf } from "../../lib/api";
@@ -43,9 +44,7 @@ function RateForm({ vendorId, roles, onClose, onSaved }: { vendorId: string; rol
             hint={minor == null ? undefined : `Read as ${formatMoney(minor, v.currency)} a day`}
           />
           <SelectField form={shown} name="currency" label="Currency" value={v.currency} onChange={(e) => set("currency", e.target.value as Currency)}>
-            {currencies.map((c) => (
-              <option key={c}>{c}</option>
-            ))}
+            <CurrencyOptions value={v.currency} />
           </SelectField>
           <TextField form={shown} name="validFrom" label="Applies from" type="date" value={v.validFrom} onChange={(e) => set("validFrom", e.target.value)} />
         </Grid>
@@ -63,7 +62,7 @@ export function VendorMoney({ vendorId, vendorName }: { vendorId: string; vendor
   const card = useQuery({ queryKey: ["rate-card", vendorId], queryFn: () => api<RateLine[]>(`/vendors/${vendorId}/rate-card`) });
   const invoices = useQuery({
     queryKey: ["invoices", { vendorId, summary: true }],
-    queryFn: () => api<Page<Invoice> & { sums: Record<Currency, number> }>("/invoices", { query: { vendorId, pageSize: 1 } }),
+    queryFn: () => api<Page<Invoice> & { sums: Money }>("/invoices", { query: { vendorId, pageSize: 1 } }),
   });
   const remove = useMutation({
     mutationFn: (l: RateLine) => api(`/rate-card/${l.id}`, { method: "DELETE" }),
@@ -87,8 +86,13 @@ export function VendorMoney({ vendorId, vendorName }: { vendorId: string; vendor
         ) : (
           <p className="num">
             <span className="text-[22px] font-semibold tracking-[-0.02em]">
-              {[sums!.EUR ? formatMoney(sums!.EUR, "EUR") : "", sums!.GBP ? formatMoney(sums!.GBP, "GBP") : ""].filter(Boolean).join(" and ")}
+              {currenciesIn(sums!.amounts).length === 1 ? moneyLine(sums!.amounts) : formatMoney(sums!.eurMinor, "EUR")}
             </span>{" "}
+            {isMixed(sums!.amounts) && (
+              <span className="text-ink-2">
+                {currenciesIn(sums!.amounts).length === 1 ? `(${formatMoney(sums!.eurMinor, "EUR")} in euros, converted) ` : `in euros, converted (${moneyLine(sums!.amounts)}) `}
+              </span>
+            )}
             <span className="text-ink-2">
               across {invoices.data.total} {invoices.data.total === 1 ? "invoice" : "invoices"}.
             </span>{" "}

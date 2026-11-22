@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { addDays, addMonths, daysBetween, isDay, type Day } from "./dates";
-import { currencies, type Currency } from "./money";
+import { currencyCode, type Currency } from "./money";
 import { DEFAULT_SETTINGS } from "./sow";
 
 export const kinds = ["msa", "sow", "subscription", "nda", "dpa"] as const;
@@ -48,7 +48,7 @@ export const agreementSchema = z.object({
   reference: optionalText(100),
   status: z.enum(agreementStatuses).default("draft"),
   ownerUserId: z.string().uuid("Choose an owner."),
-  currency: z.enum(currencies).default("EUR"),
+  currency: currencyCode.default("EUR"),
   signedOn: optionalDay.default(null),
   startDate: optionalDay.default(null),
   endDate: optionalDay.default(null),

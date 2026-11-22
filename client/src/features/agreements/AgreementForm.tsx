@@ -11,7 +11,8 @@ import {
   type AgreementDetail,
   type Kind,
 } from "../../../../shared/agreements";
-import { amountForInput, currencies, formatMoney, parseAmount } from "../../../../shared/money";
+import { amountForInput, formatMoney, parseAmount } from "../../../../shared/money";
+import { CurrencyOptions } from "../../platform/Money";
 import type { Page } from "../../../../shared/types";
 import type { Vendor } from "../../../../shared/vendors";
 import { api } from "../../lib/api";
@@ -128,9 +129,7 @@ export function AgreementForm({
   );
   const currency = (
     <SelectField form={shown} name="currency" label="Currency" value={v.currency} onChange={(e) => set("currency", e.target.value as typeof v.currency)}>
-      {currencies.map((c) => (
-        <option key={c}>{c}</option>
-      ))}
+      <CurrencyOptions value={v.currency} />
     </SelectField>
   );
 

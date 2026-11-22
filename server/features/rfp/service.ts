@@ -38,6 +38,7 @@ import { z } from "zod";
 import { ask, readSuggestion, recordSuggestion, replaced, reviewSuggestion } from "../../ai";
 import { rfpDraft } from "../../ai/prompts/rfp-draft";
 import { audit } from "../../platform/audit";
+import { requireListed } from "../settings/service";
 import { AppError, notFound } from "../../platform/errors";
 import { failFields, like } from "../../platform/http";
 import type { AiPort, Db, Queryable, StoragePort, Tx } from "../../platform/ports/types";
@@ -373,6 +374,7 @@ export async function createRfp(ctx: RfpContext, input: unknown, by: User): Prom
   if (v.demandApprovedOn && v.demandApprovedOn > ctx.today()) failFields({ demandApprovedOn: "The approval date cannot be in the future." });
   const id = await ctx.db.transaction(async (tx) => {
     await checkOwner(tx, v.ownerUserId);
+    await requireListed(tx, v.currency);
     const row = (
       await tx
         .insert(rfps)
@@ -395,6 +397,7 @@ export async function updateRfp(ctx: RfpContext, id: string, input: unknown, by:
     if (next.demandApprovedOn && next.demandApprovedOn !== rfp.demandApprovedOn && next.demandApprovedOn > ctx.today())
       failFields({ demandApprovedOn: "The approval date cannot be in the future." });
     if (next.ownerUserId !== rfp.ownerUserId) await checkOwner(tx, next.ownerUserId);
+    if (next.currency !== rfp.currency) await requireListed(tx, next.currency);
     const changes: Changes = {};
     for (const k of Object.keys(demandLabels) as (keyof typeof next)[]) if (next[k] !== current[k]) changes[demandLabels[k]!] = { from: current[k], to: next[k] };
     const weights = "Weight of the written answers" in changes || "Weight of demo and interview" in changes;

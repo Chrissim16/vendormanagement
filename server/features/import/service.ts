@@ -10,6 +10,7 @@ import { AppError } from "../../platform/errors";
 import type { Db } from "../../platform/ports/types";
 import { unpacksWithin } from "../../platform/zip";
 import { createAgreement, findSameAgreement } from "../agreements/service";
+import { listCurrencies } from "../settings/service";
 import { createVendor, findVendorByName, findVendorByVat, listPeople } from "../vendors/service";
 
 const vendorColumns = [
@@ -86,11 +87,19 @@ const columnOf: Record<string, string> = {
 };
 const allowed: Record<string, string> = {
   type: "software, consultancy or advisory",
-  currency: "EUR or GBP",
   pricing: "fixed or time_and_materials",
   noticePeriodDays: "a number of days from 0 to 730",
   renewalTermMonths: "a number of months from 1 to 120",
 };
+
+/** A currency cell: empty means euros; anything else must be a currency on the app's list (M-8). */
+function currencyCell(text: string, listed: string[], problems: string[]): string | undefined {
+  const code = text.trim().toUpperCase();
+  if (!code) return undefined;
+  if (listed.includes(code)) return code;
+  problems.push(`Currency: ${code} is not on the app's list of currencies. Use ${listed.join(", ")}, or ask an admin to add it in Settings.`);
+  return undefined;
+}
 
 const EXAMPLE = "(delete this row)";
 const MAX_ROWS = 2000;
@@ -334,6 +343,7 @@ export async function importWorkbook(db: Db, buffer: Buffer, by: User, today: Da
     // One import at a time, so two cannot both decide the same row is new.
     await tx.execute(sql`select pg_advisory_xact_lock(4202)`);
     const people = new Map((await listPeople(tx as unknown as Db)).map((u) => [u.email, u.id]));
+    const listed = (await listCurrencies(tx)).map((c) => c.code);
     const rows: ImportRow[] = [];
 
     // ---- Vendors
@@ -438,7 +448,7 @@ export async function importWorkbook(db: Db, buffer: Buffer, by: User, today: Da
         reference: cell.text(r.get("Reference"), "Reference"),
         status: key(cell.text(r.get("Status"), "Status")) || undefined,
         ownerUserId: people.get(ownerEmail) ?? by.id,
-        currency: cell.text(r.get("Currency"), "Currency").toUpperCase() || undefined,
+        currency: currencyCell(cell.text(r.get("Currency"), "Currency"), listed, problems),
         signedOn: cell.day(r.get("Signed on"), "Signed on"),
         startDate: cell.day(r.get("Start date"), "Start date"),
         endDate: cell.day(r.get("End date"), "End date"),

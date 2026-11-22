@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isDay, type Day } from "./dates";
-import { currencies, type Currency } from "./money";
+import { addMoney, currencyCode, noMoney, ratesUsed, type Currency, type Money, type Rate, type Rates } from "./money";
 
 const day = z.string().refine(isDay, "Enter a real date.");
 const optionalDay = z.preprocess((v) => (v === "" || v === undefined ? null : v), day.nullable()).default(null);
@@ -10,34 +10,14 @@ const amount = z.number("Enter an amount.").int("Enter an amount.").max(9_000_00
 
 // ---------- Settings
 
-/** What an admin can tune. The defaults are the ones the PRD names. */
+/** What an admin can tune. The defaults are the ones the PRD names. The currencies and their rates are a list of their own (M-8). */
 export const settingsSchema = z.object({
-  /** Pounds to euros, times 10,000: 1.17 is stored as 11700. */
-  gbpToEurE4: z.number().int().min(1, "Enter a rate above zero.").max(100_0000, "That rate is not believable."),
   noticeDays: z.number("Enter a number of days.").int().min(1, "Use at least 1 day.").max(365, "Use at most 365 days."),
   sowEndDays: z.number("Enter a number of days.").int().min(1, "Use at least 1 day.").max(365, "Use at most 365 days."),
   budgetWarningPct: z.number("Enter a percentage.").int().min(1, "Use at least 1%.").max(100, "Use at most 100%."),
 });
 export type Settings = z.infer<typeof settingsSchema>;
-export const DEFAULT_SETTINGS: Settings = { gbpToEurE4: 11700, noticeDays: 90, sowEndDays: 30, budgetWarningPct: 80 };
-
-/** Reads a rate as typed (1.17 or 1,17) into the stored whole number, or null. At most four decimals. */
-export function parseRate(input: string): number | null {
-  const s = input.trim().replace(",", ".");
-  if (!/^\d{1,3}(\.\d{1,4})?$/.test(s)) return null;
-  const [whole, frac = ""] = s.split(".");
-  const e4 = Number(whole) * 10000 + Number((frac + "0000").slice(0, 4));
-  return e4 > 0 ? e4 : null;
-}
-export const formatRate = (e4: number) => (e4 / 10000).toFixed(4).replace(/0{1,2}$/, "");
-
-/** An amount in euro cents: euros unchanged, pounds converted with the admin's rate and rounded to the cent. */
-export function toEur(minor: number, currency: Currency, gbpToEurE4: number): number {
-  if (currency === "EUR") return minor;
-  const product = BigInt(minor) * BigInt(gbpToEurE4);
-  const half = product >= 0n ? 5000n : -5000n;
-  return Number((product + half) / 10000n);
-}
+export const DEFAULT_SETTINGS: Settings = { noticeDays: 90, sowEndDays: 30, budgetWarningPct: 80 };
 
 // ---------- Budget
 
@@ -169,7 +149,7 @@ export function checkApproval(
 export const rateLineSchema = z.object({
   role: z.string().trim().min(1, "Name the role.").max(100, "That is too long."),
   dayRateMinor: amount.min(1, "Enter a day rate above zero."),
-  currency: z.enum(currencies).default("EUR"),
+  currency: currencyCode.default("EUR"),
   validFrom: day,
 });
 export type RateLineInput = z.infer<typeof rateLineSchema>;
@@ -235,23 +215,18 @@ export interface SpendRow {
   currency: Currency;
   amountMinor: number;
 }
-export type Money = Record<Currency, number> & { eurMinor: number };
+export type { Money } from "./money";
 export interface Spend {
   from: Day;
   to: Day;
-  gbpToEurE4: number;
+  /** The rates the euro totals were converted with: those of the currencies that occur, other than euros. */
+  rates: Rate[];
   total: Money;
   /** Highest spend first, by the euro total. */
   byVendor: ({ vendorId: string; vendorName: string } & Money)[];
   /** Every month in the period, oldest first, including months with nothing. */
   byMonth: ({ month: string } & Money)[];
 }
-
-const zero = (): Money => ({ EUR: 0, GBP: 0, eurMinor: 0 });
-const add = (m: Money, currency: Currency, minor: number, rate: number) => {
-  m[currency] += minor;
-  m.eurMinor = m.EUR + toEur(m.GBP, "GBP", rate);
-};
 
 /** The months from one day to another, as YYYY-MM, both ends included. */
 export function monthsBetween(from: Day, to: Day): string[] {
@@ -272,23 +247,23 @@ export function monthsBetween(from: Day, to: Day): string[] {
 
 /**
  * Spend per vendor and per month (M-6). Each currency is kept apart; the euro total
- * converts the pounds once, on the sum, so rounding cannot pile up row by row.
+ * converts each currency once, on its sum, so rounding cannot pile up row by row.
  */
-export function summariseSpend(rows: SpendRow[], from: Day, to: Day, gbpToEurE4: number): Spend {
-  const total = zero();
+export function summariseSpend(rows: SpendRow[], from: Day, to: Day, rates: Rates): Spend {
+  const total = noMoney();
   const vendors = new Map<string, { vendorId: string; vendorName: string } & Money>();
-  const months = new Map(monthsBetween(from, to).map((month) => [month, { month, ...zero() }]));
+  const months = new Map(monthsBetween(from, to).map((month) => [month, { month, ...noMoney() }]));
   for (const r of rows) {
-    add(total, r.currency, r.amountMinor, gbpToEurE4);
-    if (!vendors.has(r.vendorId)) vendors.set(r.vendorId, { vendorId: r.vendorId, vendorName: r.vendorName, ...zero() });
-    add(vendors.get(r.vendorId)!, r.currency, r.amountMinor, gbpToEurE4);
+    addMoney(total, r.currency, r.amountMinor, rates);
+    if (!vendors.has(r.vendorId)) vendors.set(r.vendorId, { vendorId: r.vendorId, vendorName: r.vendorName, ...noMoney() });
+    addMoney(vendors.get(r.vendorId)!, r.currency, r.amountMinor, rates);
     const month = months.get(r.month);
-    if (month) add(month, r.currency, r.amountMinor, gbpToEurE4);
+    if (month) addMoney(month, r.currency, r.amountMinor, rates);
   }
   return {
     from,
     to,
-    gbpToEurE4,
+    rates: ratesUsed(total.amounts, rates),
     total,
     byVendor: [...vendors.values()].sort((a, b) => b.eurMinor - a.eurMinor || a.vendorName.localeCompare(b.vendorName)),
     byMonth: [...months.values()],

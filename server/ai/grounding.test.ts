@@ -51,3 +51,19 @@ describe("a figure at the start of a line in what the model was given", () => {
     expect(ungrounded("We have 400 staff.", { body: "Line one\n400 staff" })).toEqual([]);
   });
 });
+
+describe("M-8 an amount counts with its currency, whichever currency it is in", () => {
+  const given = { spend: ["€ 120,000.00", "SEK 85,000.00", "$ 30,000.00"], rate: "1 EUR = 11.49 SEK" };
+  it("lets an amount through in its own currency, written with the code in front or behind", () => {
+    expect(ungroundedFigures("Invoiced: € 120,000.00, SEK 85,000.00 and $ 30,000.00.", given)).toEqual([]);
+    expect(ungroundedFigures("Some 85,000 SEK went to the Swedish vendor.", given)).toEqual([]);
+  });
+  it("does not let the same number pass in another currency", () => {
+    expect(ungroundedFigures("NOK 85,000.00 was invoiced.", given)).toEqual(["NOK85000"]);
+    expect(ungroundedFigures("€ 85,000.00 was invoiced.", given)).toEqual(["€85000"]);
+    expect(ungroundedFigures("€ 30,000.00 was invoiced.", given)).toEqual(["€30000"]);
+  });
+  it("leaves three capitals that are not a currency alone", () => {
+    expect(ungroundedFigures("SOW 07 ends.", { names: "SOW 07 ends" })).toEqual([]);
+  });
+});

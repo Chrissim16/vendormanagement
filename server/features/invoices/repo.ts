@@ -4,6 +4,7 @@ import type { Day } from "../../../shared/dates";
 import type { InvoiceInput } from "../../../shared/sow";
 import { like } from "../../platform/http";
 import type { Queryable } from "../../platform/ports/types";
+import { inEuros } from "../settings/service";
 
 const sorts = {
   invoiceDate: invoices.invoiceDate,
@@ -46,10 +47,9 @@ function conditions(f: Pick<InvoiceFilter, "q" | "vendorId" | "agreementId" | "f
   return where.length ? and(...where) : undefined;
 }
 
-export async function listInvoices(db: Queryable, f: InvoiceFilter, gbpToEurE4: number) {
+export async function listInvoices(db: Queryable, f: InvoiceFilter) {
   const cond = conditions(f);
-  // Amounts are compared in euros, so pounds and euros sort fairly together.
-  const col = f.sort === "amount" ? sql`${invoices.amountMinor} * (case when ${invoices.currency} = 'GBP' then ${gbpToEurE4}::numeric / 10000 else 1 end)` : sorts[f.sort];
+  const col = f.sort === "amount" ? inEuros(invoices.amountMinor, invoices.currency) : sorts[f.sort];
   const [items, total, sums] = await Promise.all([
     base(db)
       .where(cond)
@@ -82,7 +82,7 @@ export const findNumber = async (db: Queryable, vendorId: string, number: string
       .where(and(eq(invoices.vendorId, vendorId), sql`lower(${invoices.invoiceNumber}) = lower(${number})`, exceptId ? ne(invoices.id, exceptId) : undefined))
   )[0];
 
-type Row = InvoiceInput & { vendorId: string; currency: "EUR" | "GBP" };
+type Row = InvoiceInput & { vendorId: string; currency: string };
 export const insertInvoice = async (db: Queryable, v: Row, by: string) =>
   (
     await db

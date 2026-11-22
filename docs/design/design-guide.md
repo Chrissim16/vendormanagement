@@ -142,6 +142,23 @@ bars on the right with the chosen month in the accent. The figure and every coun
 links to the list of records behind them. The bars are decoration; a table of the same
 twelve months sits below, newest first, where a month's name chooses that month.
 
+## Money in several currencies
+
+The euro is the main currency (M-8). An amount on its own record (an invoice, a budget, a
+day rate) is shown in its own currency: € 12,500.00, £ 12,500.00, $ 12,500.00, and with
+the code for every other currency (SEK 12,500.00), so kronor of different countries
+cannot be mixed up. A total across currencies is one euro figure, with "converted to
+euros" in its label, then one line naming the amount in each currency in it (euros
+first, then A to Z, separated by a middle dot), then the rates in secondary text:
+"Converted at 1 EUR = 11.49 SEK." A rate an admin has not set yet adds "(starting rate,
+not yet set by an admin)", and for an admin a link to set it. In a list of totals (by
+vendor, by month) each row shows the euro figure with the original in brackets in
+secondary text: € 27,600.00 ($ 30,000.00). A total that is all euros shows none of this.
+A currency box lists the admin's currencies as "SEK · Swedish krona", the euro first.
+On Settings each currency is a row: code and name, the rate as "1 EUR = [ ] SEK" with
+what € 100.00 comes to as it is typed, who set it and when (or a pill "Starting rate,
+not yet set by an admin"), and what uses it.
+
 ## AI in the interface
 
 AI works quietly inside the pages; there is no assistant panel. A suggestion sits next to

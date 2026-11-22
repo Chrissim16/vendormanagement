@@ -120,6 +120,9 @@ wrong. Answered questions move to the bottom.
 | Q111 | In a contract, what if an amount says only "kr", or "$" when it could be another dollar? | "kr" alone is left out and named, since it does not say which kronor. "$" is read as US dollars. Say if your contracts write it differently. | M12 |
 | Q112 | Can a currency be removed from the list? | Only while nothing uses it (no agreement, rate card line or RFP). EUR can never be removed. | M12 |
 | Q113 | The pound rate already saved in Settings | Carried over the other way round (1 GBP = 1.17 EUR becomes 1 EUR = 0.8547 GBP), keeping who set it and when. | M12 |
+| Q114 | Where are amounts shown in euros with the original in brackets? | In totals and in the lists that add up money: the Money page (by vendor, by month, the invoice list), the dashboard, the monthly report, briefings and Ask. A record's own page (an agreement, an invoice on a SOW, a day rate) shows its own currency only, and a SOW's budget against invoiced is never converted. | M12 |
+| Q115 | A contract writes thousands with a space ("SEK 1 250 000" or "7 400,00 kr") | Read as one number, never just its last part. | M12 |
+| Q116 | In the sample data, which rates look set by an admin? | The pound's (1 EUR = 0.8547 GBP). The dollar and the three kronor keep their starting rates, so you can see what that looks like. | M12 |
 
 ## To check at work before M9
 

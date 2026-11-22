@@ -132,20 +132,22 @@ describe("C-1 counts and amounts match the list pages for the same filter", () =
       const l = a.lookups[0]!;
       const list = await listBehind(l, "/invoices");
       expect(l.count, question).toBe(list.total);
-      const euros = `€ ${(list.sums.EUR / 100).toLocaleString("en-GB", { minimumFractionDigits: 2 })}`;
-      expect(l.totals[0], question).toEqual({ label: "Total in euros", value: euros });
+      // M-8: the euro total first, as the invoice list shows it, then each currency in it.
+      const euros = `€ ${(list.sums.eurMinor / 100).toLocaleString("en-GB", { minimumFractionDigits: 2 })}`;
+      const mixed = Object.keys(list.sums.amounts).some((c: string) => c !== "EUR");
+      expect(l.totals[0], question).toEqual({ label: mixed ? "Total in euros, converted" : "Total in euros", value: euros });
       expect(a.answer, question).toContain(euros);
-      if (list.sums.GBP) expect(a.answer, question).toContain(`£ ${(list.sums.GBP / 100).toLocaleString("en-GB", { minimumFractionDigits: 2 })}`);
     }
     const pounds = await ask("What did Sedgewater invoice this year?");
-    expect(pounds.lookups[0]!.totals).toContainEqual({ label: "Total in pounds", value: "£ 31,500.00" });
+    expect(pounds.lookups[0]!.totals).toContainEqual({ label: "Total in GBP", value: "£ 31,500.00" });
+    expect(pounds.lookups[0]!.totals).toContainEqual({ label: "Rates", value: expect.stringMatching(/^Converted at 1 EUR = 0.8547 GBP\.$/) });
   });
 
   it("C-1 spend, vendors, renewals, warnings, scorecards and RFPs agree with their pages", async () => {
     const spend = await ask("How much did we spend per vendor this year?");
     const money = (await listBehind(spend.lookups[0]!, "/spend")) as { total: { eurMinor: number }; byVendor: unknown[] };
     expect(spend.lookups[0]!.totals).toContainEqual({
-      label: "Together in euros",
+      label: "Invoiced in euros, converted",
       value: `€ ${(money.total.eurMinor / 100).toLocaleString("en-GB", { minimumFractionDigits: 2 })}`,
     });
     expect(spend.lookups[0]!.totals).toContainEqual({ label: "Vendors invoiced", value: String(money.byVendor.length) });
@@ -187,8 +189,9 @@ describe("C-1 counts and amounts match the list pages for the same filter", () =
   it("C-1 a long list is counted whole although only its first rows are read", async () => {
     const a = await ask("Show all invoices");
     const l = a.lookups[0]!;
-    expect(l.count).toBe(24);
-    expect(l.rows).toHaveLength(24);
+    // The sample data's invoices, in six currencies since M-8.
+    expect(l.count).toBe(31);
+    expect(l.rows).toHaveLength(31);
     expect(l.more).toBe(0);
     const everything = await ask("Which agreements are there?");
     expect(everything.lookups[0]!.count).toBeGreaterThan(everything.lookups[0]!.rows.length - 1);
@@ -546,7 +549,7 @@ describe("C-1 a list longer than the answer can read", () => {
     expect(l.count).toBe(list.total);
     expect(l.rows).toHaveLength(40);
     expect(l.more).toBe(list.total - 40);
-    expect(l.totals[0]!.value).toBe(`€ ${(list.sums.EUR / 100).toLocaleString("en-GB", { minimumFractionDigits: 2 })}`);
+    expect(l.totals[0]!.value).toBe(`€ ${(list.sums.eurMinor / 100).toLocaleString("en-GB", { minimumFractionDigits: 2 })}`);
     expect(a.answer).toContain("Only the first ones are listed here");
   });
 });

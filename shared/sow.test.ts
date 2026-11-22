@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ratesOf } from "./money";
 import {
   budgetView,
   changeRequestSchema,
@@ -6,38 +7,22 @@ import {
   checkMilestone,
   consultantSchema,
   daysLate,
-  formatRate,
   invoiceSchema,
   milestoneSchema,
   monthsBetween,
-  parseRate,
   rateFor,
   summariseSpend,
-  toEur,
   type MilestoneInput,
 } from "./sow";
 
 const TODAY = "2026-11-21";
 
-describe("exchange rate", () => {
-  it("reads a rate with a point or a comma, up to four decimals", () => {
-    expect(parseRate("1.17")).toBe(11700);
-    expect(parseRate("1,1735")).toBe(11735);
-    expect(parseRate("1")).toBe(10000);
-    for (const bad of ["", "0", "0.0000", "1.17355", "abc", "-1", "1.1.7"]) expect(parseRate(bad), bad).toBeNull();
-    expect(formatRate(11700)).toBe("1.17");
-    expect(formatRate(11735)).toBe("1.1735");
-    expect(formatRate(10000)).toBe("1.00");
-  });
-  it("converts pounds to euro cents, rounding to the nearest cent, and leaves euros alone", () => {
-    expect(toEur(100_00, "GBP", 11700)).toBe(117_00);
-    expect(toEur(1, "GBP", 11750)).toBe(1);
-    expect(toEur(3, "GBP", 11750)).toBe(4);
-    expect(toEur(31_500_00, "GBP", 11735)).toBe(36_965_25);
-    expect(toEur(99_99, "EUR", 11700)).toBe(99_99);
-    expect(toEur(8_000_000_000_00, "GBP", 19999)).toBe(15_999_200_000_00);
-  });
-});
+/** 1 EUR = 0.80 GBP and 10 SEK: round figures, so the sums below can be checked by hand. */
+const rates = ratesOf([
+  { code: "EUR", unitsPerEurE4: 10000, starting: false },
+  { code: "GBP", unitsPerEurE4: 8000, starting: false },
+  { code: "SEK", unitsPerEurE4: 10_0000, starting: true },
+]);
 
 describe("M-5 budget against invoiced", () => {
   it("works out remaining and percentage used", () => {
@@ -147,46 +132,54 @@ describe("M-4 invoices", () => {
 });
 
 describe("M-6 spend", () => {
-  const row = (vendorId: string, month: string, currency: "EUR" | "GBP", amountMinor: number) => ({ vendorId, vendorName: `Vendor ${vendorId}`, month, currency, amountMinor });
+  const row = (vendorId: string, month: string, currency: string, amountMinor: number) => ({ vendorId, vendorName: `Vendor ${vendorId}`, month, currency, amountMinor });
   it("lists every month in the period, including empty ones", () => {
     expect(monthsBetween("2025-12-15", "2026-03-01")).toEqual(["2025-12", "2026-01", "2026-02", "2026-03"]);
     expect(monthsBetween("2026-11-01", "2026-11-30")).toEqual(["2026-11"]);
     expect(monthsBetween("2026-12-01", "2026-11-30")).toEqual([]);
   });
-  it("keeps each currency apart and adds a converted euro total", () => {
+  it("M-8 keeps each currency apart and adds a converted euro total, with the rates it used", () => {
     const s = summariseSpend(
-      [row("a", "2026-01", "EUR", 100_00), row("a", "2026-02", "EUR", 50_00), row("b", "2026-02", "GBP", 200_00), row("c", "2026-02", "EUR", 10_00)],
+      [row("a", "2026-01", "EUR", 100_00), row("a", "2026-02", "EUR", 50_00), row("b", "2026-02", "GBP", 200_00), row("c", "2026-02", "EUR", 10_00), row("c", "2026-03", "SEK", 300_00)],
       "2026-01-01",
       "2026-03-31",
-      11700,
+      rates,
     );
-    expect(s.total).toEqual({ EUR: 160_00, GBP: 200_00, eurMinor: 394_00 });
-    expect(s.byVendor.map((v) => [v.vendorId, v.EUR, v.GBP, v.eurMinor])).toEqual([
-      ["b", 0, 200_00, 234_00],
-      ["a", 150_00, 0, 150_00],
-      ["c", 10_00, 0, 10_00],
+    expect(s.total).toEqual({ amounts: { EUR: 160_00, GBP: 200_00, SEK: 300_00 }, eurMinor: 160_00 + 250_00 + 30_00 });
+    expect(s.rates.map((r) => r.code)).toEqual(["GBP", "SEK"]);
+    expect(s.byVendor.map((v) => [v.vendorId, v.amounts, v.eurMinor])).toEqual([
+      ["b", { GBP: 200_00 }, 250_00],
+      ["a", { EUR: 150_00 }, 150_00],
+      ["c", { EUR: 10_00, SEK: 300_00 }, 40_00],
     ]);
     expect(s.byMonth.map((m) => [m.month, m.eurMinor])).toEqual([
       ["2026-01", 100_00],
-      ["2026-02", 294_00],
-      ["2026-03", 0],
+      ["2026-02", 310_00],
+      ["2026-03", 30_00],
     ]);
+  });
+  it("names no rate when everything is in euros", () => {
+    expect(summariseSpend([row("a", "2026-01", "EUR", 100_00)], "2026-01-01", "2026-01-31", rates).rates).toEqual([]);
   });
   it("converts the sum once, so many small pound amounts do not pile up rounding", () => {
     const s = summariseSpend(
       Array.from({ length: 100 }, () => row("a", "2026-01", "GBP", 1)),
       "2026-01-01",
       "2026-01-31",
-      11750,
+      rates,
     );
-    expect(s.total).toEqual({ EUR: 0, GBP: 100, eurMinor: 118 });
-    expect(s.byMonth[0]!.eurMinor).toBe(118);
+    // Each penny alone would be 1.25 cents, rounded to 1; their sum is 125 cents.
+    expect(s.total).toEqual({ amounts: { GBP: 100 }, eurMinor: 125 });
+    expect(s.byMonth[0]!.eurMinor).toBe(125);
   });
   it("changes only the converted totals when the rate changes", () => {
     const rows = [row("a", "2026-01", "EUR", 100_00), row("b", "2026-01", "GBP", 100_00)];
-    const one = summariseSpend(rows, "2026-01-01", "2026-01-31", 11700);
-    const two = summariseSpend(rows, "2026-01-01", "2026-01-31", 12000);
-    expect([one.total.EUR, one.total.GBP, two.total.EUR, two.total.GBP]).toEqual([100_00, 100_00, 100_00, 100_00]);
-    expect([one.total.eurMinor, two.total.eurMinor]).toEqual([217_00, 220_00]);
+    const one = summariseSpend(rows, "2026-01-01", "2026-01-31", rates);
+    const two = summariseSpend(rows, "2026-01-01", "2026-01-31", { ...rates, GBP: { code: "GBP", unitsPerEurE4: 10000, starting: false } });
+    expect([one.total.amounts, two.total.amounts]).toEqual([
+      { EUR: 100_00, GBP: 100_00 },
+      { EUR: 100_00, GBP: 100_00 },
+    ]);
+    expect([one.total.eurMinor, two.total.eurMinor]).toEqual([225_00, 200_00]);
   });
 });

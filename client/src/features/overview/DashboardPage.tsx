@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import NumberFlow from "@number-flow/react";
 import { motion } from "motion/react";
 import { Link } from "react-router-dom";
-import { formatMoney } from "../../../../shared/money";
+import { formatMoney, isMixed, moneyLine } from "../../../../shared/money";
 import type { Dashboard } from "../../../../shared/overview";
 import { monthName } from "../../../../shared/performance";
 import { formatScore, quarterName } from "../../../../shared/scorecards";
@@ -11,6 +11,7 @@ import { api, messageOf } from "../../lib/api";
 import { useWarnings } from "../../lib/data";
 import { hourNow, longDate } from "../../lib/format";
 import { item, list } from "../../lib/motion";
+import { ConvertedNote } from "../../platform/Money";
 import { ErrorState, Loading, PageHeader, Pill } from "../../platform/ui";
 import { budgetPill, BudgetMeter, linkClass, Nothing, RowLink, Section, TrendWords } from "./parts";
 
@@ -88,10 +89,16 @@ function SpendBars({ spend }: { spend: Dashboard["spend"] }) {
           ))}
         </div>
       </div>
+      {isMixed(spend.total.amounts) && (
+        <div className="text-[13px]">
+          <p className="num">
+            {eur(spend.total.eurMinor)} in all, converted to euros: {moneyLine(spend.total.amounts)}
+          </p>
+          <ConvertedNote rates={spend.rates} />
+        </div>
+      )}
       <details className="text-[13px]">
-        <summary className="cursor-pointer text-ink-2 hover:text-ink">
-          {eur(spend.total.eurMinor)} in all{spend.total.GBP > 0 ? ", pounds converted to euros" : ""}. Show the months
-        </summary>
+        <summary className="cursor-pointer text-ink-2 hover:text-ink">{isMixed(spend.total.amounts) ? "Show the months" : `${eur(spend.total.eurMinor)} in all. Show the months`}</summary>
         <table aria-label="Spend per month" className="mt-2 w-full border-collapse text-left">
           <thead>
             <tr className="text-[12.5px] text-ink-3">

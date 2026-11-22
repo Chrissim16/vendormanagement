@@ -20,7 +20,7 @@ import { rfpRoutes } from "./features/rfp/routes";
 import type { RfpContext } from "./features/rfp/service";
 import { scorecardRoutes } from "./features/scorecards/routes";
 import type { ScorecardContext } from "./features/scorecards/service";
-import { getSettings, saveSettings } from "./features/settings/service";
+import { addCurrency, getSettings, listCurrencies, removeCurrency, saveSettings, setCurrencyRate } from "./features/settings/service";
 import { sowRoutes } from "./features/sow/routes";
 import { vendorRoutes } from "./features/vendors/routes";
 import { listAttention } from "./features/warnings/service";
@@ -135,6 +135,12 @@ export function createApp(config: Config, ports: Ports) {
   api.use(readingRoutes(scorecardContext(config, ports)));
   api.get("/settings", async (_req, res) => res.json(await getSettings(db)));
   api.put("/admin/settings", requireRole("admin"), async (req, res) => res.json(await saveSettings(db, req.body, currentUser(req))));
+  // The currency list (M-8): everyone reads it to choose a currency; only an admin changes it.
+  const code = (v: unknown) => String(v).toUpperCase();
+  api.get("/currencies", async (_req, res) => res.json(await listCurrencies(db)));
+  api.post("/admin/currencies", requireRole("admin"), async (req, res) => res.status(201).json(await addCurrency(db, req.body, currentUser(req))));
+  api.put("/admin/currencies/:code", requireRole("admin"), async (req, res) => res.json(await setCurrencyRate(db, code(req.params.code), req.body, currentUser(req))));
+  api.delete("/admin/currencies/:code", requireRole("admin"), async (req, res) => res.json(await removeCurrency(db, code(req.params.code), currentUser(req))));
   api.use("/admin/import", importRoutes(db, today));
   api.use((_req, _res, next) => next(new AppError(404, "not_found", "That address does not exist.")));
 

@@ -4,11 +4,11 @@ import type { AgreementInput, AgreementStatus, Kind } from "../../../shared/agre
 import type { Day } from "../../../shared/dates";
 import { like } from "../../platform/http";
 import type { Queryable } from "../../platform/ports/types";
+import { inEuros } from "../settings/service";
 
 const ownerName = sql<string>`coalesce(${users.displayName}, ${users.email})`;
-/** Value or budget in euro cents, so sorting compares pounds and euros fairly. */
-const valueInEur = (gbpToEurE4: number) =>
-  sql<number>`coalesce(${agreements.budgetMinor}, ${agreements.annualValueMinor}) * (case when ${agreements.currency} = 'GBP' then ${gbpToEurE4}::numeric / 10000 else 1 end)`;
+/** Value or budget in euros, so sorting compares amounts in different currencies fairly. */
+const valueInEur = () => inEuros(sql`coalesce(${agreements.budgetMinor}, ${agreements.annualValueMinor})`, agreements.currency);
 const sorts = {
   title: sql`lower(${agreements.title})`,
   vendor: sql`lower(${vendors.name})`,
@@ -58,9 +58,9 @@ function conditions(f: Omit<AgreementFilter, "sort" | "dir" | "page" | "pageSize
   return where.length ? and(...where) : undefined;
 }
 
-export async function listAgreements(db: Queryable, f: AgreementFilter, gbpToEurE4: number) {
+export async function listAgreements(db: Queryable, f: AgreementFilter) {
   const cond = conditions(f);
-  const col = f.sort === "value" ? valueInEur(gbpToEurE4) : sorts[f.sort];
+  const col = f.sort === "value" ? valueInEur() : sorts[f.sort];
   const order = f.dir === "asc" ? sql`${col} asc nulls last` : sql`${col} desc nulls last`;
   const [items, total] = await Promise.all([
     base(db)

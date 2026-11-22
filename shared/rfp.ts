@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isDay, type Day } from "./dates";
-import { currencies, type Currency } from "./money";
+import { currencyCode, type Currency } from "./money";
 import type { TextSuggestion } from "./overview";
 import { openRemarks, type ReviewerRemark, type ReviewRound } from "./review";
 import { normalise, parseBlocks, TABLE_LIMITS } from "./richtext";
@@ -65,7 +65,7 @@ export const rfpDemandSchema = z
     title: requiredText(200, "Give the RFP a title."),
     need: requiredText(5000, "Describe what is needed."),
     budgetMinor: z.number().int().min(0, "The budget cannot be negative.").max(Number.MAX_SAFE_INTEGER).nullable().default(null),
-    currency: z.enum(currencies).default("EUR"),
+    currency: currencyCode.default("EUR"),
     sponsor: optionalText(200),
     demandApprovedOn: optionalDay,
     targetDecisionDate: optionalDay,

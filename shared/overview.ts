@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { AgreementStatus, Kind } from "./agreements";
 import type { Day } from "./dates";
-import type { Currency } from "./money";
+import type { Currency, Rate } from "./money";
 import { metricInfo, type MetricCell, type MetricKey, type Month } from "./performance";
 import type { Quarter, SuggestionStatus } from "./scorecards";
 import type { BudgetView, Money, Spend } from "./sow";
@@ -151,7 +151,7 @@ export interface ReportData {
   asAt: Day;
   running: boolean;
   /** Invoiced in the month, per vendor and in total. */
-  spend: Pick<Spend, "total" | "byVendor" | "gbpToEurE4">;
+  spend: Pick<Spend, "total" | "byVendor" | "rates">;
   /** SOWs that ran in the month, with what was invoiced on them up to `asAt`. */
   sows: SowBudgetRow[];
   ending: EndingAgreement[];
@@ -211,7 +211,7 @@ export interface BriefingFacts {
   dates: BriefingDate[];
   budgets: Omit<SowBudgetRow, "vendorId" | "vendorName">[];
   /** Invoiced in the twelve months up to the briefing's day. */
-  spend: { from: Day; to: Day; total: Money };
+  spend: { from: Day; to: Day; total: Money; rates: Rate[] };
   /** The last whole months of helpdesk figures, oldest first; null for a vendor without a board or not scored. */
   performance: { months: { month: Month; cells: Record<MetricKey, MetricCell> }[]; trends: Record<MetricKey, MetricTrend> } | null;
   missed: Omit<MissedTarget, "vendorId" | "vendorName">[];

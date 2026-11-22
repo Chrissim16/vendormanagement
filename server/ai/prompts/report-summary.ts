@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { agreementName } from "../../../shared/agreements";
 import { formatDay } from "../../../shared/dates";
-import { formatMoney } from "../../../shared/money";
+import { currenciesIn, formatMoney, rateText } from "../../../shared/money";
 import { REPORT_ENDING_DAYS, trendWords, type ReportData } from "../../../shared/overview";
 import { formatMetric, formatTarget, metricInfo, monthName } from "../../../shared/performance";
 import { formatScore, quarterName } from "../../../shared/scorecards";
@@ -28,12 +28,13 @@ export type ReportSummaryOutput = z.infer<typeof output>;
  */
 export const reportSummary: Prompt<ReportData, ReportSummaryOutput> = {
   kind: "report_summary",
-  version: "report-summary/1",
+  version: "report-summary/2",
   tier: "strong",
   maxTokens: 700,
   system: [
     "You write the opening paragraph of a monthly vendor report for an IT management team. You are given the report's figures as JSON: what was invoiced in the month, SOW budgets and how much of each is used, agreements that end soon, vendor scores with their trend, missed helpdesk targets and open RFPs.",
     "Write one paragraph of three to five plain sentences, in British English, that tells a manager what matters most this month: what needs a decision or attention first, then what is going well. Name vendors and agreements as they are given.",
+    "Each amount is written with its own currency. A total across currencies is given in euros as togetherInEuros, converted by the app at the rates in convertedAt; when you speak of a total, use that one.",
     "Quote figures exactly as they are written in the input. Do not calculate, round, add up or estimate anything, and do not mention a number, date or amount that is not in the input. If a section is empty, either leave it out or say plainly that there is nothing to report.",
     "No headings, no bullet points, no greeting, and no advice beyond what the figures support.",
     'Answer with one JSON object and nothing else, shaped as {"summary":"..."}.',
@@ -45,9 +46,9 @@ export const reportSummary: Prompt<ReportData, ReportSummaryOutput> = {
     // The windows the report uses, so that "ending in the next 90 days" is a figure the model was given.
     windows: { agreementsEndingWithin: `${REPORT_ENDING_DAYS} days` },
     invoicedInTheMonth: {
-      euros: formatMoney(d.spend.total.EUR, "EUR"),
-      pounds: formatMoney(d.spend.total.GBP, "GBP"),
+      inEachCurrency: currenciesIn(d.spend.total.amounts).map((c) => formatMoney(d.spend.total.amounts[c]!, c)),
       togetherInEuros: formatMoney(d.spend.total.eurMinor, "EUR"),
+      convertedAt: d.spend.rates.map(rateText),
       byVendor: d.spend.byVendor.map((v) => ({ vendor: v.vendorName, togetherInEuros: formatMoney(v.eurMinor, "EUR") })),
     },
     sowBudgets: d.sows.map((s) => ({

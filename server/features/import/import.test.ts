@@ -63,7 +63,7 @@ describe("A-8 import", () => {
         a("Import Alpha", "Lease", "Car"),
         a("Bluefinch Systems", "MSA", "master services agreement"),
         a("Import Alpha", "SOW", "Orphan", { 8: "2026-04-01", 9: "2026-05-01", 10: "No such MSA", 11: "fixed", 12: 100 }),
-        a("Import Alpha", "NDA", "Odd NDA", { 4: "signed", 6: "USD", 10: "Alpha MSA" }),
+        a("Import Alpha", "NDA", "Odd NDA", { 4: "signed", 6: "CHF", 10: "Alpha MSA" }),
       ],
     );
     const before = (await t.as(ADMIN).get("/api/vendors").query({ status: "all" })).body.total;
@@ -88,7 +88,7 @@ describe("A-8 import", () => {
     expect(rows.A7).toMatchObject({ outcome: "exists" });
     expect(rows.A8.problems.join(" ")).toMatch(/no MSA called "No such MSA"/);
     expect(rows.A9.problems.sort()).toEqual([
-      "Currency: use EUR or GBP.",
+      "Currency: CHF is not on the app's list of currencies. Use EUR, DKK, GBP, NOK, SEK, USD, or ask an admin to add it in Settings.",
       "Parent MSA title: only a SOW can sit under an MSA.",
       "Status: use one of draft, in_negotiation, out_for_signature, active or ended.",
     ]);

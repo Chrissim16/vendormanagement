@@ -41,7 +41,7 @@ describe("V-1 vendor list", () => {
   it("searches by name and filters by type, status and owner", async () => {
     const list = (q: Record<string, string>) => t.as(MEMBER).get("/api/vendors").query(q);
     expect((await list({ q: "quillon" })).body.items.map((v: { name: string }) => v.name)).toEqual(["Quillon Consulting"]);
-    expect((await list({ type: "advisory" })).body.items.map((v: { name: string }) => v.name)).toEqual(["Emberline Advisory"]);
+    expect((await list({ type: "advisory" })).body.items.map((v: { name: string }) => v.name)).toEqual(["Emberline Advisory", "Hvidsand Advisory"]);
     expect((await list({ status: "prospect" })).body.items.map((v: { name: string }) => v.name)).toEqual([
       "Calderby Software",
       "Fennmoor Expenses",
