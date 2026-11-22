@@ -54,7 +54,7 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 
 **A-4 Agreement page.** Shows all details, the parent MSA or the SOWs underneath, documents and history.
 
-**A-5 Documents.** A member can upload PDF, Word and Excel files up to 25 MB to an agreement, download them and remove them. Other file types are refused.
+**A-5 Documents.** A member can upload PDF, Word and Excel files up to 25 MB to an agreement, by button or by dropping them on the section (X-7), several at once, download them and remove them. Other file types are refused.
 
 **A-6 Renewals.**
 - A subscription shows its notice deadline and renewal state.
@@ -180,3 +180,10 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 **X-4** Dates are shown as day month year, for example 21 Nov 2026.
 **X-5** Every page loads within 2 seconds with the volumes in section 12 of the PRD.
 **X-6** No real company, vendor, person or ticket data appears anywhere in the repository; sample data is invented.
+
+**X-7 Dropping files.** Every place where a file is chosen with a button (an agreement's documents, an RFP candidate's answer sheet and other documents, the admin Excel import) also takes a file dragged onto it from the computer, by the same rules as the button.
+- While a file is dragged over the window, each place that takes it shows a dashed outline and says what dropping does ("Drop to attach"). Nothing changes on the page otherwise, and the buttons stay.
+- On the two document places several files can be dropped, or picked with "Attach document", at once. Each is checked on its own: the fine ones are attached, each refused one is named with its reason, and a message says how many were attached ("Attached 2 documents").
+- The answer sheet and the Excel import take one file. Dropping several there is refused with "Drop one file at a time" and nothing is sent.
+- A drop while files are still being sent is refused with a request to wait. A file dropped anywhere else on a page is ignored: the browser does not open it and nothing typed is lost. Dragging text or a link does nothing.
+- A place that cannot take a file now (the responses of an RFP that is decided or cancelled) shows no outline and takes no drop.

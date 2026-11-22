@@ -20,6 +20,7 @@ can click through. A milestone is done when:
 | M6 | RFP | Q-1 to Q-11 | M1; AI from M4 |
 | M7 | Ask a question | C-1 | M5, M6 |
 | M8 | Contract reading | E-1 | M1; AI from M4 |
+| M8a | Dropping files | X-7 | M1, M6 |
 | M9 | Move to Databricks | none new | all; needs the owner at work |
 
 X-1 to X-6 apply to every milestone. M2 and M3 touch different features and may be built in parallel.
@@ -59,6 +60,9 @@ Read-only query tools over the existing list queries, document text search, chat
 
 ## M8 Contract reading
 Field proposal from an uploaded document with source passages and confirm step.
+
+## M8a Dropping files
+Added on request on 22 Nov 2026. Drag and drop onto the four upload places, several documents at once, and a page that ignores a file dropped beside them. Reworks the existing upload buttons on the agreement page, the RFP responses tab and the import page; no change to the server or the data.
 
 ## M9 Move to Databricks
 Done at work, with limited AI assistance, so the preparation is done here first.

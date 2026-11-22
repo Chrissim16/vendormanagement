@@ -28,6 +28,7 @@ import { RfpPage } from "./features/rfp/RfpPage";
 import { RfpsPage } from "./features/rfp/RfpsPage";
 import { VendorsPage } from "./features/vendors/VendorsPage";
 import { WarningsPage } from "./features/warnings/WarningsPage";
+import { installFileDropGuard } from "./platform/files";
 import { Layout } from "./platform/Layout";
 import { Session, useMe } from "./platform/session";
 import "@fontsource-variable/inter";
@@ -105,6 +106,9 @@ const router = createBrowserRouter([
     ],
   },
 ]);
+
+// X-7: a file dropped beside a drop place is not opened by the browser.
+installFileDropGuard();
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 15_000, retry: 1 } } });
 

@@ -15,11 +15,27 @@ Newest entry first. Written for the owner, in plain language.
 | M6 RFP | Done here; the AI draft and comparison are unproven until tried with the company's model |
 | M7 Ask a question | Done here; how well a real AI understands questions is unproven until tried with the company's model |
 | M8 Contract reading | Done here; how well a real AI reads a contract is unproven until tried with the company's model |
+| M8a Dropping files | Done |
 | M9 Move to Databricks | Not started; done at work |
 
 **Next:** M9 Move to Databricks, which is done at work and needs you. Everything that can be built outside the company is now built.
 
 ## Log
+
+### 2026-11-22 Dropping files onto the app
+You asked to be able to drag documents onto the app instead of always using the button. This is now requirement X-7, built as a small step of its own before the move to Databricks. Nothing else in the plan moved.
+
+What you can do now:
+
+- **Drag files from your computer onto the app.** This works on an agreement's documents, on an RFP candidate's answer sheet and other documents, and on the admin Excel import page. The buttons stay as they were.
+- **See where a file can go.** While you drag a file over the window, each place that takes it gets a dashed blue outline that says what dropping there does: "Drop to attach", "Drop the answer sheet here" or "Drop the filled-in template here". Nothing else on the page moves.
+- **Attach several documents at once**, by dropping them or by picking them together with "Attach document". Each file is checked on its own. The fine ones are attached, a message says how many ("Attached 2 documents"), and each refused one is listed by name with its reason.
+- **One file only where one is meant.** The answer sheet and the Excel import take one file. Dropping several there says "Drop one file at a time", and nothing is sent.
+- **Missing the spot does no harm.** A file dropped anywhere else on a page is ignored. Before, the browser would open the file itself and take you out of the app. A drop while files are still being sent is refused with a request to wait. Once an RFP is decided or cancelled, its responses take no drop.
+
+Also fixed along the way: on an RFP, a button pressed right after another one could be quietly ignored for a moment while the app refreshed other lists in the background. Buttons now work again as soon as the RFP is saved. This showed up as an automated check that failed now and then.
+
+Decided on your behalf (see `docs/open-questions.md`, Q87 and Q88): several files are sent one after another, and one refused file does not stop the others. A file dropped on the answer sheet is checked exactly as one chosen with the button.
 
 ### 2026-11-22 Three building blocks updated
 Installing the app reported eight known weaknesses, all rated moderate, in three of the outside building blocks it uses: the one that moves between pages, one used when making Excel files, and one used only by a tool for building. All three are now on versions without those weaknesses, and the install reports none. Nothing changes in how the app looks or works; the full set of automated checks passes. The notes about "deprecated" packages during install remain: those are old but working parts that other building blocks bring along, and are not weaknesses.

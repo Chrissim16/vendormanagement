@@ -1,13 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { documentTypes, kindLabels, MAX_DOCUMENT_BYTES, pricingLabels, statusLabels, type AgreementDetail, type DocumentInfo } from "../../../../shared/agreements";
+import { kindLabels, pricingLabels, statusLabels, type AgreementDetail, type DocumentInfo } from "../../../../shared/agreements";
 import { daysBetween, formatDay } from "../../../../shared/dates";
 import type { DocumentReading } from "../../../../shared/reading";
 import { formatMoney } from "../../../../shared/money";
 import { api, ApiError, messageOf } from "../../lib/api";
 import { formatDate } from "../../lib/format";
+import { DOCUMENT_EXTENSIONS, DropZone, FileButton, FileProblems, useAttachEach } from "../../platform/files";
 import { History } from "../../platform/History";
 import { useToday } from "../../platform/session";
 import { Button, ErrorState, Loading, PageHeader, Pill } from "../../platform/ui";
@@ -45,18 +46,21 @@ const decisionLabels = { renew: "Renew", renegotiate: "Renegotiate", terminate: 
 
 function Documents({ a }: { a: AgreementDetail }) {
   const qc = useQueryClient();
-  const input = useRef<HTMLInputElement>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const done = () => qc.invalidateQueries();
-  const upload = useMutation({
-    mutationFn: (file: File) => api<DocumentInfo>(`/agreements/${a.id}/documents`, { file }),
-    onSuccess: async (d) => {
-      setProblem(null);
-      toast.success(`Attached ${d.fileName}`);
-      await done();
-    },
-    onError: (e) => setProblem(messageOf(e)),
+  // A-5, X-7: one or several files, picked or dropped, each checked and sent in turn.
+  const upload = useAttachEach(async (file) => {
+    await api<DocumentInfo>(`/agreements/${a.id}/documents`, { file });
+    await done();
   });
+  const show = (message: string) => {
+    upload.setProblems([]);
+    setProblem(message);
+  };
+  const attach = (files: File[]) => {
+    setProblem(null);
+    void upload.attach(files);
+  };
   // E-1: what the AI read in these documents, and asking it to read one.
   const readings = useQuery({ queryKey: ["agreement", a.id, "readings"], queryFn: () => api<DocumentReading[]>(`/agreements/${a.id}/readings`) });
   const read = useMutation({
@@ -83,68 +87,47 @@ function Documents({ a }: { a: AgreementDetail }) {
     onError: (e) => setProblem(messageOf(e)),
   });
   return (
-    <Section
-      title="Documents"
-      action={
-        <>
-          <input
-            ref={input}
-            id="document-file"
-            type="file"
-            aria-label="Choose a document to attach"
-            accept=".pdf,.doc,.docx,.xls,.xlsx"
-            className="sr-only"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              e.target.value = "";
-              if (!file) return;
-              // Checked here first so a 40 MB file is not sent only to be refused. The server checks again.
-              const ext = file.name.includes(".") ? file.name.split(".").pop()!.toLowerCase() : "";
-              if (!(ext in documentTypes)) setProblem("Only PDF, Word and Excel files can be attached.");
-              else if (file.size > MAX_DOCUMENT_BYTES) setProblem("That file is larger than 25 MB.");
-              else upload.mutate(file);
-            }}
-          />
-          <Button onClick={() => input.current?.click()} aria-disabled={upload.isPending || undefined}>
-            {upload.isPending ? "Uploading" : "Attach document"}
-          </Button>
-        </>
-      }
-    >
-      {problem && <ErrorState message={problem} />}
-      {a.documents.length === 0 ? (
-        <p className="text-ink-2">No documents attached. PDF, Word and Excel files up to 25 MB can be added.</p>
-      ) : (
-        <ul className="flex flex-col">
-          {a.documents.map((d) => (
-            <li key={d.id} className="flex items-center gap-3 border-b border-line py-3.5">
-              <span className="min-w-0 flex-1">
-                <a href={`/api/documents/${d.id}/download`} download className="block truncate font-semibold text-accent-ink underline-offset-2 hover:underline">
-                  {d.fileName}
-                </a>
-                <span className="num block text-[13px] text-ink-2">
-                  {size(d.sizeBytes)} · added {formatDate(d.createdAt)} by {d.createdBy ?? "someone"}
-                  {d.readable === false && " · no readable text, so it cannot be searched or read by the AI"}
+    <DropZone enabled label="Drop to attach" multiple busy={upload.busy} onFiles={attach} onProblem={show}>
+      <Section
+        title="Documents"
+        action={<FileButton label="Attach document" chooserLabel="Choose a document to attach" accept={DOCUMENT_EXTENSIONS} multiple busy={upload.busy} onFiles={attach} />}
+      >
+        {problem && <ErrorState message={problem} />}
+        <FileProblems problems={upload.problems} />
+        {a.documents.length === 0 ? (
+          <p className="text-ink-2">No documents attached. PDF, Word and Excel files up to 25 MB can be added.</p>
+        ) : (
+          <ul className="flex flex-col">
+            {a.documents.map((d) => (
+              <li key={d.id} className="flex items-center gap-3 border-b border-line py-3.5">
+                <span className="min-w-0 flex-1">
+                  <a href={`/api/documents/${d.id}/download`} download className="block truncate font-semibold text-accent-ink underline-offset-2 hover:underline">
+                    {d.fileName}
+                  </a>
+                  <span className="num block text-[13px] text-ink-2">
+                    {size(d.sizeBytes)} · added {formatDate(d.createdAt)} by {d.createdBy ?? "someone"}
+                    {d.readable === false && " · no readable text, so it cannot be searched or read by the AI"}
+                  </span>
                 </span>
-              </span>
-              {d.readable && !wasRead.has(d.id) && (
-                <Button
-                  className={`h-8 px-3.5 text-[12.5px] ${read.isPending && read.variables === d.id ? "cursor-progress" : ""}`}
-                  onClick={() => !read.isPending && read.mutate(d.id)}
-                  aria-disabled={read.isPending || undefined}
-                  aria-label={`Read with AI: ${d.fileName}`}
-                >
-                  {read.isPending && read.variables === d.id ? "Reading" : "Read with AI"}
+                {d.readable && !wasRead.has(d.id) && (
+                  <Button
+                    className={`h-8 px-3.5 text-[12.5px] ${read.isPending && read.variables === d.id ? "cursor-progress" : ""}`}
+                    onClick={() => !read.isPending && read.mutate(d.id)}
+                    aria-disabled={read.isPending || undefined}
+                    aria-label={`Read with AI: ${d.fileName}`}
+                  >
+                    {read.isPending && read.variables === d.id ? "Reading" : "Read with AI"}
+                  </Button>
+                )}
+                <Button className="h-8 px-3.5 text-[12.5px]" onClick={() => remove.mutate(d)} aria-label={`Remove ${d.fileName}`}>
+                  Remove
                 </Button>
-              )}
-              <Button className="h-8 px-3.5 text-[12.5px]" onClick={() => remove.mutate(d)} aria-label={`Remove ${d.fileName}`}>
-                Remove
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Section>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+    </DropZone>
   );
 }
 

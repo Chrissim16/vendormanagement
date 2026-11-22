@@ -6,7 +6,8 @@ import { formatDate, formatDateTime } from "../../lib/format";
 import { Button, ConfirmButton, ErrorState, Pill, Segmented, Select } from "../../platform/ui";
 import { linkClass, Nothing, Section } from "../overview/parts";
 import { AiLabel } from "../scorecards/parts";
-import { FileButton, kb, textareaClass, useAdoptRfp, useChoice, useRfpChange } from "./parts";
+import { DOCUMENT_EXTENSIONS, DropZone, FileButton, FileProblems, fileProblem, useAttachEach } from "../../platform/files";
+import { kb, textareaClass, useAdoptRfp, useChoice, useRfpChange } from "./parts";
 
 interface UploadAnswer {
   rfp: RfpDetail;
@@ -107,28 +108,47 @@ function CandidateResponse({ rfp, candidate: c }: { rfp: RfpDetail; candidate: C
   const adopt = useAdoptRfp(rfp.id);
   const [problem, setProblem] = useState<string | null>(null);
   const [result, setResult] = useState<UploadAnswer["result"] | null>(null);
-  const [busy, setBusy] = useState<"sheet" | "document" | null>(null);
+  const [sheetBusy, setSheetBusy] = useState(false);
   const open = isOpen(rfp.stage);
-  const send = async (kind: "sheet" | "document", file: File) => {
-    setBusy(kind);
+  // Q-6, X-7: the answer sheet is one file; other documents may be several, each sent in turn.
+  const docs = useAttachEach(async (file) => adopt(await api<RfpDetail>(`/rfp-candidates/${c.id}/documents`, { file })));
+  const busy = sheetBusy || docs.busy;
+  const show = (message: string) => {
+    docs.setProblems([]);
+    setResult(null);
+    setProblem(message);
+  };
+  const sendSheet = async (files: File[]) => {
+    if (busy) return show("Files are still being sent. Wait until they are done, then drop again.");
+    if (files.length > 1) return show("Drop one file at a time.");
+    const [file] = files;
+    if (!file) return;
+    const why = fileProblem(file, ["xlsx"]);
+    if (why) return show(why);
+    setSheetBusy(true);
     setProblem(null);
+    docs.setProblems([]);
     setResult(null);
     try {
-      if (kind === "sheet") {
-        const up = await api<UploadAnswer>(`/rfp-candidates/${c.id}/response`, { file });
-        setResult(up.result);
-        adopt(up.rfp, `Answer sheet of ${c.vendorName} read`);
-      } else adopt(await api<RfpDetail>(`/rfp-candidates/${c.id}/documents`, { file }), `Attached ${file.name}`);
+      const up = await api<UploadAnswer>(`/rfp-candidates/${c.id}/response`, { file });
+      setResult(up.result);
+      adopt(up.rfp, `Answer sheet of ${c.vendorName} read`);
     } catch (e) {
       setProblem(messageOf(e));
     } finally {
-      setBusy(null);
+      setSheetBusy(false);
     }
+  };
+  const attach = (files: File[]) => {
+    if (sheetBusy) return show("Files are still being sent. Wait until they are done, then drop again.");
+    setProblem(null);
+    setResult(null);
+    void docs.attach(files);
   };
   const removeDoc = useRfpChange(rfp.id, (id: string) => api<RfpDetail>(`/rfp-documents/${id}`, { method: "DELETE" }), { done: "Document removed" });
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2.5">
+      <DropZone enabled={open} label="Drop the answer sheet here" busy={busy} onFiles={(f) => void sendSheet(f)} onProblem={show} className="flex flex-wrap items-center gap-2.5">
         <p className="min-w-0 flex-1 text-ink-2">
           <span className="font-semibold text-ink">
             {c.answered} of {rfp.questions.length} questions answered.
@@ -142,23 +162,23 @@ function CandidateResponse({ rfp, candidate: c }: { rfp: RfpDetail; candidate: C
               busyLabel="Reading the sheet"
               chooserLabel={`Choose the answer sheet of ${c.vendorName}`}
               accept={["xlsx"]}
-              busy={busy === "sheet"}
+              busy={sheetBusy}
               primary={!c.answered}
-              onFile={(f) => void send("sheet", f)}
-              onProblem={setProblem}
+              onFiles={(f) => void sendSheet(f)}
             />
             <FileButton
               label="Attach document"
               chooserLabel={`Choose a document of ${c.vendorName} to attach`}
-              accept={["pdf", "doc", "docx", "xls", "xlsx"]}
-              busy={busy === "document"}
-              onFile={(f) => void send("document", f)}
-              onProblem={setProblem}
+              accept={DOCUMENT_EXTENSIONS}
+              multiple
+              busy={docs.busy}
+              onFiles={attach}
             />
           </>
         )}
-      </div>
+      </DropZone>
       {problem && <ErrorState message={problem} />}
+      <FileProblems problems={docs.problems} />
       {result && (
         <p role="status" className="rounded-2xl bg-sunk px-5 py-4">
           <span className="font-semibold">
@@ -186,28 +206,30 @@ function CandidateResponse({ rfp, candidate: c }: { rfp: RfpDetail; candidate: C
         </Section>
       )}
 
-      <Section title="Documents">
-        {c.documents.length === 0 ? (
-          <Nothing>No documents. The uploaded answer sheet is kept here, and anything else the candidate sent (PDF, Word or Excel up to 25 MB) can be attached.</Nothing>
-        ) : (
-          <ul aria-label={`Documents of ${c.vendorName}`} className="flex flex-col">
-            {c.documents.map((d) => (
-              <li key={d.id} className="flex items-center gap-3 border-b border-line py-3">
-                <span className="min-w-0 flex-1">
-                  <a href={`/api/documents/${d.id}/download`} download className={`underline ${linkClass}`}>
-                    {d.fileName}
-                  </a>
-                  <span className="block text-[13px] text-ink-2">
-                    <span className="num">{kb(d.sizeBytes)}</span> · added {formatDate(d.createdAt)}
-                    {d.createdBy ? ` by ${d.createdBy}` : ""}
+      <DropZone enabled={open} label="Drop to attach" multiple busy={busy} onFiles={attach} onProblem={show}>
+        <Section title="Documents">
+          {c.documents.length === 0 ? (
+            <Nothing>No documents. The uploaded answer sheet is kept here, and anything else the candidate sent (PDF, Word or Excel up to 25 MB) can be attached.</Nothing>
+          ) : (
+            <ul aria-label={`Documents of ${c.vendorName}`} className="flex flex-col">
+              {c.documents.map((d) => (
+                <li key={d.id} className="flex items-center gap-3 border-b border-line py-3">
+                  <span className="min-w-0 flex-1">
+                    <a href={`/api/documents/${d.id}/download`} download className={`underline ${linkClass}`}>
+                      {d.fileName}
+                    </a>
+                    <span className="block text-[13px] text-ink-2">
+                      <span className="num">{kb(d.sizeBytes)}</span> · added {formatDate(d.createdAt)}
+                      {d.createdBy ? ` by ${d.createdBy}` : ""}
+                    </span>
                   </span>
-                </span>
-                {open && <ConfirmButton label={`Remove ${d.fileName}`} onConfirm={() => removeDoc.mutate(d.id)} disabled={removeDoc.isPending} />}
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
+                  {open && <ConfirmButton label={`Remove ${d.fileName}`} onConfirm={() => removeDoc.mutate(d.id)} disabled={removeDoc.isPending} />}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+      </DropZone>
 
       <Section title="Answers">
         <ol aria-label={`Answers of ${c.vendorName}`} className="flex flex-col">

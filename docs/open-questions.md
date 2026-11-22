@@ -92,6 +92,8 @@ wrong. Answered questions move to the bottom.
 | Q84 | How much of a long contract is read? | The first 30,000 characters, roughly ten pages. The page says when a document is longer than that. | M8 |
 | Q85 | Can the AI read the same document again? | Yes, at any time; the new reading takes the place of the old one on the page. A reading that was used or rejected cannot be used a second time. | M8 |
 | Q86 | Which documents can be read? | Those attached to an agreement, with real text in them (PDF, .docx, .xlsx). Not scans, not the old .doc and .xls formats, and not documents an RFP candidate sent. | M8 |
+| Q87 | In what order are several dropped files attached, and does one failure stop the rest? | One after another, in the order the computer hands them over. A refused file, or one the server turns down, is named with its reason and the others still go. | M8a |
+| Q88 | What does a drop onto the answer sheet do when the file is not an answer sheet? | The same as choosing it with the button: a file that is not .xlsx is refused before sending, and a workbook that is not the answer sheet is refused by the app in plain words. | M8a |
 | Q27 | How long are tickets kept? | 24 months after they were resolved, as the data model says. Open tickets are kept however old. | M3 |
 
 ## To check at work before M9

@@ -1,10 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
-import { documentTypes, MAX_DOCUMENT_BYTES } from "../../../../shared/agreements";
 import { rfpStageLabels, type RfpDetail, type RfpStage } from "../../../../shared/rfp";
 import { messageOf } from "../../lib/api";
-import { Button, Pill, type Tone } from "../../platform/ui";
+import { Pill, type Tone } from "../../platform/ui";
 
 const tones: Record<RfpStage, Tone> = { drafting: "brand", in_review: "brand", approved: "brand", issued: "brand", evaluating: "brand", decided: "ok", cancelled: "none" };
 export const StagePill = ({ stage }: { stage: RfpStage }) => <Pill tone={tones[stage]}>{rfpStageLabels[stage]}</Pill>;
@@ -38,12 +37,13 @@ export function useRfpChange<V = void>(
   const qc = useQueryClient();
   return useMutation({
     mutationFn: run,
-    onSuccess: async (rfp, v) => {
+    onSuccess: (rfp, v) => {
       qc.setQueryData(["rfp", id], rfp);
       const done = typeof options.done === "function" ? options.done(rfp, v) : options.done;
       if (done) toast.success(done);
       options.after?.(rfp, v);
-      await qc.invalidateQueries({ predicate: (q) => !(q.queryKey[0] === "rfp" && q.queryKey[1] === id) });
+      // Not awaited: the RFP is already up to date, so its buttons work again at once while other lists refresh.
+      void qc.invalidateQueries({ predicate: (q) => !(q.queryKey[0] === "rfp" && q.queryKey[1] === id) });
     },
     onError: async (e) => {
       if (!options.quiet) toast.error(messageOf(e));
@@ -51,56 +51,6 @@ export function useRfpChange<V = void>(
       await qc.invalidateQueries({ queryKey: ["rfp", id] });
     },
   });
-}
-
-/** A button that opens the browser's file chooser (design guide: never a bare file box). The type and size are checked before anything is sent. */
-export function FileButton({
-  label,
-  busyLabel = "Uploading",
-  chooserLabel,
-  accept,
-  busy,
-  onFile,
-  onProblem,
-  primary,
-}: {
-  label: string;
-  busyLabel?: string;
-  /** What the hidden file box is called for screen readers and tests. */
-  chooserLabel: string;
-  /** Extensions without the dot. */
-  accept: string[];
-  busy: boolean;
-  onFile: (file: File) => void;
-  onProblem: (message: string) => void;
-  primary?: boolean;
-}) {
-  const input = useRef<HTMLInputElement>(null);
-  return (
-    <>
-      <input
-        ref={input}
-        type="file"
-        aria-label={chooserLabel}
-        accept={accept.map((e) => `.${e}`).join(",")}
-        className="sr-only"
-        tabIndex={-1}
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          e.target.value = "";
-          if (!file) return;
-          const ext = file.name.includes(".") ? file.name.split(".").pop()!.toLowerCase() : "";
-          if (!accept.includes(ext) || !(ext in documentTypes))
-            onProblem(accept.length === 1 ? "Choose an Excel file (.xlsx)." : "Only PDF, Word and Excel files can be attached.");
-          else if (file.size > MAX_DOCUMENT_BYTES) onProblem("That file is larger than 25 MB.");
-          else onFile(file);
-        }}
-      />
-      <Button variant={primary ? "primary" : "plain"} onClick={() => !busy && input.current?.click()} aria-disabled={busy || undefined}>
-        {busy ? busyLabel : label}
-      </Button>
-    </>
-  );
 }
 
 /** Which of a few things is being looked at, remembered while the page is open. Falls back to the first when the chosen one is gone. */
