@@ -104,7 +104,9 @@ export function DropZone({
   const dragging = useFileDragging();
   const [over, setOver] = useState(false);
   if (!enabled) return <div className={className}>{children}</div>;
-  const shown = dragging || over;
+  // Shown only while a file is over the window, so a drag that ends anywhere ends it here too.
+  const shown = dragging;
+  const near = dragging && over;
   return (
     <div
       className={clsx("relative", className)}
@@ -137,7 +139,7 @@ export function DropZone({
           shown ? "visible opacity-100" : "invisible opacity-0",
         )}
       >
-        <div className={clsx("absolute inset-0 rounded-[14px] bg-tint transition-opacity duration-150", over ? "opacity-95" : "opacity-75")} />
+        <div className={clsx("absolute inset-0 rounded-[14px] bg-tint transition-opacity duration-150", near ? "opacity-95" : "opacity-75")} />
         <span className="relative rounded-full bg-surface px-4 py-1.5 text-[13.5px] font-semibold text-accent-ink shadow-float">{label}</span>
       </div>
     </div>
