@@ -6,7 +6,7 @@
 |---|---|
 | Language | TypeScript everywhere, strict mode |
 | Platform | Databricks Apps (Node.js runtime) |
-| App framework | Express server plus React client built with Vite. Databricks' `@databricks/lakebase` helper for the database connection; the rest of AppKit is not used (decision 0001) |
+| App framework | Express server plus React client built with Vite. Databricks' `@databricks/lakebase` helper for the database connection (Lakebase Autoscaling; for Lakebase Provisioned a plain connection with a token from the credentials API, chosen by `LAKEBASE_INSTANCE`); the rest of AppKit is not used (decision 0001) |
 | Database | Lakebase (managed Postgres) when deployed. Locally, Postgres built into the app (PGlite) so nothing needs installing, or a Postgres server through `DATABASE_URL` |
 | Data access | Drizzle ORM with SQL migration files |
 | Validation | Zod schemas shared by server and client |

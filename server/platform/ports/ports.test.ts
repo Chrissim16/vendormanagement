@@ -81,7 +81,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("database: Postgres server", () 
 });
 
 describe("configuration", () => {
-  const databricks = { DATABRICKS_APP_NAME: "vendorapp", PLATFORM: "databricks", BOOTSTRAP_ADMIN_EMAIL: "owner@company.test" };
+  const databricks = { DATABRICKS_APP_NAME: "vendorapp", PLATFORM: "databricks", BOOTSTRAP_ADMIN_EMAIL: "owner@company.test", JIRA_BASE_URL: "https://company.atlassian.net" };
   it("refuses to run with stand-ins inside Databricks", () => {
     expect(() => loadConfig({ DATABRICKS_APP_NAME: "vendorapp" })).toThrow(/PLATFORM/);
     expect(loadConfig(databricks).platform).toBe("databricks");
@@ -89,6 +89,11 @@ describe("configuration", () => {
   it("refuses to start in Databricks without a real first admin", () => {
     expect(() => loadConfig({ ...databricks, BOOTSTRAP_ADMIN_EMAIL: "" })).toThrow(/BOOTSTRAP_ADMIN_EMAIL/);
     expect(() => loadConfig({ ...databricks, BOOTSTRAP_ADMIN_EMAIL: "change-me@example.test" })).toThrow(/BOOTSTRAP_ADMIN_EMAIL/);
+  });
+  it("refuses to start in Databricks without the company's Jira address", () => {
+    expect(() => loadConfig({ ...databricks, JIRA_BASE_URL: "" })).toThrow(/JIRA_BASE_URL/);
+    expect(() => loadConfig({ ...databricks, JIRA_BASE_URL: "https://change-me.atlassian.net" })).toThrow(/JIRA_BASE_URL/);
+    expect(() => loadConfig({ ...databricks, JIRA_BASE_URL: "http://company.atlassian.net" })).toThrow(/JIRA_BASE_URL/);
   });
   it("only offers stand-in sign-in on this machine", () => {
     expect(() => loadConfig({ HOST: "0.0.0.0" })).toThrow(/only listens on this machine/);

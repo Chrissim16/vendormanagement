@@ -17,11 +17,24 @@ Newest entry first. Written for the owner, in plain language.
 | M8 Contract reading | Done here; how well a real AI reads a contract is unproven until tried with the company's model |
 | M10 Vendor details, contact roles, history tabs | Done |
 | M11 RFP editor, review rounds, company template | Done here; the company's own template, real Word and the AI's rewriting are unproven until tried at work |
-| M9 Move to Databricks | Not started; done at work |
+| M9 Move to Databricks | Prepared here; done at work by the AI in Cursor, with you |
 
-**Next:** M9 Move to Databricks, which is done at work and needs you.
+**Next:** M9 Move to Databricks, at work: give the AI in Cursor `docs/deploy-with-cursor.md` and `docs/runbook.md` and follow along. Merge this branch into `main` on GitHub first, so it downloads the latest version.
 
 ## Log
+
+### 2026-11-22 Ready for the move to Databricks
+You chose how the move is done: the AI in Cursor on your work laptop carries out the steps through its Databricks connection, while you watch. Your rules for it: it changes only settings (never the program), it tells you before it creates anything, you type the Jira access key yourself, it never sends anything back to GitHub, and when something needs more than a setting it writes a report that you bring back here.
+
+What is ready:
+
+- **Instructions for the AI in Cursor** (`docs/deploy-with-cursor.md`): every step, what it may and may not do, what to check after each step, which problems are settings it may fix and which go in the report, how to go back to an earlier version, and the report to write.
+- **Your guide** (`docs/runbook.md`), rewritten for this way of working: what happens at each step and what you should see, including the Word template and a first review round, going back to an earlier version, and backups.
+- **Checked against Databricks' current documentation** as far as it could be read from outside the company. It confirms that Databricks installs and builds the app itself and how the six connections are named. Five things can only be confirmed at work, and both guides say what to watch for: how Databricks passes the signed-in person's email, the older kind of database, saving files to the storage folder, calling the AI models, and the limit on upload size.
+- **Two small safety changes:** the app now refuses to start while the Jira address is still the placeholder, as it already did for your email; and the start setting no longer depends on a feature that only newer versions of Node.js have.
+- **A last full pass:** an independent tester went through every part of the app once more, as a member and as the admin. Everything passed. The full set of automated checks passes too. One older check failed just after midnight, because it counted the day in a different time zone than the app; the check was wrong, not the app, and it is corrected.
+
+Before you go to work: merge this branch into `main` on GitHub (or tell the AI in Cursor to download this branch), and have the company's Word template ready with [Title], [Date] and [Version] typed on its cover page.
 
 ### 2026-11-22 M11 Writing and reviewing the RFP done
 What you can do now:
@@ -455,6 +468,10 @@ First version of the brief, requirements, plan and agent workflow. No applicatio
 - At a very narrow window (a phone) the vendor form is cramped and the vendor list scrolls sideways. The app is made for a laptop screen.
 - M11: the settings page has two sections called "History" (the settings' own and the contact roles'); they could be named apart.
 - M11: a table pasted with merged cells shows its merged rows short in the editor until it is saved; once saved, every cell sits in its own column.
+- Final pass before M9: Ask took "Which agreements need notice before year end?" too loosely and listed agreements renewing later; the look-up and its link were shown, so the figures could be checked.
+- Final pass before M9: an invoice sent to the server with another currency than its agreement's is booked in the agreement's currency without a word. The screen has no currency field, so only a direct call can do this.
+- Final pass before M9: there is no "skip to content" link; the first Tab goes into the menu. The automated accessibility check passes.
+- Final pass before M9: an answer sheet made for one candidate is accepted when uploaded for another.
 - M11: the review's code reviewer suggested further hardening that was left for later: Word's own cover-page boxes tied to document properties (W12), and comments marked as resolved in Word, which are read as open remarks.
 - A VAT number typed into Excel as a plain number loses any zeros at its start before the app sees it; type it with its country letters.
 - The check that job titles became roles runs on the built-in database only, not on the server database the tests can also use.

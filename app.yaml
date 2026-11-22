@@ -1,4 +1,4 @@
-# Databricks Apps configuration. UNPROVEN until the first deployment; see docs/runbook.md.
+# Databricks Apps configuration. UNPROVEN until the first deployment; see docs/runbook.md and docs/deploy-with-cursor.md.
 # The platform runs `npm run build`, then this command.
 command: ["npm", "run", "start"]
 env:
@@ -10,6 +10,7 @@ env:
   - name: BOOTSTRAP_ADMIN_EMAIL
     value: "change-me@example.test"
   # Resources attached to the app in Databricks. The value after valueFrom is the resource key.
+  # With Lakebase Provisioned instead of Autoscaling: remove LAKEBASE_ENDPOINT and add LAKEBASE_INSTANCE (the instance name).
   - name: LAKEBASE_ENDPOINT
     valueFrom: postgres
   - name: VOLUME_PATH
@@ -18,6 +19,8 @@ env:
     valueFrom: ai-strong
   - name: AI_FAST_ENDPOINT
     valueFrom: ai-fast
+  # The company's Jira Cloud address. Change it at work, with the admin email above; the app refuses to start with the placeholder.
+  # Both stay in the work copy and never go back to GitHub.
   - name: JIRA_BASE_URL
     value: "https://change-me.atlassian.net"
   - name: JIRA_EMAIL

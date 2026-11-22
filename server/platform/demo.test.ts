@@ -15,7 +15,9 @@ describe("F-5 a sample version on a public address", () => {
     expect(loadConfig({ ...local, HOST: "0.0.0.0", DEMO_PASSWORD: PASSWORD })).toMatchObject({ host: "0.0.0.0", demoPassword: PASSWORD });
     expect(() => loadConfig({ ...local, HOST: "0.0.0.0", DEMO_PASSWORD: "short" })).toThrow("at least 12 characters");
     expect(loadConfig(local).demoPassword).toBeNull();
-    expect(() => loadConfig({ PLATFORM: "databricks", BOOTSTRAP_ADMIN_EMAIL: "someone@company.test", DEMO_PASSWORD: PASSWORD })).toThrow("sample version only");
+    expect(() =>
+      loadConfig({ PLATFORM: "databricks", BOOTSTRAP_ADMIN_EMAIL: "someone@company.test", JIRA_BASE_URL: "https://company.atlassian.net", DEMO_PASSWORD: PASSWORD }),
+    ).toThrow("sample version only");
   });
 
   it("F-5 nothing is served without the password: no page, no data, no file; with it everything works as usual", async () => {

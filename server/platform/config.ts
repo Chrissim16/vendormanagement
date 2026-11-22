@@ -59,6 +59,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (platform === "databricks" && (!bootstrap.includes("@") || bootstrap.endsWith("example.test"))) {
     throw new Error("BOOTSTRAP_ADMIN_EMAIL in app.yaml must be the first admin's real work email. It is still empty or the placeholder.");
   }
+  // The Jira address is the company's own; the placeholder would only fail later, at the first sync, with a less helpful message.
+  const jiraUrl = env.JIRA_BASE_URL || "";
+  if (platform === "databricks" && (!/^https:\/\/[^/\s]+/.test(jiraUrl) || /change-me|example\.(test|com)/i.test(jiraUrl))) {
+    throw new Error("JIRA_BASE_URL in app.yaml must be the company's Jira Cloud address, such as https://name.atlassian.net. It is still empty or the placeholder.");
+  }
   // F-5: a sample version on a public address is closed with one shared password. It is never for the real thing.
   const demoPassword = env.DEMO_PASSWORD || null;
   if (demoPassword && platform === "databricks")

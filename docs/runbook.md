@@ -4,72 +4,142 @@ Written for the owner, who is not a developer. Nothing below has been tried on a
 workspace yet; the first deployment is where it gets proven. Expect to fix a few things,
 and use the system check page to find out which.
 
+**How it is done (decided 22 Nov 2026):** the AI in Cursor on your work laptop carries out
+these steps through its Databricks connection, while you watch and check. Its instructions
+are in `docs/deploy-with-cursor.md`: give it that file and this one, and ask it to start.
+This guide says what happens at each step and what you should see, so you can follow and
+check it, and do a step by hand where the AI cannot.
+
+## The rules you gave the AI
+
+- It may change only settings: the file `app.yaml` and the app's settings in Databricks. It
+  never changes the program. Anything more is written down and brought back here.
+- It tells you before it creates anything, and waits for your OK. Where your account is not
+  allowed to create something, it says what to ask IT for.
+- You type the Jira access key into Databricks yourself; it never sees it.
+- It never sends anything back to GitHub, and puts no company data into the project.
+- At the end, or when it has to stop, it writes a report. Bring that report back here.
+
 ## Before you start
 
 You need, at work:
 
-1. A Databricks workspace where you may create an app.
-2. A Lakebase database (Autoscaling if available).
-3. A Unity Catalog volume for uploaded documents.
-4. The names of two model serving endpoints: one strong model, one fast one.
-5. The Jira service account's email and API token, stored as two Databricks secrets.
-6. Node.js is not needed on your laptop; Databricks builds the app itself.
+1. Cursor on your work laptop with its Databricks connection to the company workspace.
+2. Permission in that workspace to create an app. Where you may not create the database,
+   the storage folder or the secrets yourself, IT creates them; the AI tells you what to ask.
+3. The company's Jira address and a Jira service account: its email and an access key.
+4. The project: the `main` branch on GitHub once M10 and M11 are merged into it, otherwise
+   the branch `claude/serene-cerf-9ymwne`.
+5. For the template step: the company's Word template, with [Title], [Date] and [Version]
+   typed on its cover page where they should appear.
+
+Node.js is not needed on your laptop for the move itself; Databricks builds the app. It is
+needed only for the AI test run in "After the first deployment: AI", which is optional.
 
 ## Steps
 
-1. **Get the code.** Download the repository from GitHub as a ZIP and unpack it, or clone it.
-2. **Set the first admin.** Open `app.yaml` and replace `change-me@example.test` with your work email, and `change-me.atlassian.net` with your Jira address. The app refuses to start while the placeholder email is still there, so this step cannot be skipped by accident.
-3. **Create the app.** In Databricks: Compute, Apps, Create app, Custom. Name it `vendorapp`.
-4. **Attach resources.** In the app's settings add these resources with exactly these keys:
+1. **Find out what is possible.** The AI checks what its connection may do, which cloud the
+   workspace runs on, which kind of database (Lakebase) the workspace offers, and whether
+   apps may reach Jira over the network. It tells you what it found.
+2. **Get the code.** The AI downloads the project into a fresh folder on your laptop.
+3. **Two settings only the company knows.** In `app.yaml` the AI puts your work email (you
+   become the first admin) and the company's Jira address. The app refuses to start while
+   either placeholder is still there, so this cannot be skipped by accident. These stay on
+   your laptop; they never go to GitHub.
+4. **What the app needs.** The AI proposes, and after your OK creates: a database, a storage
+   folder (a "volume") for documents, and a place for the two Jira secrets. With you it
+   picks two of the company's AI models: a stronger one for writing and a faster one for
+   quick look-ups. You paste the Jira access key into the secret yourself; the AI shows you
+   where.
+5. **Create the app.** In Databricks: Compute, Apps, Create app, Custom, named `vendorapp`.
+   The AI connects it to the six things from step 4 under these exact names: `postgres`,
+   `volume`, `ai-strong`, `ai-fast`, `jira-email`, `jira-token`.
+6. **Upload and start it.** The AI uploads the folder and deploys it. Databricks installs
+   and builds it; the first time takes a few minutes. The log ends with "vendorapp is
+   running" when it worked.
+7. **Decide who can open it.** "Can use" for the VS Finance team members you name, and
+   nobody else. You keep "Can manage".
+8. **Open it.** From the Apps page. You should see the dashboard with your name and "Admin"
+   in the bottom left corner.
+9. **Run the system check.** Admin, System check. Every row should say "Working" and "Real
+   service". For any row that does not, the page says what is wrong, and the AI knows which
+   of those it may fix and which go in the report.
 
-   | Key | Resource | Permission |
-   |---|---|---|
-   | `postgres` | The Lakebase database | Can connect and create |
-   | `volume` | The Unity Catalog volume | Read and write |
-   | `ai-strong` | Serving endpoint, strong model | Can query |
-   | `ai-fast` | Serving endpoint, fast model | Can query |
-   | `jira-email` | Secret with the Jira account email | Can read |
-   | `jira-token` | Secret with the Jira API token | Can read |
-
-5. **Upload and deploy.** Upload the unpacked folder to the workspace and deploy the app from it. The first build takes a few minutes.
-6. **Limit who can open it.** In the app's permissions, give "Can use" to the VS Finance team members only.
-7. **Open the app.** You should see the dashboard with your name and "Admin" in the bottom left corner.
-8. **Run the system check.** Admin, System check. Every row should say "Working" and "Real service". For any row that does not, the page says what is wrong and what to do.
+The app sets up its own database tables every time it starts. There is nothing to run by hand.
 
 ## If something goes wrong
 
 | What you see | Likely cause |
 |---|---|
-| The app does not start; the log says a setting is missing | A resource key in step 4 is misspelled or not attached. |
-| The app does not start; the log mentions `vite` or `esbuild` | The build tools were not installed. Tell the agent; the fix is in `package.json`. |
-| The log says `BOOTSTRAP_ADMIN_EMAIL` must be a real work email | Step 2 was skipped. |
-| You are a member, not an admin | The email in step 2 does not match your sign-in address. Correct it and deploy again; you become admin at your next visit as long as nobody else is one. |
-| "We could not sign you in" | The app was opened by a direct server link. Use the app's address from the Apps page. |
-| Database row not working | The app's service principal lacks permission on the Lakebase database, or the workspace has Lakebase Provisioned: remove `LAKEBASE_ENDPOINT` from `app.yaml` and add `LAKEBASE_INSTANCE` with the instance name. |
-| Jira row not working, "could not reach" | Databricks Apps may not be allowed to connect out to Atlassian. Ask IT. |
-| AI row not working | Wrong endpoint, or the app lacks "Can query" on it. |
-
-The app updates its own database tables every time it starts. There is nothing to run by hand.
-
-## Updating later
-
-Download the new version from GitHub, upload it over the old folder, and deploy again.
-Data stays in Lakebase and the volume.
-
-## Still to write (at milestone M9)
-
-Rolling back to a previous version, and backups.
+| The app does not start; the log says a setting is missing | A name in step 5 is misspelled or not attached. The AI fixes it. |
+| The log says `BOOTSTRAP_ADMIN_EMAIL` or `JIRA_BASE_URL` must be set | Step 3 was skipped. |
+| You are a member, not an admin | The email in step 3 differs from your sign-in name. The AI corrects it and deploys again; you become admin at your next visit as long as nobody else is one. |
+| "We could not sign you in" | The app was opened by a direct server link, or Databricks does not pass the signed-in person the way the app expects. Open it from the Apps page; if it persists, it goes in the report. |
+| Database row not working | A missing permission, or the workspace only has the older kind of Lakebase ("Provisioned"). The AI knows the settings for both. |
+| Jira row: "could not reach" | Databricks apps may not connect out to Atlassian. Ask IT to allow the company's Jira site. |
+| Jira row: "refused the sign-in" | Check the access key. If it is right, the key may be a newer kind that needs another address: it goes in the report. |
+| AI row not working | A wrong model choice, or the app may not use it. The AI fixes it. |
+| Anything else | The AI writes it in the report. Bring the report back here. |
 
 ## After the first deployment: Jira
 
-1. Open System check; the Jira row should say how many boards the account can see.
-2. On Performance, press Link a board, choose a vendor and its board, and press Test link. It lists the board's statuses and labels and says if this Jira lacks the response-time, resolution-time or satisfaction measurements (open question W8).
-3. Save. The tickets are fetched at once; after that the app fetches changes every hour by itself (`JIRA_SYNC_EVERY_MINUTES`). If figures stay empty although the board has tickets, note what Test link said and pass it on: a field in this Jira is probably named differently.
-4. Three more things the documentation could not settle (open question W8). If System check says Jira refused the sign-in although the email and token are right, the token is probably a newer "scoped" one that needs a different Jira address: pass that on. If every ticket of a board shows as solved by the first line although some were escalated, the names of status or label changes in the ticket history differ. If satisfaction stays empty while the other figures appear, the rating is written differently on this Jira.
+1. The Jira row on the system check says how many boards the account can see.
+2. On Performance, press Link a board, choose a vendor and its board, and press Test link.
+   It lists the board's statuses and labels and says if this Jira lacks the response-time,
+   resolution-time or satisfaction measurements (open question W8).
+3. Save. The tickets are fetched at once; after that the app fetches changes every hour by
+   itself. If figures stay empty although the board has tickets, note what Test link said:
+   a field in this Jira is probably named differently.
+4. Compare one month's figures with Jira's own reports. If every ticket of a board shows as
+   solved by the first line although some were escalated, or satisfaction stays empty while
+   the other figures appear, it goes in the report.
 
-## After the first deployment: AI proposals
+## After the first deployment: AI
 
-1. Open System check; the AI row should say both models answered.
-2. Open a helpdesk vendor on Performance, choose last month and press "Ask the AI for a proposal". A proposal with two scores, their reasons and ticket themes should appear within about a minute. If the page says the AI could not write a proposal, the app's log says whether the model could not be reached or answered in a form the app could not read.
-3. Run the evaluation sets once inside the workspace (`npm run ai:eval` with `PLATFORM=databricks`): they show whether the model's scores and themes, its report summaries and its briefings are sensible on invented examples, and whether it keeps to the figures it is given. Until this has run, the quality of the AI's writing has only been seen with the stand-in. If a report summary or a briefing often ends in "The AI could not ...", the model is probably quoting numbers of its own, which the app refuses; note the cases the evaluation run names.
-4. From then on the app writes last month's proposals by itself; it looks every six hours (`AI_PROPOSALS_EVERY_MINUTES`).
+1. The AI row on the system check says both models answered.
+2. Open a helpdesk vendor on Performance, choose last month and press "Ask the AI for a
+   proposal". A proposal with two scores, their reasons and ticket themes should appear
+   within about a minute.
+3. Optional, if Node.js is on your laptop: the AI in Cursor runs the AI test sets against
+   the chosen models. They show whether the model's scores, summaries, answers and RFP
+   rewrites are sensible on invented examples and keep to the figures they are given. So
+   far only the simple stand-in has answered them. For the access key this needs, you type
+   it in your own terminal, as with the Jira key.
+4. From then on the app writes last month's proposals by itself; it looks every six hours.
+
+## After the first deployment: the Word template and a review round
+
+1. Settings, Word template: upload the company's template and read what the app found.
+   Each of [Title], [Date] and [Version] should say where it was found.
+2. Download one RFP review copy and open it in Word: the cover page, logo, header and
+   footer should be the company's, with the title, the date and the version filled in.
+3. If you can, have a colleague comment in it and track changes in Word, send it back, and
+   upload it to its round on the Review tab. If the app says it is not a review copy,
+   Word or SharePoint dropped the file's hidden mark (open question W11): it goes in the report.
+
+## After the first deployment: your data
+
+Enter the real vendors and agreements with Admin, Import. The import template is on that page.
+
+## Going back to an earlier version
+
+Report a problem first: a fix is usually quicker than going back. Deploying the earlier
+version again is safe when the new version brought no change to the database's tables. When
+it did, the earlier version may not run on the changed tables, and going back means also
+restoring the database to just before the new version started, which loses everything
+entered since. That is your decision; the AI never takes it.
+
+Before every deploy, the AI notes which version it deploys, so you always know which one to
+go back to.
+
+## Backups
+
+The database keeps its own history: the newer kind of Lakebase can restore any moment of
+the last 7 days (up to 30, as set in the workspace), into a copy, without touching the data
+in use; the older kind up to 35 days. The AI tells you what your workspace is set to.
+Uploaded documents live in the storage folder; ask IT whether those folders are backed up.
+
+## Updating later
+
+Download the new version from GitHub, and ask the AI in Cursor to deploy it as in step 6 and
+to run step 9 again. Your data stays in the database and the storage folder.

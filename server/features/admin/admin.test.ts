@@ -172,7 +172,8 @@ describe("F-3 audit trail", () => {
     expect((await t.as(ADMIN).get("/api/admin/audit")).body.total).toBe(before);
   });
   it("filters the log by date", async () => {
-    const today = new Date().toISOString().slice(0, 10);
+    // "Today" as the app counts days: in the team's time zone, not in UTC (they differ just after midnight).
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Amsterdam" }).format(new Date());
     expect((await t.as(ADMIN).get("/api/admin/audit").query({ from: today, to: today })).body.total).toBeGreaterThan(0);
     expect((await t.as(ADMIN).get("/api/admin/audit").query({ to: "2000-01-01" })).body.total).toBe(0);
   });

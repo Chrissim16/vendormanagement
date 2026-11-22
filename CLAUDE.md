@@ -26,6 +26,7 @@ in plain language, with no code or jargon they would have to look up.
 | Current status, what happened last | `docs/plan/progress.md` |
 | Unanswered questions and working assumptions | `docs/open-questions.md` |
 | How the owner tries the app on their own computer | `docs/try-it.md` |
+| Moving the app into Databricks (M9): the owner's guide, and the instructions for the AI in Cursor that does it | `docs/runbook.md`, `docs/deploy-with-cursor.md` |
 
 Read `progress.md` first in every session. Read the other files when the task touches them.
 

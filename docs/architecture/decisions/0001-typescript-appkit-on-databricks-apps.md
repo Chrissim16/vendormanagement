@@ -1,4 +1,4 @@
-# 0001 TypeScript with AppKit on Databricks Apps
+# 0001 TypeScript on Databricks Apps (AppKit considered, not adopted)
 
 Date: 2026-11-21. Status: accepted.
 
