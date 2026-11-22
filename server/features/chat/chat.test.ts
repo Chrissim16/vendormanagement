@@ -68,7 +68,8 @@ describe("C-1 an answer with links to the records used", () => {
     ["performance", "How did the helpdesks do last month?", "Tarnwick Software", /^\/performance\/[0-9a-f-]{36}\?month=2026-10$/],
     ["scorecards", "Which scorecards are final?", "4.2 out of 5", /^\/performance\/scorecards\//],
     ["RFPs", "Which RFPs are still running?", "Expense management tool", /^\/rfps\//],
-    ["warnings", "Which vendors have no NDA?", "Larkspur Data", /^\/vendors\?open=/],
+    // Larkspur Data's NDA is in negotiation, so its warning leads there, as on the warnings page (A-7).
+    ["warnings", "Which vendors have no NDA?", "Larkspur Data", /^\/agreements\//],
   ])("C-1 answers a question about %s with a link to each record", async (_what, question, expected, link) => {
     const a = await ask(question);
     expect(a.answered).toBe(true);

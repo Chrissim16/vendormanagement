@@ -82,6 +82,8 @@ Derived, not stored:
 
 Warnings are sorted with what is already wrong first, then the soonest date. The windows and the budget percentage are the admin's settings.
 
+A warning about an NDA or data processing agreement points at the one of that kind being worked on (draft, in negotiation, out for signature; the furthest along wins, then by title), and says which it is. With none under way, an expired warning points at the most recently expired one, and a missing warning at no agreement: it opens the form to add one with the kind chosen.
+
 **Import** (A-8): a vendor row whose name is already in the app, and an agreement row whose vendor, kind and title are already in the app, are left alone. A row that appears twice in the file is a problem, for every copy. An empty owner means the person importing. A cell showing a formula error is a problem, never read as empty. A number finer than a cent is refused, not rounded. A subscription row must say whether it renews automatically. The template's example rows are refused if left in. The preview and the import run the same analysis and always agree.
 
 ## SOW delivery and money

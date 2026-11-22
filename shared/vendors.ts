@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { inPlace, noticeDeadline, renewalState, WINDOWS, type AgreementStatus, type Kind, type Windows } from "./agreements";
+import { inPlace, noticeDeadline, renewalState, statusLabels, WINDOWS, type AgreementStatus, type Kind, type Windows } from "./agreements";
 import { formatMoney, type Currency } from "./money";
 import { budgetView } from "./sow";
 import { daysBetween, formatDay, type Day } from "./dates";
@@ -166,6 +166,9 @@ export interface WarningAgreement extends Paper {
   currency?: Currency;
 }
 
+/** The statuses of an agreement that is being worked on but not yet signed, from furthest away to closest. */
+const underWay: AgreementStatus[] = ["draft", "in_negotiation", "out_for_signature"];
+
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 /** Everything that needs attention today (A-7). Pure, so it can be tested without a database. */
@@ -247,18 +250,23 @@ export function buildWarnings(vendors: WarningVendor[], agreements: WarningAgree
       const name = kind === "nda" ? "NDA" : "Data processing agreement";
       const short = kind === "nda" ? "NDA" : "DPA";
       const expired = mine.filter((a) => a.kind === kind && a.status === "active" && a.endDate).sort((x, y) => (x.endDate! < y.endDate! ? 1 : -1))[0];
+      // One already being worked on is what needs doing, so the warning leads there; the one closest to signed wins.
+      const coming = mine
+        .filter((a) => a.kind === kind && underWay.includes(a.status))
+        .sort((x, y) => underWay.indexOf(y.status) - underWay.indexOf(x.status) || x.title.localeCompare(y.title))[0];
+      const fact =
+        state === "expired"
+          ? `${name} expired on ${expired?.endDate ? formatDay(expired.endDate) : "an unknown date"}.`
+          : `No ${kind === "nda" ? "NDA" : "data processing agreement"} is in place.`;
       out.push({
         type: `${kind}_${state}`,
         tone: state === "expired" ? "bad" : "warn",
         label: `${short} ${state}`,
         title: v.name,
-        detail:
-          state === "expired"
-            ? `${name} expired on ${expired?.endDate ? formatDay(expired.endDate) : "an unknown date"}.`
-            : `No ${kind === "nda" ? "NDA" : "data processing agreement"} is in place.`,
+        detail: coming ? `${fact} “${coming.title}” is ${coming.status === "draft" ? "still a draft" : statusLabels[coming.status].toLowerCase()}.` : fact,
         vendorId: v.id,
         vendorName: v.name,
-        agreementId: expired?.id ?? null,
+        agreementId: coming?.id ?? expired?.id ?? null,
         ownerUserId: v.ownerUserId,
         date: expired?.endDate ?? null,
       });

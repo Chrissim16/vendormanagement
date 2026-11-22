@@ -8,9 +8,18 @@ import { item, list } from "../../lib/motion";
 import { useUrlState } from "../../lib/useUrlState";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, Pill, Select } from "../../platform/ui";
 
-/** Where a warning leads: the agreement it is about, the vendor's helpdesk figures, or the vendor. */
+/**
+ * Where a warning leads: the agreement it is about, the vendor's helpdesk figures, or the vendor.
+ * A missing NDA or data processing agreement with none under way opens the form to add one, with its kind chosen.
+ */
 export const warningLink = (w: Warning) =>
-  w.agreementId ? `/agreements/${w.agreementId}` : w.type === "risk_metric_worsening" ? `/performance/${w.vendorId}` : `/vendors?open=${w.vendorId}`;
+  w.agreementId
+    ? `/agreements/${w.agreementId}`
+    : w.type === "risk_metric_worsening"
+      ? `/performance/${w.vendorId}`
+      : w.type === "nda_missing" || w.type === "dpa_missing"
+        ? `/vendors?open=${w.vendorId}&add=${w.type.slice(0, 3)}`
+        : `/vendors?open=${w.vendorId}`;
 
 export function WarningRow({ w }: { w: Warning }) {
   return (
