@@ -54,6 +54,8 @@ Needs your attention:
 - **No real AI model has been tried, again.** The stand-in makes a reviewer's edit and turns text into a list or shortens it by simple rules; for anything else it leaves a note in square brackets. There are four new invented test cases for the rewrite; the two the stand-in can take pass, and two (leaving a gap instead of inventing a fact, not following an instruction hidden in the text) wait for the company's model.
 - **The editor is for desktop screens.** On a phone-sized window it is squeezed, as the rest of the app is.
 
+After the fixes the tester checked everything that had failed, and everything the fixes touched, once more in the running app: all passed, and the full set of automated checks passes.
+
 Decided on your behalf (see `docs/open-questions.md`, Q97 to Q108): [Version] becomes "Version 2", so type it on its own; a candidate's copy has no version; one level of lists and tables up to 60 rows and 8 columns; a new template counts as a new version; an older version sent back goes to its own round; a reply to a comment is a remark of its own; a returned file can be removed while none of its remarks has been worked on; the AI rewrites only sections that have text and only for remarks placed in that section; the rules for taking edits over described above.
 
 ### 2026-11-22 M10 Vendor details, contact roles and history done
@@ -451,6 +453,9 @@ First version of the brief, requirements, plan and agent workflow. No applicatio
 - The check of the RFP list's search (Q-11) failed once during a full run on 22 Nov 2026, while the machine was busy, and passed in every run since, alone and in full. Probably the search box and the "All" button changing the address at nearly the same moment. To be watched.
 - Pressing Tab past the last button of a dialog moves on to the browser itself before coming back. That is how the browser's own dialogs work and it predates M10, but the design guide says focus stays inside; to be looked at.
 - At a very narrow window (a phone) the vendor form is cramped and the vendor list scrolls sideways. The app is made for a laptop screen.
+- M11: the settings page has two sections called "History" (the settings' own and the contact roles'); they could be named apart.
+- M11: a table pasted with merged cells shows its merged rows short in the editor until it is saved; once saved, every cell sits in its own column.
+- M11: the review's code reviewer suggested further hardening that was left for later: Word's own cover-page boxes tied to document properties (W12), and comments marked as resolved in Word, which are read as open remarks.
 - A VAT number typed into Excel as a plain number loses any zeros at its start before the app sees it; type it with its country letters.
 - The check that job titles became roles runs on the built-in database only, not on the server database the tests can also use.
 - A record with more than 200 changes shows the newest 200, and says so; an admin sees all of them on the Audit log page.
