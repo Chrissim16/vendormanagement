@@ -7,7 +7,7 @@ import { formatDay } from "../../../../shared/dates";
 import { formatMoney } from "../../../../shared/money";
 import { candidateListLabels, rfpStageLabels, type CandidateList, type RfpStage } from "../../../../shared/rfp";
 import type { Page } from "../../../../shared/types";
-import { vendorStatusLabels, vendorTypeLabels, type Contact, type Paperwork, type VendorDetail } from "../../../../shared/vendors";
+import { addressLines, vendorStatusLabels, vendorTypeLabels, type Contact, type Paperwork, type VendorDetail } from "../../../../shared/vendors";
 import { api, messageOf } from "../../lib/api";
 import { Dialog } from "../../platform/Dialog";
 import { CheckField, FormFooter, Grid, TextField, useForm } from "../../platform/form";
@@ -20,6 +20,7 @@ import { VendorBriefingsTab } from "../briefings/VendorBriefingsTab";
 import { VendorPerformanceTab } from "../performance/VendorPerformanceTab";
 import { VendorMoney } from "../sow/RateCard";
 import { agreementTone } from "../agreements/display";
+import { roleErrorKeys, RolesField, rolesError } from "./ContactRoles";
 import { VendorForm } from "./VendorForm";
 
 const paper: Record<Paperwork, [Tone, string]> = { in_place: ["ok", "In place"], missing: ["bad", "Missing"], expired: ["bad", "Expired"], not_required: ["none", "Not required"] };
@@ -27,7 +28,7 @@ export const vendorTone = (status: VendorDetail["status"]): Tone => (status === 
 
 function ContactForm({ vendorId, contact, onClose, onSaved }: { vendorId: string; contact?: Contact; onClose: () => void; onSaved: () => void }) {
   const form = useForm(
-    { name: contact?.name ?? "", jobTitle: contact?.jobTitle ?? "", email: contact?.email ?? "", phone: contact?.phone ?? "", isPrimary: contact?.isPrimary ?? false },
+    { name: contact?.name ?? "", roles: contact?.roles ?? [], email: contact?.email ?? "", phone: contact?.phone ?? "", isPrimary: contact?.isPrimary ?? false },
     (v) => api<Contact[]>(contact ? `/contacts/${contact.id}` : `/vendors/${vendorId}/contacts`, { method: contact ? "PATCH" : "POST", body: v }),
     { onSaved },
   );
@@ -37,10 +38,10 @@ function ContactForm({ vendorId, contact, onClose, onSaved }: { vendorId: string
       <form onSubmit={form.submit} noValidate className="flex flex-col gap-5">
         <Grid>
           <TextField form={form} name="name" label="Name" value={v.name} onChange={(e) => set("name", e.target.value)} autoFocus />
-          <TextField form={form} name="jobTitle" label="Job title (optional)" value={v.jobTitle} onChange={(e) => set("jobTitle", e.target.value)} />
           <TextField form={form} name="email" label="Email (optional)" type="email" value={v.email} onChange={(e) => set("email", e.target.value)} />
           <TextField form={form} name="phone" label="Phone (optional)" value={v.phone} onChange={(e) => set("phone", e.target.value)} />
         </Grid>
+        <RolesField id="f-roles" chosen={v.roles} onChange={(next) => set("roles", next, roleErrorKeys(form.errors))} error={rolesError(form.errors)} />
         <CheckField id="f-isPrimary" label="Primary contact" hint="A vendor has one primary contact." checked={v.isPrimary} onChange={(x) => set("isPrimary", x)} />
         <FormFooter problem={form.problem} busy={form.busy} submitLabel={contact ? "Save changes" : "Add contact"} onCancel={onClose} />
       </form>
@@ -201,7 +202,20 @@ export function VendorPanel({ id, onClose }: { id: string; onClose: () => void }
               </Fact>
               <Fact label="Primary contact">{v.contacts.find((c) => c.isPrimary)?.name ?? <span className="text-ink-2">None yet</span>}</Fact>
               {v.legalName && <Fact label="Legal name">{v.legalName}</Fact>}
-              {v.country && <Fact label="Country">{v.country}</Fact>}
+              <Fact label="Address">
+                {addressLines(v).length ? (
+                  <address className="not-italic">
+                    {addressLines(v).map((line) => (
+                      <span key={line} className="block">
+                        {line}
+                      </span>
+                    ))}
+                  </address>
+                ) : (
+                  <span className="text-ink-2">Not given</span>
+                )}
+              </Fact>
+              <Fact label="VAT or tax number">{v.vatNumber ? <span className="num">{v.vatNumber}</span> : <span className="text-ink-2">Not given</span>}</Fact>
               {v.website && (
                 <Fact label="Website">
                   <a href={v.website} target="_blank" rel="noreferrer noopener" className="font-medium text-accent-ink underline-offset-2 hover:underline">
@@ -222,7 +236,7 @@ export function VendorPanel({ id, onClose }: { id: string; onClose: () => void }
                 <li key={c.id} className="flex items-center gap-3 border-b border-line py-3.5">
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-semibold">{c.name}</span>
-                    <span className="block truncate text-[13px] text-ink-2">{[c.jobTitle, c.email, c.phone].filter(Boolean).join(" · ") || "No details"}</span>
+                    <span className="block truncate text-[13px] text-ink-2">{[c.roles.join(", "), c.email, c.phone].filter(Boolean).join(" · ") || "No details"}</span>
                   </span>
                   {c.isPrimary && <Pill tone="brand">Primary</Pill>}
                   <Button className="h-8 px-3.5 text-[12.5px]" onClick={() => setDialog(c)} aria-label={`Edit ${c.name}`}>

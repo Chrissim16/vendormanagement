@@ -4,18 +4,25 @@ import { contentEditable, contentLocked, contentProblems, partLabels, parts, rev
 import { api, ApiError, messageOf } from "../../lib/api";
 import { burst } from "../../lib/burst";
 import { Button, ErrorState, IconButton, Select, TextInput } from "../../platform/ui";
+import { parseBlocks } from "../../../../shared/richtext";
+import { RichText } from "../../platform/RichText";
+import { RichTextEditor } from "../../platform/RichTextEditor";
 import { AiTextPanel, Nothing, Section } from "../overview/parts";
 import { textareaClass, useRfpChange } from "./parts";
+import { RemarkCard } from "./Remarks";
+import { SectionRewrite } from "./Rewrite";
+import type { ReviewerRemark } from "../../../../shared/review";
+import { useSearchParams } from "react-router-dom";
 
 interface Editing {
-  sections: { heading: string; body: string }[];
+  sections: { id?: string; heading: string; body: string }[];
   criteria: { key: string; name: string; weight: string; part: Part }[];
   questions: { text: string; criterionKey: string }[];
 }
 /** Unsaved changes to the document, held by the RFP's page so that they outlive this tab. */
 export type Kept = MutableRefObject<{ v: Editing; base: string } | null>;
 const editingOf = (r: RfpDetail): Editing => ({
-  sections: r.sections.map((s) => ({ heading: s.heading, body: s.body ?? "" })),
+  sections: r.sections.map((s) => ({ id: s.id, heading: s.heading, body: s.body ?? "" })),
   criteria: r.criteria.map((c) => ({ key: c.id, name: c.name, weight: String(c.weight), part: c.part })),
   questions: r.questions.map((q) => ({ text: q.text, criterionKey: q.criterionId })),
 });
@@ -40,7 +47,7 @@ function ReadOnly({ rfp }: { rfp: RfpDetail }) {
         {rfp.sections.map((s) => (
           <div key={s.id} className="border-b border-line py-4">
             <h3 className="font-semibold">{s.heading}</h3>
-            <p className="mt-1 max-w-[78ch] whitespace-pre-line text-ink-2">{s.body ?? "Not written."}</p>
+            {s.body ? <RichText blocks={parseBlocks(s.body)} className="mt-1 text-ink-2" /> : <p className="mt-1 text-ink-2">Not written.</p>}
           </div>
         ))}
       </Section>
@@ -97,6 +104,25 @@ function Editor({ rfp, onDirty, keep }: { rfp: RfpDetail; onDirty: (dirty: boole
   }, [savedJson]); // eslint-disable-line react-hooks/exhaustive-deps
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [problem, setProblem] = useState<string | null>(null);
+  // Which sections have the form for asking the AI open, with the remarks it is for. A remark's button on the Review tab opens it through the address.
+  const [params, setParams] = useSearchParams();
+  const [asking, setAsking] = useState<Record<string, string[] | null>>(() => {
+    const id = params.get("rewrite");
+    return id ? { [id]: params.getAll("remark") } : {};
+  });
+  useEffect(() => {
+    const id = params.get("rewrite");
+    if (!id) return;
+    document.getElementById(`section-${id}`)?.scrollIntoView({ block: "start" });
+    setParams(
+      (p) => {
+        p.delete("rewrite");
+        p.delete("remark");
+        return p;
+      },
+      { replace: true },
+    );
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const dirty = JSON.stringify(v) !== JSON.stringify(saved);
   // The page above needs to know, so that it never replaces the document while something typed here is unsaved.
   useEffect(() => onDirty(dirty), [dirty]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -167,7 +193,7 @@ function Editor({ rfp, onDirty, keep }: { rfp: RfpDetail; onDirty: (dirty: boole
         {v.sections.length === 0 && <Nothing>No sections yet. A section is a heading with the text under it, such as the introduction or how to respond.</Nothing>}
         <ol aria-label="Sections" className="flex flex-col">
           {v.sections.map((s, i) => (
-            <li key={i} className="flex gap-3 border-b border-line py-4">
+            <li key={i} id={s.id ? `section-${s.id}` : undefined} className="flex scroll-mt-24 gap-3 border-b border-line py-4">
               <div className="flex min-w-0 flex-1 flex-col gap-2">
                 <TextInput
                   aria-label={`Heading of section ${i + 1}`}
@@ -179,17 +205,26 @@ function Editor({ rfp, onDirty, keep }: { rfp: RfpDetail; onDirty: (dirty: boole
                   className="font-semibold"
                 />
                 <Problem id={`p-sections.${i}.heading`}>{errors[`sections.${i}.heading`]}</Problem>
-                <textarea
-                  aria-label={`Text of section ${i + 1}`}
-                  rows={Math.min(10, Math.max(3, Math.ceil(s.body.length / 110)))}
+                <RichTextEditor
+                  key={s.id ?? `new-${i}`}
+                  label={`Text of section ${i + 1}`}
                   value={s.body}
-                  maxLength={10000}
                   placeholder="The text of this section"
-                  {...invalid(`sections.${i}.body`)}
-                  onChange={(e) => set({ sections: v.sections.map((x, n) => (n === i ? { ...x, body: e.target.value } : x)) })}
-                  className={textareaClass}
+                  invalid={!!errors[`sections.${i}.body`]}
+                  describedBy={errors[`sections.${i}.body`] ? `p-sections.${i}.body` : undefined}
+                  onChange={(body) => setV((x) => ({ ...x, sections: x.sections.map((y, n) => (n === i ? { ...y, body } : y)) }))}
                 />
                 <Problem id={`p-sections.${i}.body`}>{errors[`sections.${i}.body`]}</Problem>
+                {s.id && <SectionRemarks rfp={rfp} sectionId={s.id} heading={s.heading} unsaved={dirty} onRewrite={(m) => setAsking((a) => ({ ...a, [s.id!]: [m.id] }))} />}
+                {s.id && rfp.sections.some((x) => x.id === s.id) && (
+                  <SectionRewrite
+                    rfp={rfp}
+                    section={rfp.sections.find((x) => x.id === s.id)!}
+                    unsaved={dirty}
+                    asking={asking[s.id] ?? null}
+                    onAsking={(ids) => setAsking((a) => ({ ...a, [s.id!]: ids }))}
+                  />
+                )}
               </div>
               <div className="flex flex-col">
                 <IconButton
@@ -403,6 +438,37 @@ function Editor({ rfp, onDirty, keep }: { rfp: RfpDetail; onDirty: (dirty: boole
   );
 }
 
+/** Q-13: the open remarks of reviewers next to the section they are in. Nothing that changes the section can happen while the document has unsaved changes. */
+function SectionRemarks({
+  rfp,
+  sectionId,
+  heading,
+  unsaved,
+  onRewrite,
+}: {
+  rfp: RfpDetail;
+  sectionId: string;
+  heading: string;
+  unsaved: boolean;
+  onRewrite: (m: ReviewerRemark) => void;
+}) {
+  const open = rfp.review.remarks.filter((m) => m.status === "open" && m.sectionId === sectionId);
+  if (!open.length) return null;
+  return (
+    <details className="rounded-2xl bg-sunk px-4 py-3">
+      <summary className="cursor-pointer text-[13.5px] font-medium text-accent-ink">
+        {open.length === 1 ? "1 open remark" : `${open.length} open remarks`} from reviewers on {heading || "this section"}
+      </summary>
+      {unsaved && <p className="mt-2 text-[13px] text-ink-2">Save or discard your changes to the document before taking an edit over.</p>}
+      <ul aria-label={`Open remarks on ${heading || "this section"}`} className="mt-3 flex flex-col gap-2">
+        {open.map((m) => (
+          <RemarkCard key={m.id} rfp={rfp} remark={m} unsaved={unsaved} onRewrite={onRewrite} />
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 /** Q-2: the RFP's own text. The AI's draft is a proposal next to it; the document is what people saved. */
 export function DocumentTab({ rfp, keep }: { rfp: RfpDetail; keep: Kept }) {
   const empty = rfp.sections.length + rfp.criteria.length + rfp.questions.length === 0;
@@ -482,7 +548,7 @@ export function DocumentTab({ rfp, keep }: { rfp: RfpDetail; keep: Kept }) {
                     {d.sections.map((s, i) => (
                       <div key={i}>
                         <h3 className="font-semibold">{s.heading}</h3>
-                        <p className="whitespace-pre-line">{s.body}</p>
+                        <RichText blocks={parseBlocks(s.body)} />
                       </div>
                     ))}
                     <div>

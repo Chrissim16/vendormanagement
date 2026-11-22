@@ -16,6 +16,9 @@ const optionalText = (max: number) => z.preprocess((v) => (typeof v === "string"
 /** Names are compared ignoring case and extra spaces. */
 export const cleanName = (name: string) => name.trim().replace(/\s+/g, " ");
 
+/** A VAT or tax number as stored: capitals, without spaces, dots or dashes. */
+export const cleanVat = (vat: string) => vat.toUpperCase().replace(/[\s.-]/g, "");
+
 export const vendorSchema = z.object({
   name: z.string().transform(cleanName).pipe(z.string().min(1, "Give the vendor a name.").max(200)),
   legalName: optionalText(200),
@@ -33,12 +36,29 @@ export const vendorSchema = z.object({
         .nullable(),
     )
     .default(null),
+  addressLine1: optionalText(200),
+  addressLine2: optionalText(200),
+  postalCode: optionalText(20),
+  city: optionalText(100),
   country: z
     .preprocess(
       (v) => (typeof v === "string" && v.trim() === "" ? null : typeof v === "string" ? v.trim().toUpperCase() : v),
       z
         .string()
         .regex(/^[A-Z]{2}$/, "Use a two-letter country code, such as NL.")
+        .nullable(),
+    )
+    .default(null),
+  vatNumber: z
+    .preprocess(
+      (v) => (typeof v === "string" && v.trim() === "" ? null : v),
+      z
+        .string()
+        .trim()
+        .max(40)
+        .regex(/^[A-Za-z0-9 .-]+$/, "Use only letters, digits, spaces, dots and dashes.")
+        .transform(cleanVat)
+        .pipe(z.string().min(2, "Enter the whole VAT or tax number."))
         .nullable(),
     )
     .default(null),
@@ -50,17 +70,49 @@ export const vendorSchema = z.object({
 });
 export type VendorInput = z.infer<typeof vendorSchema>;
 
+/** A contact role's name (V-7), stored with extra spaces removed and compared ignoring case. Up to 200 characters, as job titles were, so no title carried over from before can block a contact. */
+export const roleNameSchema = z.string().transform(cleanName).pipe(z.string().min(1, "Give the role a name.").max(200, "Keep the role to 200 characters."));
+
+/** Role names as a contact holds them: each once (ignoring case), A to Z. */
+export function cleanRoles(names: string[]): string[] {
+  const seen = new Map<string, string>();
+  for (const n of names) if (!seen.has(n.toLowerCase())) seen.set(n.toLowerCase(), n);
+  return [...seen.values()].sort(byName);
+}
+/** A to Z, ignoring case. */
+export const byName = (a: string, b: string) => a.localeCompare(b, "en", { sensitivity: "base" });
+
 export const contactSchema = z.object({
   name: z.string().trim().min(1, "Give the contact a name.").max(200),
-  jobTitle: optionalText(200),
+  roles: z.array(roleNameSchema).max(12, "Choose at most 12 roles.").transform(cleanRoles).default([]),
   email: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? null : v), z.email("Enter a valid email address.").max(200).nullable()).default(null),
   phone: optionalText(50),
   isPrimary: z.boolean().default(false),
 });
 export type ContactInput = z.infer<typeof contactSchema>;
 
+const blank = (v: unknown) => v === undefined || v === null || (typeof v === "string" && v.trim() === "") || (Array.isArray(v) && v.length === 0);
+/**
+ * A new vendor with its main contact (V-6). The contact is optional: left empty, the vendor is
+ * saved without one. Anything filled in without a name is pointed out, not dropped.
+ */
+export const newVendorSchema = vendorSchema.extend({
+  mainContact: z.preprocess((v) => (v && typeof v === "object" && Object.values(v).every(blank) ? undefined : v), contactSchema.omit({ isPrimary: true }).optional()),
+});
+
+/** A vendor's address as the lines it is written on; the country is the last line. Empty when none is given. */
+export const addressLines = (v: Pick<VendorInput, "addressLine1" | "addressLine2" | "postalCode" | "city" | "country">): string[] =>
+  [v.addressLine1, v.addressLine2, [v.postalCode, v.city].filter(Boolean).join(" "), v.country].filter((x): x is string => !!x);
+
 export interface Contact extends ContactInput {
   id: string;
+}
+
+export interface ContactRole {
+  id: string;
+  name: string;
+  /** How many contacts hold it. */
+  contacts: number;
 }
 
 export type Paperwork = "in_place" | "missing" | "expired" | "not_required";

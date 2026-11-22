@@ -532,7 +532,7 @@ export function ScorecardPage() {
           </div>
 
           <div className="max-w-[720px]">
-            <History entityType="scorecard" entityId={c!.id} />
+            <History entityType="scorecard" entityId={c!.id} limit={5} />
           </div>
         </>
       )}

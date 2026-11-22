@@ -65,11 +65,15 @@ function Documents({ a }: { a: AgreementDetail }) {
       setProblem(null);
       await done();
       // The reading is shown across the page, above this section: take the reader, and the keyboard, there.
-      requestAnimationFrame(() => {
+      // The panel is drawn once the new reading has arrived, which can take a few frames on a busy computer.
+      let tries = 0;
+      const go = () => {
         const panel = document.getElementById(`reading-${r.documentId}`);
-        panel?.scrollIntoView({ block: "center", behavior: "smooth" });
-        panel?.focus({ preventScroll: true });
-      });
+        if (!panel) return void (tries++ < 60 && requestAnimationFrame(go));
+        panel.scrollIntoView({ block: "center", behavior: "smooth" });
+        panel.focus({ preventScroll: true });
+      };
+      requestAnimationFrame(go);
     },
     onError: (e) => setProblem(messageOf(e)),
   });
@@ -289,7 +293,7 @@ export function AgreementPage() {
             </Section>
           )}
         </div>
-        <History entityType="agreement" entityId={a.id} />
+        <History entityType="agreement" entityId={a.id} limit={5} />
       </div>
 
       {dialog === "edit" && <AgreementForm agreement={a} onClose={() => setDialog(null)} onSaved={(x) => saved(`Saved ${x.title}`)} />}

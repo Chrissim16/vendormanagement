@@ -31,6 +31,8 @@ const tabs: { id: RfpTab; label: string }[] = [
   { id: "responses", label: "Responses" },
   { id: "scoring", label: "Scoring" },
   { id: "decision", label: "Decision" },
+  // The history has its own tab at every stage, so it never pushes the demand down (Q-11).
+  { id: "history", label: "History" },
 ];
 
 /** Where the RFP stands on its way from drafting to decided (Q-11). */
@@ -113,7 +115,6 @@ function Overview({ rfp, onEdit, onCancel }: { rfp: RfpDetail; onEdit: () => voi
           a candidate.
         </p>
       </Section>
-      <History entityType="rfp" entityId={rfp.id} />
     </>
   );
 }
@@ -179,11 +180,12 @@ export function RfpPage() {
         <div className="flex flex-col gap-10">
           {tab === "overview" && <Overview rfp={rfp} onEdit={() => setDialog("edit")} onCancel={() => setDialog("cancel")} />}
           {tab === "document" && <DocumentTab rfp={rfp} keep={kept} />}
-          {tab === "review" && <ReviewTab rfp={rfp} />}
+          {tab === "review" && <ReviewTab rfp={rfp} unsaved={!!kept.current} onDocument={() => setUrl({ tab: "document" }, { push: true })} />}
           {tab === "candidates" && <CandidatesTab rfp={rfp} />}
           {tab === "responses" && <ResponsesTab rfp={rfp} />}
           {tab === "scoring" && <ScoringTab rfp={rfp} />}
           {tab === "decision" && <DecisionTab rfp={rfp} />}
+          {tab === "history" && <History entityType="rfp" entityId={rfp.id} />}
         </div>
       </Tabs>
 

@@ -20,6 +20,7 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 **F-3 Audit trail.**
 - Every create, change and removal of a business record adds an entry with who, when and what changed.
 - Each record's page shows its history. Admins can browse and filter the full log.
+- A long history does not push a page's content down: on a page with tabs it has its own History tab, the last one; elsewhere the newest five entries are shown with "Show all" (added after M8, built in M10).
 
 **F-5 Sample version.** The app can be tried with invented data only, without anything from the company.
 - On one's own computer, one command starts it with the sample data, fresh every time; nothing is kept when it stops.
@@ -41,6 +42,25 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 **V-3 Vendor page.** Shows details, contacts (one primary), agreements grouped by kind, and sections for money, performance and RFPs that fill in later milestones. Shows clearly whether an NDA and a DPA are in place, missing or expired.
 
 **V-4 Offboarding.** Refused while the vendor has an active agreement, naming the agreement.
+
+**V-5 Address and VAT number.** Added after M8 at the owner's request; built in M10.
+- The vendor form has an address in separate boxes (street, a second street line, postal code, city, country) and a "VAT or tax number". All are optional, for every status.
+- The VAT or tax number takes letters, digits, spaces, dots and dashes, and is stored in capitals without spaces, dots or dashes. A number already held by another vendor is refused next to the field, naming that vendor.
+- The vendor page shows the address as one block and the number, or "Not given".
+- The import template has the same columns, all optional, by the same rules.
+
+**V-6 Main contact when adding a vendor.** Added after M8; built in M10.
+- The form for a new vendor has an optional "Main contact" part: name, roles, email and phone.
+- When a name is given, the vendor and the contact are saved together and the contact is the vendor's primary contact. When the contact is refused (for example an invalid email), nothing is saved and the form keeps what was typed.
+- With nothing filled in, the vendor is saved without contacts, as before. An email, phone or role filled in without a name is pointed out under the name ("Give the contact a name.") and nothing is saved, so nothing typed is dropped without a word. Further contacts are added on the vendor's page.
+
+**V-7 Contact roles.** Added after M8; built in M10. Replaces the free-text job title.
+- A contact has any number of roles, chosen from one shared list, shown A to Z.
+- The list starts with Account Manager, Billing / Finance, Consultant, Delivery Manager, Developer, Executive Sponsor, Helpdesk, Legal / Contracts, Program Manager, Project Manager, Support Manager and Technical Contact.
+- While filling in a contact, a member can type a role that is not on the list and add it; it is then on the list for everyone. A role that differs from an existing one only in capitals or in extra spaces (before, after, or doubled between words) is not added twice; the existing one is chosen. "Help desk" and "Helpdesk" are different names. Text typed in the box but not confirmed with Enter is taken as a role when the box is left.
+- An admin can rename a role and remove one. A role in use cannot be removed; the page names the contacts that hold it. Renaming changes it on every contact.
+- Every job title held before becomes a role on the list and on its contact, so nothing typed earlier is lost.
+- The vendor's contacts show their roles, and so does Ask's vendor look-up.
 
 **A-1 Add an agreement.**
 - A member can add an MSA, SOW, subscription, NDA or DPA to a vendor. The form shows only the fields for that kind.
@@ -84,7 +104,7 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 
 **M-7 Warning thresholds.** An admin sets how many days ahead to warn of a notice deadline and of a SOW ending, and at what percentage of a budget to warn. Warnings, the Renewals page and the explanations on screen all follow these settings. (Exchange rates were part of M-7 until 22 Nov 2026 and are now M-8.)
 
-**M-8 Currencies and exchange rates.** Euro is the main currency; amounts can be in any currency on the admin's list, and every total across currencies is in euros. Built in M10.
+**M-8 Currencies and exchange rates.** Euro is the main currency; amounts can be in any currency on the admin's list, and every total across currencies is in euros. Built in M12.
 - The list starts with EUR, GBP, USD, SEK, NOK and DKK. On the Settings page an admin can add any other currency that uses cents (two decimals), chosen from the standard currency list, by giving its rate. A currency without cents or with three decimals (for example yen or dinar) is refused with a plain explanation.
 - Each currency other than EUR has one current rate, typed as "1 EUR = X" with up to four decimals, as banks and the European Central Bank publish them. EUR itself is always 1 and cannot be removed or changed.
 - Settings shows, per currency, the rate and when and by whom it was last set. Until an admin saves a rate, the app uses a rough starting rate and says "starting rate, not yet set by an admin" there and next to every euro total that uses it.
@@ -143,7 +163,7 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 
 **Q-2 Draft.** The AI drafts sections, criteria with weights and a numbered question list from the need and a template. The draft is a proposal: it becomes the RFP's document when a member takes it over, and a member can edit everything. Each question belongs to one criterion. Weights within a part add up to 100. Without the AI, the template gives the same start by hand.
 
-**Q-3 Review.** The RFP exports as Word and PDF. A member records each reviewer's sign-off or requested changes, and marks a requested change as dealt with. The stage cannot move to approved without at least one approval and no open change request. An approved document is fixed; when it is taken back and changed, the earlier approval no longer counts.
+**Q-3 Review.** The RFP exports as Word (since M11 no longer as PDF; see Q-14). A member records each reviewer's sign-off or requested changes, and marks a requested change as dealt with. The stage cannot move to approved without at least one approval and no open change request. An approved document is fixed; when it is taken back and changed, the earlier approval no longer counts.
 
 **Q-4 Candidates.** A member keeps a longlist and shortlist with a reason per candidate. A candidate not yet known is created as a prospect vendor.
 
@@ -159,7 +179,31 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 
 **Q-10 Decision record.** The full trail (demand, sign-offs, candidates with reasons, scores per evaluator, decision) exports as one PDF. Before a decision it holds the trail so far.
 
-**Q-11 Overview.** A list of RFPs with stage, owner and target date, and a page per RFP that shows the current stage and the next step.
+**Q-11 Overview.** A list of RFPs with stage, owner and target date, and a page per RFP that shows the current stage and the next step. The RFP's history is on its own History tab after Decision, at every stage (changed after M8; built in M10).
+
+**Q-12 Document editor.** Added after M8 at the owner's request; built in M11.
+- A section's text is edited in an editor with headings, bullet and numbered lists, bold, italic and simple tables, using the keyboard as well as buttons. The AI's draft arrives in the same formatting.
+- What the editor shows is what the Word file holds: the same headings, lists, emphasis and tables.
+- Text written before M11 opens unchanged, as plain paragraphs.
+- On a section a member can ask the AI to rewrite it, with an instruction in their own words, or for one or more reviewer comments (Q-13). The rewrite is shown next to the current text with the differences marked, labelled as AI, and changes nothing until the member uses it, edits it, or rejects it. It may contain no figure that is not in the section, the comments or the instruction.
+- Rewriting follows the same locks as editing: not on an approved, issued, decided or cancelled RFP.
+
+**Q-13 Review rounds with comments from Word.** Added after M8; built in M11. Reviewers stay in Word.
+- Downloading the review copy starts a review round with the next version number (version 1, 2, ...). The version is on the cover page and in the file name.
+- A member uploads a reviewer's returned Word file to that round. The app reads its comments and tracked changes, with the reviewer's name as Word gives it, and places each next to the section it is in. One round takes the files of several reviewers.
+- A comment shows the words it was made on. A tracked change shows as a suggested edit: what would be removed and what would be added.
+- For each comment or suggested edit the member can: take the suggested edit over, ask the AI to rewrite the section for it, edit by hand, or set it aside. Each ends as "dealt with" or "set aside", with who and when.
+- A suggested edit whose words are no longer in the section (because the text changed since) cannot be taken over as it is; the page says so and shows it for doing by hand. A comment the app cannot place in a section, for example because a reviewer renamed a heading, is listed under "Not placed" for the member to put in a section or set aside.
+- An uploaded file that is not a review copy of this RFP, or of another version, is refused or flagged with which version it is.
+- The RFP cannot move to approved while a comment or suggested edit of any round is open, as with a requested change.
+- Downloading the next review copy holds every change made since. Earlier versions stay downloadable from their round, with their comments and what was done with each.
+
+**Q-14 Company Word template.** Added after M8; built in M11.
+- An admin uploads the company's Word template (.dotx or .docx) on the settings page. On upload the app says what it found: the cover page and the places marked [Title], [Date] and [Version], the header and footer, and the heading and list styles. A missing mark is reported, not refused.
+- Every RFP Word file (the review copy and the copy each candidate gets) uses the template's cover page, header and footer, logo, fonts and spacing; the RFP's own text uses the template's heading, list and table styles. The cover gets the RFP title, the day the file was made and the version.
+- The template's own words other than the marks are kept as they are; the RFP's text follows the cover page.
+- A new upload replaces the template for files made from then on. Without a template the app uses a plain layout of its own. The project holds only an invented example template for trying the app, never the company's.
+- The RFP is no longer exported as PDF for review. The decision record (Q-10) stays a PDF.
 
 ## Ask a question (M7)
 

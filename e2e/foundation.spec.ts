@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { ADMIN, expectAccessible, MEMBER, newPerson, setPerson, signInAs } from "./helpers";
+import { ADMIN, expectAccessible, MEMBER, newAgreement, newPerson, newVendor, setPerson, signInAs } from "./helpers";
 
 // Every test brings its own data, so any one of them can run alone: `npx playwright test -g "F-3"`.
 
@@ -284,5 +284,27 @@ test.describe("throughout", () => {
     await page.goto("/admin/people");
     await expect(page.getByRole("table", { name: "People" })).toBeVisible();
     expect(outside).toEqual([]);
+  });
+});
+
+test.describe("F-3 a long history stays out of the way", () => {
+  test("F-3 a page without tabs shows the newest five changes, with Show all for the rest", async ({ page, context, request }) => {
+    const v = await newVendor(request, "History");
+    const a = await newAgreement(request, v, { kind: "msa", title: "Much changed MSA" });
+    for (let i = 1; i <= 6; i++) {
+      const res = await request.patch(`http://127.0.0.1:4173/api/agreements/${a.id}`, { headers: { "x-dev-user": ADMIN, cookie: "" }, data: { notes: `Note ${i}` } });
+      expect(res.ok()).toBe(true);
+    }
+    await signInAs(context, MEMBER);
+    await page.goto(`/agreements/${a.id}`);
+    const history = page.getByRole("list", { name: "History" });
+    await expect(history.getByRole("listitem")).toHaveCount(5);
+    await expect(history.getByRole("listitem").first()).toContainText("Note 6");
+    await page.getByRole("button", { name: "Show all 7" }).click();
+    await expect(history.getByRole("listitem")).toHaveCount(7);
+    await expect(history.getByRole("listitem").last()).toContainText("Added");
+    await page.getByRole("button", { name: "Show the newest 5" }).click();
+    await expect(history.getByRole("listitem")).toHaveCount(5);
+    await expectAccessible(page);
   });
 });

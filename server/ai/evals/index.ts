@@ -4,7 +4,7 @@ import { askAnswerCases, askPlanCases } from "./ask";
 import { contractFieldsCases } from "./contract-fields";
 import { monthlyProposalCases } from "./monthly-proposal";
 import { briefingCases, reportSummaryCases } from "./overview";
-import { rfpComparisonCases, rfpDraftCases } from "./rfp";
+import { rfpComparisonCases, rfpDraftCases, rfpSectionRewriteCases } from "./rfp";
 
 /**
  * Evaluation sets: for each prompt, a handful of invented inputs with checks on what a
@@ -35,6 +35,7 @@ const cases: EvalCase<any, any>[] = [
   ...briefingCases,
   ...rfpDraftCases,
   ...rfpComparisonCases,
+  ...rfpSectionRewriteCases,
   ...askPlanCases,
   ...askAnswerCases,
   ...contractFieldsCases,

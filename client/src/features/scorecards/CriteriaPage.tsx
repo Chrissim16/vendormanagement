@@ -180,7 +180,7 @@ export function CriteriaPage() {
             <details key={c.id}>
               <summary className="cursor-pointer text-[13px] font-medium text-ink-2">History of {c.name}</summary>
               <div className="pt-3">
-                <History entityType="criterion" entityId={c.id} />
+                <History entityType="criterion" entityId={c.id} limit={5} />
               </div>
             </details>
           ))}

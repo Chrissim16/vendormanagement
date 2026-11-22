@@ -31,6 +31,7 @@ import {
   type RfpRow,
   type RfpStage,
 } from "../../../shared/rfp";
+import { normalise, parseBlocks, plainBlocks, plainText, toMarkdown } from "../../../shared/richtext";
 import { suggestionStatusLabels, type SuggestionStatus } from "../../../shared/scorecards";
 import type { Page, User } from "../../../shared/types";
 import { z } from "zod";
@@ -41,6 +42,7 @@ import { AppError, notFound } from "../../platform/errors";
 import { failFields, like } from "../../platform/http";
 import type { AiPort, Db, Queryable, StoragePort, Tx } from "../../platform/ports/types";
 import { getVendor } from "../vendors/service";
+import { reviewOf } from "./reviewRead";
 
 /** What the RFP feature needs: the database, the AI, the place files are kept, and the clock. */
 export interface RfpContext {
@@ -54,6 +56,8 @@ export type Changes = Record<string, { from: unknown; to: unknown }>;
 
 const personName = sql<string>`coalesce(${users.displayName}, ${users.email})`;
 const short = (s: string | null | undefined, max = 160) => (s == null ? null : s.length > max ? `${s.slice(0, max)}…` : s);
+/** A section's text as words, without its formatting, for the history. */
+const sectionWords = (md: string | null | undefined) => plainText(parseBlocks(md)).replace(/\n/g, " · ") || null;
 export const words = (s: SuggestionStatus) => suggestionStatusLabels[s].toLowerCase();
 
 /** What the comparison read: every answer of the candidates in the running. Changes whenever one of them does. */
@@ -65,6 +69,9 @@ export function answersFingerprint(candidates: Pick<Candidate, "id" | "list" | "
     .sort();
   return createHash("sha256").update(lines.join("\n")).digest("hex");
 }
+
+/** What a section's text was when the AI rewrote it, so that using the rewrite can never overwrite a change made since (Q-12). */
+export const textPrint = (body: string | null) => createHash("sha256").update(normalise(body)).digest("hex");
 
 /** Everything about one RFP, as its page shows it. */
 export async function getRfp(db: Queryable, id: string, today: Day): Promise<RfpDetail> {
@@ -136,7 +143,12 @@ export async function getRfp(db: Queryable, id: string, today: Day): Promise<Rfp
     suggestedScore: s.suggestedScore,
   }));
   const plainAnswers = answers.map((a) => ({ candidateId: a.candidateId, questionId: a.questionId, text: a.text }));
-  const [draft, comparison] = await Promise.all([readSuggestion<RfpDraft>(db, r.draftSuggestionId), readSuggestion<RfpComparison>(db, r.comparisonSuggestionId)]);
+  const rewrites = await Promise.all(sections.map((s) => readSuggestion<{ body: string }>(db, s.rewriteSuggestionId)));
+  const [draft, comparison, review] = await Promise.all([
+    readSuggestion<RfpDraft>(db, r.draftSuggestionId),
+    readSuggestion<RfpComparison>(db, r.comparisonSuggestionId),
+    reviewOf(db, id),
+  ]);
   const winner = candidates.find((c) => c.id === r.winnerCandidateId);
   return {
     id: r.id,
@@ -154,7 +166,23 @@ export async function getRfp(db: Queryable, id: string, today: Day): Promise<Rfp
     stage: r.stage,
     createdAt: r.createdAt.toISOString(),
     createdBy: r.createdBy,
-    sections: sections.map((s) => ({ id: s.id, heading: s.heading, body: s.body })),
+    sections: sections.map((s, i) => {
+      const body = s.bodyFormat === "plain" ? toMarkdown(plainBlocks(s.body)) || null : s.body;
+      const rw = rewrites[i];
+      return {
+        id: s.id,
+        heading: s.heading,
+        body,
+        rewrite: rw
+          ? {
+              ...rw,
+              remarkIds: s.rewriteFor?.remarkIds ?? [],
+              instruction: s.rewriteFor?.instruction ?? null,
+              outdated: rw.status === "proposed" && s.rewriteFor?.basedOn !== textPrint(body),
+            }
+          : null,
+      };
+    }),
     criteria: criteria.map((c) => ({ id: c.id, name: c.name, weight: c.weight, part: c.part })),
     questions: questions.map((q) => ({ id: q.id, number: q.number, text: q.text, criterionId: q.criterionId })),
     signoffs: signoffs.map((s) => ({
@@ -178,6 +206,7 @@ export async function getRfp(db: Queryable, id: string, today: Day): Promise<Rfp
       plainScores.filter((s) => running.includes(s.candidateId)),
     ),
     draft,
+    review,
     comparison,
     comparisonOutdated: !!comparison && r.comparisonAnswers !== answersFingerprint(candidates, plainAnswers),
     decision:
@@ -288,7 +317,7 @@ export async function change(ctx: RfpContext, id: string, by: User, apply: (tx: 
 
 export const closed = () => new AppError(409, "rfp_closed", "This RFP is decided or cancelled, so nothing on it can be changed any more.");
 /** Why the document or the part weights cannot be changed at this stage. */
-const locked = (stage: RfpStage) =>
+export const locked = (stage: RfpStage) =>
   contentLocked(stage)
     ? new AppError(
         409,
@@ -301,7 +330,7 @@ const locked = (stage: RfpStage) =>
  * The document or its weights changed: an approval given before speaks for an earlier
  * version and no longer counts (Q-3). It stays in the trail, marked as such.
  */
-async function supersedeApprovals(tx: Tx, rfp: RfpDetail): Promise<Changes> {
+export async function supersedeApprovals(tx: Tx, rfp: RfpDetail): Promise<Changes> {
   const earlier = rfp.signoffs.filter((x) => x.outcome === "approved" && !x.superseded);
   if (!earlier.length) return {};
   await tx
@@ -382,7 +411,8 @@ function contentChanges(before: RfpDetail, after: RfpContentInput): Changes {
   const newSections = new Map(after.sections.map((s) => [s.heading, s.body]));
   for (const [heading, body] of newSections) {
     if (!oldSections.has(heading)) changes[`section ${heading}`] = { from: null, to: "added" };
-    else if ((oldSections.get(heading) ?? null) !== (body ?? null)) changes[`section ${heading}`] = { from: short(oldSections.get(heading)), to: short(body) };
+    else if (normalise(oldSections.get(heading)) !== normalise(body))
+      changes[`section ${heading}`] = { from: short(sectionWords(oldSections.get(heading))), to: short(sectionWords(body)) };
   }
   for (const heading of oldSections.keys()) if (!newSections.has(heading)) changes[`section ${heading}`] = { from: "listed", to: "removed" };
   if (before.sections.map((s) => s.heading).join("\n") !== after.sections.map((s) => s.heading).join("\n") && !Object.keys(changes).length)
@@ -412,12 +442,22 @@ function contentChanges(before: RfpDetail, after: RfpContentInput): Changes {
   return changes;
 }
 
-/** Replaces the sections, criteria and questions with what was sent. Questions are numbered in the order given. */
-async function writeContent(tx: Tx, rfpId: string, c: RfpContentInput) {
+/**
+ * Replaces the sections, criteria and questions with what was sent. Questions are numbered
+ * in the order given. A section sent with its id is changed in place, so that reviewers'
+ * remarks and AI rewrites stay with it; a section left out is removed.
+ */
+export async function writeContent(tx: Tx, rfpId: string, c: RfpContentInput) {
   await tx.delete(rfpQuestions).where(eq(rfpQuestions.rfpId, rfpId));
   await tx.delete(rfpCriteria).where(eq(rfpCriteria.rfpId, rfpId));
-  await tx.delete(rfpSections).where(eq(rfpSections.rfpId, rfpId));
-  if (c.sections.length) await tx.insert(rfpSections).values(c.sections.map((s, i) => ({ rfpId, position: i + 1, heading: s.heading, body: s.body })));
+  const existing = new Set((await tx.select({ id: rfpSections.id }).from(rfpSections).where(eq(rfpSections.rfpId, rfpId))).map((x) => x.id));
+  const kept = c.sections.flatMap((s) => (s.id && existing.has(s.id) ? [s.id] : []));
+  await tx.delete(rfpSections).where(kept.length ? and(eq(rfpSections.rfpId, rfpId), notInArray(rfpSections.id, kept)) : eq(rfpSections.rfpId, rfpId));
+  for (const [i, s] of c.sections.entries()) {
+    const values = { rfpId, position: i + 1, heading: s.heading, body: normalise(s.body) || null, bodyFormat: "markdown" as const };
+    if (s.id && existing.has(s.id)) await tx.update(rfpSections).set(values).where(eq(rfpSections.id, s.id));
+    else await tx.insert(rfpSections).values(values);
+  }
   const ids = new Map<string, string>();
   if (c.criteria.length) {
     const rows = await tx
@@ -430,7 +470,7 @@ async function writeContent(tx: Tx, rfpId: string, c: RfpContentInput) {
 }
 
 /** After the document changed: an AI draft that was taken over now counts as accepted or as edited, whichever is true (AI-1). */
-async function settleDraft(ctx: RfpContext, tx: Tx, rfp: RfpDetail, by: User): Promise<Changes> {
+export async function settleDraft(ctx: RfpContext, tx: Tx, rfp: RfpDetail, by: User): Promise<Changes> {
   const draft = rfp.draft;
   if (!draft || (draft.status !== "accepted" && draft.status !== "edited")) return {};
   const now = await getRfp(tx, rfp.id, ctx.today());
@@ -534,7 +574,7 @@ export async function moveStage(ctx: RfpContext, id: string, input: unknown, by:
       if (rfp.stage !== "in_review" && rfp.stage !== "approved") throw refuse(`An RFP that is ${rfpStageLabels[rfp.stage].toLowerCase()} cannot go back to drafting.`);
     } else {
       if (rfp.stage !== "in_review") throw refuse("Only an RFP that is in review can be marked as approved.");
-      const blocker = approvalBlocker(rfp.signoffs);
+      const blocker = approvalBlocker(rfp.signoffs, rfp.review.remarks);
       if (blocker) throw refuse(blocker);
     }
     await tx.update(rfps).set({ stage: to }).where(eq(rfps.id, id));

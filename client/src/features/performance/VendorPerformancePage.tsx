@@ -304,7 +304,7 @@ export function VendorPerformancePage() {
 
       {p && (
         <div className="max-w-[720px]">
-          <History entityType="vendor" entityId={vendorId} />
+          <History entityType="vendor" entityId={vendorId} limit={5} />
         </div>
       )}
 

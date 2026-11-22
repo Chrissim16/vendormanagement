@@ -145,7 +145,7 @@ export function PeoplePage() {
                 </div>
                 {open.id === me.id && <p className="text-[13px] text-ink-2">This is you.</p>}
                 {problem && <ErrorState message={problem} />}
-                <History entityType="user" entityId={open.id} />
+                <History entityType="user" entityId={open.id} limit={5} />
               </Panel>
             )
           }

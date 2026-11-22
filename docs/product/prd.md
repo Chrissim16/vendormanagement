@@ -95,8 +95,8 @@ Inside the app only, no email:
 About three a year. The app follows the team's existing process:
 
 1. Record the approved demand: what is needed, budget, sponsor, target date.
-2. Draft the RFP from a template with AI help: sections and a numbered question list, each question tied to a weighted criterion.
-3. Internal review. Reviewers outside the team (CTO, other IT teams) receive an exported Word or PDF; their sign-off is recorded.
+2. Draft the RFP from a template with AI help: sections and a numbered question list, each question tied to a weighted criterion. The text is edited in the app with headings, lists and tables, and the AI can rewrite a section on request.
+3. Internal review. Reviewers outside the team (CTO, other IT teams) receive the RFP as a Word file in the company's layout and comment in Word as they do now. The returned files are uploaded; the app places each comment and tracked change next to its section, where it is taken over, rewritten with AI help or set aside. Each round has a version number. Their sign-off is recorded.
 4. Longlist and shortlist of candidates, entered by hand with a reason for each.
 5. Issue: export the RFP as Word and the question list as Excel per candidate. The app warns if a candidate has no NDA.
 6. Upload each candidate's answers. The AI summarises and compares them per question and proposes scores.

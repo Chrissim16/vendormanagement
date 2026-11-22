@@ -259,7 +259,10 @@ export function ReportPage() {
             {d!.rfps.length === 0 ? (
               <Nothing>No RFP is open. A running RFP is listed here with its stage; a new one is started under RFPs.</Nothing>
             ) : (
-              <Figures label="Open RFPs" head={["RFP", "Stage"]} rows={d!.rfps.map((x) => [
+              <Figures
+                label="Open RFPs"
+                head={["RFP", "Stage"]}
+                rows={d!.rfps.map((x) => [
                   <Link key="t" to={`/rfps/${x.id}`} className={`underline ${linkClass}`}>
                     {x.title}
                   </Link>,

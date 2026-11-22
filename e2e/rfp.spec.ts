@@ -92,7 +92,6 @@ test.describe("Q-1 demand", () => {
     await expect(demand).toContainText("A way to plan cash across the entities.");
     for (const fact of ["€ 45,000.00", "Group treasurer", "10 Nov 2026", "31 Mar 2027", "Mira Okafor", "Written answers 70%, demo and interview 30%"])
       await expect(demand).toContainText(fact);
-    await expect(page.getByText(`Added${""}`).first()).toBeVisible();
     await expectAccessible(page);
 
     // The demand can be changed; the history says what changed.
@@ -101,7 +100,15 @@ test.describe("Q-1 demand", () => {
     await edit.getByLabel("Sponsor").fill("Head of treasury");
     await edit.getByRole("button", { name: "Save demand" }).click();
     await expect(demand).toContainText("Head of treasury");
+    // Q-11 the history is on its own tab, the last one, after Decision.
+    await expect(page.getByText("Sponsor from Group treasurer to Head of treasury")).toHaveCount(0);
+    const tabs = page.getByRole("tablist", { name: "Parts of this RFP" }).getByRole("tab");
+    await expect(tabs.last()).toHaveText("History");
+    await expect(tabs.nth(-2)).toHaveText("Decision");
+    await tabs.last().click();
     await expect(page.getByText("Sponsor from Group treasurer to Head of treasury")).toBeVisible();
+    await expect(page).toHaveURL(/tab=history/);
+    await expect(page.getByRole("list", { name: "History" }).getByRole("listitem").last()).toContainText("Added");
   });
 });
 
@@ -155,7 +162,7 @@ test.describe("Q-2 draft", () => {
     await page.getByLabel("Criterion of question 14").selectOption({ label: "Commercial terms" });
     await page.getByRole("button", { name: "Add section" }).click();
     await page.getByLabel("Heading of section 7").fill("Annex: our systems");
-    await page.getByLabel("Text of section 7").fill("A list of the systems the tool has to work with.");
+    await page.getByRole("textbox", { name: "Text of section 7" }).fill("A list of the systems the tool has to work with.");
     await page.getByRole("button", { name: "Save document" }).click();
     await expect(page.getByText("Document saved")).toBeVisible();
     await expect(panel).toContainText("Accepted with changes");
@@ -188,18 +195,14 @@ test.describe("Q-2 draft", () => {
 });
 
 test.describe("Q-3 review", () => {
-  test("Q-3 exports as Word and PDF; approved needs at least one approval and no open change request", async ({ page, context, request }) => {
+  test("Q-3 exports as Word, no longer as PDF; approved needs at least one approval and no open change request", async ({ page, context, request }) => {
     const rfp = await drafted(request);
     await signInAs(context, MEMBER);
     await open(page, rfp, "review");
-    for (const [name, ext] of [
-      ["Download as Word", ".docx"],
-      ["Download as PDF", ".pdf"],
-    ] as const) {
-      const download = page.waitForEvent("download");
-      await page.getByRole("link", { name }).click();
-      expect((await download).suggestedFilename()).toBe(`${rfp.title} RFP review copy${ext}`);
-    }
+    const download = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Download the review copy" }).click();
+    expect((await download).suggestedFilename()).toBe(`${rfp.title} RFP review copy v1.docx`);
+    await expect(page.getByRole("link", { name: "Download as PDF" })).toHaveCount(0);
     await expect(page.getByText("No sign-offs yet. They are recorded once the draft has been sent for review.")).toBeVisible();
     await page.getByRole("button", { name: "Send for review" }).click();
     await expect(currentStage(page)).toContainText("In review");
@@ -734,8 +737,8 @@ test.describe("Q-11 overview", () => {
     const decided = list.items.find((r) => r.title === "Treasury reporting advice")!;
     await signInAs(context, MEMBER);
     for (const [rfp, tabs] of [
-      [sample, ["overview", "document", "review", "candidates", "responses", "scoring", "decision"]],
-      [decided, ["scoring", "decision"]],
+      [sample, ["overview", "document", "review", "candidates", "responses", "scoring", "decision", "history"]],
+      [decided, ["scoring", "decision", "history"]],
     ] as const)
       for (const tab of tabs) {
         const started = Date.now();
@@ -745,5 +748,21 @@ test.describe("Q-11 overview", () => {
         expect(Date.now() - started, `${rfp.title} ${tab}`).toBeLessThan(2000);
         await expectAccessible(page);
       }
+  });
+});
+
+test.describe("Q-11 history tab", () => {
+  test("Q-11 a decided RFP keeps its history on its own tab after Decision, not on the overview", async ({ page, context, request }) => {
+    const list = await call<{ items: { id: string; title: string }[] }>(request, "get", "/rfps?pageSize=200");
+    const decided = list.items.find((r) => r.title === "Treasury reporting advice")!;
+    await signInAs(context, MEMBER);
+    await page.goto(`/rfps/${decided.id}?tab=overview`);
+    const tabs = page.getByRole("tablist", { name: "Parts of this RFP" }).getByRole("tab");
+    await expect(tabs.last()).toHaveText("History");
+    await expect(tabs.nth(-2)).toHaveText("Decision");
+    await expect(page.getByRole("list", { name: "History" })).toHaveCount(0);
+    await tabs.last().click();
+    await expect(page.getByRole("list", { name: "History" }).getByRole("listitem").first()).toBeVisible();
+    await expectAccessible(page);
   });
 });

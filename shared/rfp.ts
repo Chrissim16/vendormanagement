@@ -2,6 +2,8 @@ import { z } from "zod";
 import { isDay, type Day } from "./dates";
 import { currencies, type Currency } from "./money";
 import type { TextSuggestion } from "./overview";
+import { openRemarks, type ReviewerRemark, type ReviewRound } from "./review";
+import { normalise, parseBlocks, TABLE_LIMITS } from "./richtext";
 import { cleanName, vendorTypes, type Paperwork, type VendorStatus, type VendorType } from "./vendors";
 
 /**
@@ -81,7 +83,15 @@ export type RfpDemand = z.infer<typeof rfpDemandSchema>;
 
 export const rfpContentSchema = z.object({
   sections: z
-    .array(z.object({ heading: requiredText(200, "Give the section a heading."), body: optionalText(10_000) }))
+    .array(
+      z.object({
+        /** The section as saved before, so that what points at it (a reviewer's remark, an AI rewrite) stays with it. Absent for a new one. */
+        id: z.string().uuid().optional(),
+        heading: requiredText(200, "Give the section a heading."),
+        /** Formatted text (shared/richtext). */
+        body: optionalText(20_000),
+      }),
+    )
     .max(30, "An RFP has at most 30 sections.")
     .default([]),
   criteria: z
@@ -121,6 +131,13 @@ export function contentProblems(c: RfpContentInput): Record<string, string> {
     if (seen.has(k)) out[`criteria.${i}.name`] = "This part already has a criterion with this name.";
     seen.add(k);
   });
+  c.sections.forEach((s, i) => {
+    for (const b of parseBlocks(s.body))
+      if (b.kind === "table" && (b.rows.length > TABLE_LIMITS.rows || (b.rows[0]?.length ?? 0) > TABLE_LIMITS.columns))
+        out[`sections.${i}.body`] = `A table has at most ${TABLE_LIMITS.rows} rows and ${TABLE_LIMITS.columns} columns.`;
+  });
+  const ids = c.sections.flatMap((s) => (s.id ? [s.id] : []));
+  if (new Set(ids).size !== ids.length) out["sections"] = "A section appears twice.";
   const byKey = new Map(c.criteria.map((x) => [x.key, x]));
   c.questions.forEach((q, i) => {
     const criterion = byKey.get(q.criterionKey);
@@ -180,7 +197,7 @@ export const templateDraft = (): RfpDraft => ({ sections: RFP_TEMPLATE.sections.
 export const draftToContent = (d: RfpDraft): RfpContentInput => {
   const key = (name: string) => `new-${d.criteria.findIndex((c) => c.part === "written" && c.name.toLowerCase() === name.toLowerCase())}`;
   return {
-    sections: d.sections.map((s) => ({ heading: s.heading, body: s.body || null })),
+    sections: d.sections.map((s) => ({ heading: s.heading, body: normalise(s.body) || null })),
     criteria: d.criteria.map((c, i) => ({ key: `new-${i}`, name: c.name, weight: c.weight, part: c.part })),
     questions: d.questions.map((q) => ({ text: q.text, criterionKey: key(q.criterion) })),
   };
@@ -191,12 +208,12 @@ const squash = (s: string | null | undefined) => (s ?? "").trim().replace(/\s+/g
 export function sameAsDraft(doc: { sections: RfpSection[]; criteria: RfpCriterion[]; questions: RfpQuestion[] }, d: RfpDraft): boolean {
   const names = new Map(doc.criteria.map((c) => [c.id, c.name]));
   const mine = JSON.stringify([
-    doc.sections.map((s) => [squash(s.heading), squash(s.body)]),
+    doc.sections.map((s) => [squash(s.heading), normalise(s.body)]),
     doc.criteria.map((c) => [squash(c.name).toLowerCase(), c.part, c.weight]),
     doc.questions.map((q) => [squash(q.text), squash(names.get(q.criterionId)).toLowerCase()]),
   ]);
   const theirs = JSON.stringify([
-    d.sections.map((s) => [squash(s.heading), squash(s.body)]),
+    d.sections.map((s) => [squash(s.heading), normalise(s.body)]),
     d.criteria.map((c) => [squash(c.name).toLowerCase(), c.part, c.weight]),
     d.questions.map((q) => [squash(q.text), squash(q.criterion).toLowerCase()]),
   ]);
@@ -431,8 +448,31 @@ export interface RfpRow {
 export interface RfpSection {
   id: string;
   heading: string;
+  /** Formatted text (shared/richtext); text from before M11 is given as plain paragraphs in that form. */
   body: string | null;
+  /** Q-12: the AI's latest rewrite of this section, if one was asked for. */
+  rewrite?: SectionRewrite | null;
 }
+/** Q-12: an AI rewrite of a section, with the reviewers' remarks it was asked for. */
+export interface SectionRewrite extends TextSuggestion<{ body: string }> {
+  remarkIds: string[];
+  /** What the member asked for, as they typed it. */
+  instruction: string | null;
+  /** The section's text changed after the AI was asked, so the rewrite is of an earlier text. */
+  outdated: boolean;
+}
+export const rewriteAskSchema = z
+  .object({
+    instruction: optionalText(1000),
+    remarkIds: z.array(z.string().uuid()).max(20).default([]),
+  })
+  .refine((v) => v.instruction || v.remarkIds.length, { message: "Say what to change, or choose a reviewer's remark to rewrite for.", path: ["instruction"] });
+export const rewriteReviewSchema = z.object({
+  action: z.enum(["accept", "reject"]),
+  suggestionId: z.string().uuid(),
+  /** The rewrite as the member edited it before using it; absent when used as it is. */
+  body: z.string().max(20_000).optional(),
+});
 export interface RfpCriterion {
   id: string;
   name: string;
@@ -512,6 +552,8 @@ export interface RfpDetail extends Omit<RfpDemand, "ownerUserId"> {
   /** Worked out for the candidates that can be scored: shortlisted and issued. */
   results: CandidateResult[];
   draft: TextSuggestion<RfpDraft> | null;
+  /** Q-13: the review rounds, newest first, and every remark read from the reviewers' returned files. */
+  review: { rounds: ReviewRound[]; remarks: ReviewerRemark[] };
   comparison: TextSuggestion<RfpComparison> | null;
   /** An answer was added or changed after the AI compared them. */
   comparisonOutdated: boolean;
@@ -525,9 +567,13 @@ export const ndaInPlace = (c: Pick<Candidate, "nda">) => c.nda === "in_place" ||
 export const openChangeRequests = (signoffs: Pick<Signoff, "outcome" | "resolvedOn" | "superseded">[]) =>
   signoffs.filter((s) => s.outcome === "changes_requested" && !s.resolvedOn && !s.superseded);
 /** Q-3: approved needs at least one approval of the document as it stands and no change request still open. Returns why not, or null. */
-export function approvalBlocker(signoffs: Pick<Signoff, "outcome" | "resolvedOn" | "superseded">[]): string | null {
+export function approvalBlocker(signoffs: Pick<Signoff, "outcome" | "resolvedOn" | "superseded">[], remarks: Pick<ReviewerRemark, "status">[] = []): string | null {
   const open = openChangeRequests(signoffs).length;
   if (open) return `${open === 1 ? "A requested change is" : `${open} requested changes are`} still open. Mark ${open === 1 ? "it" : "them"} as dealt with first.`;
+  // Q-13: a reviewer's comment or suggested edit counts as a requested change (Q87).
+  const remarksOpen = openRemarks(remarks).length;
+  if (remarksOpen)
+    return `${remarksOpen === 1 ? "A reviewer's remark from Word is" : `${remarksOpen} reviewers' remarks from Word are`} still open. Deal with ${remarksOpen === 1 ? "it" : "each"} or set ${remarksOpen === 1 ? "it" : "them"} aside first.`;
   if (!signoffs.some((s) => s.outcome === "approved" && !s.superseded))
     return signoffs.some((s) => s.outcome === "approved")
       ? "The document was changed after it was approved, so the earlier approval no longer counts. Record an approval of the document as it is now."
@@ -535,7 +581,7 @@ export function approvalBlocker(signoffs: Pick<Signoff, "outcome" | "resolvedOn"
   return null;
 }
 
-export type RfpTab = "overview" | "document" | "review" | "candidates" | "responses" | "scoring" | "decision";
+export type RfpTab = "overview" | "document" | "review" | "candidates" | "responses" | "scoring" | "decision" | "history";
 export interface NextStep {
   title: string;
   text: string;
@@ -563,9 +609,9 @@ export function nextStep(r: RfpDetail, meId?: string): NextStep {
         : { title: "Send it for review", text: "The draft has sections, weighted criteria and a question list. When it reads well, send it for review.", tab: "document" };
     }
     case "in_review": {
-      const blocker = approvalBlocker(r.signoffs);
+      const blocker = approvalBlocker(r.signoffs, r.review.remarks);
       return blocker
-        ? { title: "Collect the sign-offs", text: `Send the Word or PDF export to the reviewers and record what each of them decided. ${blocker}`, tab: "review" }
+        ? { title: "Collect the sign-offs", text: `Send the Word copy to the reviewers and record what each of them decided. ${blocker}`, tab: "review" }
         : { title: "Mark it as approved", text: "At least one reviewer approved and no requested change is open.", tab: "review" };
     }
     case "approved": {

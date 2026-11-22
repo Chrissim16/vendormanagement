@@ -16,7 +16,7 @@ Fields marked `*` are required. Every table also has `id`, `created_at`, `create
 ## Vendors
 
 **Vendor**: `name*` (unique, ignoring case), `legal_name`, `type*` (software | consultancy | advisory),
-`status*` (prospect | active | on_hold | offboarded), `owner_user_id*`, `website`, `country`, `description`, `notes`,
+`status*` (prospect | active | on_hold | offboarded), `owner_user_id*`, `website`, `address_line1`, `address_line2`, `postal_code`, `city`, `country`, `vat_number`, `description`, `notes`,
 `scoring_enabled*` (default yes), `nda_required*` (default yes), `dpa_required*` (default yes).
 - A vendor with an active agreement cannot be offboarded.
 - An offboarded vendor cannot receive new agreements, and none of its agreements can be made active. Every other status can, so a prospect can sign an NDA.
@@ -24,8 +24,12 @@ Fields marked `*` are required. Every table also has `id`, `created_at`, `create
 - The owner must be a person who has access to the app.
 - RFP candidates are vendors with status `prospect`.
 - Changes to a vendor's contacts are recorded in the vendor's history.
+- `vat_number` (V-5) is optional and stored in capitals without spaces, dots or dashes. When given, no other vendor holds the same one.
+- A vendor added with a main contact (V-6) is saved with that contact, as primary, in one transaction, or not at all.
 
-**Contact**: `vendor_id*`, `name*`, `job_title`, `email`, `phone`, `is_primary*`. At most one primary per vendor.
+**Contact**: `vendor_id*`, `name*`, `roles` (any number of contact roles), `email`, `phone`, `is_primary*`. At most one primary per vendor. The free-text `job_title` was replaced by roles in M10; each title held then became a role.
+
+**Contact role** (V-7): `name*` (unique ignoring case and extra spaces). Shown A to Z. Any member adds one; an admin renames or removes one, and one in use cannot be removed. Adding, renaming and removing are recorded in the audit log. Not the same as a rate card role, which is a consultant's role and day rate.
 
 **Rate card line**: `vendor_id*`, `role*`, `day_rate_minor*`, `currency*`, `valid_from*`. The current rate for a role is the latest line not in the future.
 
@@ -82,13 +86,13 @@ Derived, not stored:
 
 Warnings are sorted with what is already wrong first, then the soonest date. The windows and the budget percentage are the admin's settings.
 
-**Import** (A-8): a vendor row whose name is already in the app, and an agreement row whose vendor, kind and title are already in the app, are left alone. A row that appears twice in the file is a problem, for every copy. An empty owner means the person importing. A cell showing a formula error is a problem, never read as empty. A number finer than a cent is refused, not rounded. A subscription row must say whether it renews automatically. The template's example rows are refused if left in. The preview and the import run the same analysis and always agree.
+**Import** (A-8): the vendor sheet has the address and VAT or tax number columns, optional, by the vendor form's rules. A vendor row whose name is already in the app, and an agreement row whose vendor, kind and title are already in the app, are left alone. A row that appears twice in the file is a problem, for every copy. An empty owner means the person importing. A cell showing a formula error is a problem, never read as empty. A number finer than a cent is refused, not rounded. A subscription row must say whether it renews automatically. The template's example rows are refused if left in. The preview and the import run the same analysis and always agree.
 
 ## SOW delivery and money
 
 **Settings** (admin, one set for the whole team): `notice_days*` (default 90), `sow_end_days*` (default 30), `budget_warning_pct*` (default 80). The defaults apply until an admin first saves. The Renewals page starts at `notice_days` and can be set to another window for a look further ahead. Changes are recorded in the audit log.
 
-**Currency** (admin, M-8): `code*` (three-letter ISO 4217 code, unique), `name*`, `units_per_eur*` (how many of this currency one euro buys, up to four decimals, above zero; stored as a whole number of ten-thousandths), `rate_set_at`, `rate_set_by` (empty while the starting rate is in use).
+**Currency** (admin, M-8, milestone M12): `code*` (three-letter ISO 4217 code, unique), `name*`, `units_per_eur*` (how many of this currency one euro buys, up to four decimals, above zero; stored as a whole number of ten-thousandths), `rate_set_at`, `rate_set_by` (empty while the starting rate is in use).
 - EUR is always on the list with `units_per_eur` 1 and cannot be changed or removed.
 - The list starts with EUR, GBP, USD, SEK, NOK and DKK, with rough starting rates (GBP 0.8550, USD 1.0800, SEK 11.5000, NOK 11.7000, DKK 7.4600). A rate is a starting rate until an admin first saves it, and every euro total that uses a starting rate says so.
 - An admin may add a currency from the standard ISO 4217 list only if it has two decimals. Its rate is required when it is added.
@@ -270,7 +274,9 @@ per criterion a `score` 1 to 5, a `vendor_comment` and an `internal_note`, plus 
 - Every change to an RFP and its parts is recorded in the RFP's own history.
 
 **RFP criterion**: `rfp_id*`, `name*` (unique within its part), `weight*` (1 to 100; the weights within a part add up to 100), `part*` (written | demo).
-**RFP section**: `rfp_id*`, `position*`, `heading*`, `body`.
+**RFP section**: `rfp_id*`, `position*`, `heading*`, `body` (formatted text since M11: paragraphs, sub-headings, bullet and numbered lists, bold, italic, simple tables; text from before is plain paragraphs), `body_format*` (markdown | plain), `rewrite_suggestion_id`, `rewrite_for`.
+- Formatted text is stored as a small, strict subset of Markdown (`shared/richtext.ts`): one level of lists, two levels of sub-heading, tables with a header row of at most 60 rows and 8 columns. It is saved in one tidy form, so the same text never counts as a change. Text typed before M11 is marked `plain` and is read as one paragraph per line, character for character, so nothing in it is taken for formatting; it is saved as formatted text from the first save on.
+- A section keeps its id when the document is saved again, so a reviewer's remark and an AI rewrite stay with it; a section left out of a save is removed.
 **RFP question**: `rfp_id*`, `number*` (its place in the list), `text*`, `criterion_id*` (a written criterion).
 - Sections, criteria and questions are saved together as one document. They and the two part weights can be changed while drafting or in review. An approved RFP is fixed as approved and has to be taken back to drafting to change; once it is `issued` it is locked for good.
 - The template gives six sections and six criteria (four written, two demo). The AI's draft is a suggestion; the document is what a person saved. A draft taken over counts as accepted while the document still reads as drafted and as edited once it does not.
@@ -278,6 +284,26 @@ per criterion a `score` 1 to 5, a `vendor_comment` and an `internal_note`, plus 
 **Review sign-off**: `rfp_id*`, `reviewer_name*`, `reviewer_role`, `outcome*` (approved | changes_requested), `on_date*` (not in the future), `comment` (required for requested changes), `resolved_on`, `superseded`.
 - A requested change is open until a member marks it as dealt with. Approved needs at least one approval that still counts and no open request. Sign-offs are recorded in review and stand once the RFP is approved.
 - When the document or the part weights change, every approval given before is marked as superseded: it stays in the trail as "approved an earlier version" and no longer counts.
+
+**Review round** (Q-13): `rfp_id*`, `version*` (1, 2, ... per RFP), `made_at*`, `made_by*`, `content*` (the demand, sections, criteria and questions exactly as in the review copy), `fingerprint*`, the review copy itself in file storage. Made when a review copy is downloaded; a download with no change since the last round reuses that round and gives its file again. A change is any change to the words, the weights or the demand, or a new Word template in force: the copy then looks different, so it is a new version. A new round is not made once the RFP is decided or cancelled; earlier rounds stay downloadable.
+- The review copy carries two hidden custom document properties, the RFP and the version, by which a returned copy is recognised.
+
+**Returned review file**: `round_id*`, `file_name*`, `size_bytes*`, the Word file in file storage, `sha256*`, `uploaded_by*`, `uploaded_at*`. Kept apart from an agreement's or a candidate's documents, so Ask does not search it. Must be a .docx review copy of this RFP; one that carries another version's mark goes into that version's round, and the answer says so. The same file twice in one round is refused. A file can be removed, with its remarks, while none of them has been dealt with or set aside. Uploaded while drafting or in review.
+
+**Reviewer remark** (Q-13): `file_id*`, `rfp_id*`, `position*` (reading order in the file), `kind*` (comment | suggested_edit), `author*` (the name in Word), `section_id` (empty until placed, and again if its section is removed), `found_under*` (the Heading 1 it stands under in the file, or "Cover page"), `in_heading*`, `anchor_text` (the words commented on), `text` (the comment), `removed_text`, `added_text`, `before_text`, `after_text` (a suggested edit with a few words on either side, as in the file), `status*` (open | dealt_with | set_aside), `resolution` (taken_over | ai_rewrite | by_hand), `resolved_by`, `resolved_at`.
+- Read from the file: comments (a reply stands where the comment it answers stands, as a remark of its own), and tracked changes, where deleted and inserted words next to each other by one reviewer make one suggested edit. The text the remarks are placed against is what the review copy said: deleted words in, inserted words out.
+- Placed by the section heading it stands under and, when two sections have the same heading, by their order, against the round's content; and only if that section still exists. Remarks under the demand, the criteria or the questions are not placed. A member places one in a section, deals with it or sets it aside.
+- A suggested edit is taken over where its removed words, with the words around them, stand in the section once as it is now, as whole words (never part of a word or a number); failing that, where the removed words alone stand once, if they are distinctive (two words or more, or a word of six letters or more). Otherwise it is done by hand, and the page says so beforehand. Taking one over changes the section as a save would: an approval given before no longer counts.
+- An edit a reviewer made in a section's heading (`in_heading`) is taken over into the heading, by the same rule, unless another section already has that heading.
+- A file with more than 500 comments and tracked changes is refused, not read in part.
+- An open remark of any round blocks moving to approved. Remarks are worked on while drafting or in review. Every action on a remark, and every upload, is in the RFP's history.
+
+**Section rewrite** (Q-12): an AI suggestion of kind `rfp_section_rewrite` with the section as subject, the instruction and any remarks it answers as input, and the new section text as output. The section points to its latest one (`rewrite_suggestion_id`) and keeps `rewrite_for` (the remarks, the instruction, and a fingerprint of the text it was made from). Asking again sets an unread earlier one aside. Accepted when used as it is, edited when changed first, rejected otherwise; using it deals with the open remarks it was asked for. A rewrite of a text that changed since cannot be used. Asked and used only while drafting or in review, for a section with text, and only for open remarks placed in that section. The figures rule of the other prompts applies, and the budget and sponsor are not passed.
+
+**Word template** (Q-14, admin, one in force): a Word file (.dotx or .docx, at most 10 MB, no macros) kept in file storage, `file_name*`, `uploaded_by*`, `uploaded_at*`, `in_force*`, `found*` (what the app recognised: cover page, where the [Title], [Date] and [Version] marks are, header, footer, pictures, the body font, and the heading, list and table styles by their built-in names). Every upload is kept; at most one is in force. Uploading, and going back to the plain layout, are recorded in the settings history. Without one in force, the app's own plain layout is used, which is made the same way from a built-in template. No template file is in the repository: the invented example ("Larkspur & Vale") is drawn by the app itself.
+- [Title] becomes the RFP's title, [Date] the day the file is made (22 Nov 2026), [Version] "Version 2" in a review copy. A candidate's copy has no version: [Version] is left empty there. The marks are found in any capitals, also when Word has split them over several pieces of text, on the cover page, in the header and in the footer.
+- A template with comments or tracked changes left in it is refused, since they would go out in every file; and a trial file is made from every upload, so a template the app cannot make a sound file from is refused at once.
+- The template's body is its cover page and is kept as it is; the RFP's text starts on the next page, in the template's Heading 1 to 3, List Bullet and List Number, and Table Grid styles where it has them, and in plain formatting where it does not (a heading then still carries its outline level, so Word's navigation and the reading of returned copies find it). Each numbered list starts at 1.
 
 **Candidate**: `rfp_id*`, `vendor_id*` (once per RFP, not an offboarded vendor), `list*` (longlist | shortlist | dropped), `reason*`, `issued_on`, `nda_warning_acknowledged_by`, `response_received_on`, `unmatched` (rows of an uploaded answer sheet that fitted no question).
 - A new vendor is created as a prospect owned by the member who adds it.

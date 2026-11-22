@@ -16,7 +16,11 @@ import { finaliseScorecard, saveScorecard, startScorecard, type ScorecardContext
 import { addMonth, monthOf } from "../../shared/performance";
 import { addQuarter, quarterBounds, quarterOf } from "../../shared/scorecards";
 import { createVendor, saveContact, updateVendor } from "../../server/features/vendors/service";
-import { briefings, jiraBoardLinks, rfps, scorecards } from "../schema";
+import { briefings, jiraBoardLinks, rfps, scorecards, wordTemplates } from "../schema";
+import { actOnRemark, makeRound, roundFile, uploadReturned } from "../../server/features/rfp/review";
+import { uploadTemplate } from "../../server/features/rfp/template";
+import { annotate } from "../../server/features/rfp/word/annotate";
+import { exampleTemplate } from "../../server/features/rfp/word/example";
 import { addCandidate, issueCandidate, moveCandidate, saveAnswer } from "../../server/features/rfp/candidates";
 import { compareAnswers, decide, saveScore } from "../../server/features/rfp/evaluation";
 import { addSignoff, changeSignoff, createRfp, getRfp, moveStage, reviewDraft, suggestDraft, type RfpContext } from "../../server/features/rfp/service";
@@ -37,7 +41,8 @@ type A = Partial<AgreementInput> & Pick<AgreementInput, "kind" | "title">;
 interface SeedVendor {
   vendor: Partial<VendorInput> & Pick<VendorInput, "name" | "type">;
   owner: string;
-  contact?: [name: string, jobTitle: string];
+  /** The first is the primary contact. */
+  contacts?: [name: string, roles: string[]][];
   agreements: (A & { under?: string })[];
   /** Day rates per role: [role, rate in cents, days ago it started]. */
   rates?: [role: string, dayRateMinor: number, since: number][];
@@ -79,9 +84,24 @@ function sampleVendors(today: Day): SeedVendor[] {
   });
   return [
     {
-      vendor: { name: "Bluefinch Systems", type: "software", legalName: "Bluefinch Systems B.V. (invented)", country: "NL", website: "https://bluefinch.example.test" },
+      vendor: {
+        name: "Bluefinch Systems",
+        type: "software",
+        legalName: "Bluefinch Systems B.V. (invented)",
+        country: "NL",
+        website: "https://bluefinch.example.test",
+        addressLine1: "Bluefinchplein 12",
+        addressLine2: "4th floor",
+        postalCode: "3500 AA",
+        city: "Utrecht",
+        vatNumber: "NL000100001B01",
+      },
       owner: "mira@example.test",
-      contact: ["Lena Hartog", "Service Director"],
+      contacts: [
+        ["Lena Hartog", ["Account Manager", "Executive Sponsor"]],
+        ["Joris Veld", ["Helpdesk", "Support Manager"]],
+        ["Femke Raad", ["Billing / Finance"]],
+      ],
       rates: [
         ["Lead architect", 1_250_00, 800],
         ["Lead architect", 1_350_00, 140],
@@ -128,9 +148,20 @@ function sampleVendors(today: Day): SeedVendor[] {
       ],
     },
     {
-      vendor: { name: "Quillon Consulting", type: "consultancy", country: "NL" },
+      vendor: {
+        name: "Quillon Consulting",
+        type: "consultancy",
+        country: "NL",
+        addressLine1: "Quillonkade 8",
+        postalCode: "1000 AB",
+        city: "Amsterdam",
+        vatNumber: "NL000100002B01",
+      },
       owner: "sanne@example.test",
-      contact: ["Pieter Aalto", "Partner"],
+      contacts: [
+        ["Pieter Aalto", ["Partner"]],
+        ["Iris Bloem", ["Consultant", "Project Manager"]],
+      ],
       rates: [
         ["Senior consultant", 1_450_00, 440],
         ["Analyst", 890_00, 440],
@@ -174,15 +205,18 @@ function sampleVendors(today: Day): SeedVendor[] {
       ],
     },
     {
-      vendor: { name: "Tarnwick Software", type: "software", country: "DE" },
+      vendor: { name: "Tarnwick Software", type: "software", country: "DE", addressLine1: "Tarnwickstraße 3", postalCode: "10001", city: "Berlin", vatNumber: "DE000100003" },
       owner: "jonas@example.test",
-      contact: ["Ruth Emery", "Customer Success"],
+      contacts: [["Ruth Emery", ["Account Manager"]]],
       agreements: [sub("Reporting suite", 81, 48_000_00), ...paper(-2000)],
     },
     {
-      vendor: { name: "Mossgate IT", type: "software", country: "NL" },
+      vendor: { name: "Mossgate IT", type: "software", country: "NL", addressLine1: "Mossgatelaan 45", postalCode: "3000 AC", city: "Rotterdam", vatNumber: "NL000100004B01" },
       owner: "mira@example.test",
-      contact: ["Dana Whitlow", "Account Lead"],
+      contacts: [
+        ["Dana Whitlow", ["Account Manager"]],
+        ["Theo Marsh", ["Helpdesk"]],
+      ],
       agreements: [
         sub("Service desk licence", 117, 26_400_00),
         { kind: "nda", title: "Mutual NDA", status: "active", signedOn: d(-1700) },
@@ -190,18 +224,30 @@ function sampleVendors(today: Day): SeedVendor[] {
       ],
     },
     {
-      vendor: { name: "Sedgewater Cloud", type: "software", country: "GB" },
+      vendor: { name: "Sedgewater Cloud", type: "software", country: "GB", addressLine1: "22 Sedgewater Yard", postalCode: "E1 0AA", city: "London", vatNumber: "GB000100005" },
       owner: "jonas@example.test",
-      contact: ["Sam Idris", "Account Manager"],
+      contacts: [
+        ["Sam Idris", ["Account Manager"]],
+        ["Priya Nandi", ["Technical Contact", "Developer"]],
+      ],
       agreements: [sub("Data platform licence", 250, 31_500_00, { currency: "GBP", autoRenews: false }), ...paper(-740)],
     },
     {
-      vendor: { name: "Emberline Advisory", type: "advisory", scoringEnabled: false, dpaRequired: false, country: "GB" },
+      vendor: {
+        name: "Emberline Advisory",
+        type: "advisory",
+        scoringEnabled: false,
+        dpaRequired: false,
+        country: "GB",
+        addressLine1: "3 Emberline Close",
+        postalCode: "EH1 0AA",
+        city: "Edinburgh",
+      },
       owner: "sanne@example.test",
       agreements: [sub("Research membership", 300, 62_000_00, { noticePeriodDays: 60 }), { kind: "nda", title: "NDA", status: "active", signedOn: d(-2400) }],
     },
     {
-      vendor: { name: "Larkspur Data", type: "software", country: "NL" },
+      vendor: { name: "Larkspur Data", type: "software", country: "NL", addressLine1: "Larkspurhof 7", postalCode: "9700 AD", city: "Groningen", vatNumber: "NL000100007B01" },
       owner: "jonas@example.test",
       agreements: [
         { kind: "dpa", title: "Data processing agreement", status: "active", signedOn: d(-200) },
@@ -216,7 +262,7 @@ function sampleVendors(today: Day): SeedVendor[] {
     {
       vendor: { name: "Harrowick Partners", type: "consultancy", status: "prospect", country: "NL" },
       owner: "sanne@example.test",
-      contact: ["Noor Castell", "Partner"],
+      contacts: [["Noor Castell", ["Partner"]]],
       agreements: [],
     },
   ];
@@ -392,9 +438,12 @@ export async function seed(db: Db, today: Day, ctx?: ScorecardContext, storage?:
     const admin = (await db.select().from(users).where(eq(users.email, "admin@example.test")))[0];
     // Two invented contracts, when there is a place to keep files.
     if (admin && storage) await seedDocuments(db, storage, toUser(admin));
+    // Q-14: the invented example template in use, so the Word files look as they will with the company's.
+    if (admin && storage && !(await db.select({ id: wordTemplates.id }).from(wordTemplates)).length)
+      await uploadTemplate({ db, storage }, { name: "Larkspur & Vale RFP template (invented example).dotx", data: await exampleTemplate() }, toUser(admin));
     if (admin) await seedPerformance(ctx.perf, toUser(admin));
     await seedScorecards(ctx, today);
-    await seedRfps(ctx, today);
+    await seedRfps(ctx, today, storage);
     await seedOverview(ctx, today);
   }
 }
@@ -405,7 +454,7 @@ export async function seed(db: Db, today: Day, ctx?: ScorecardContext, storage?:
  * issued and without an NDA), one in drafting with an AI draft nobody has looked at, and
  * one decided. Everything goes through the same functions the screens use.
  */
-async function seedRfps(ctx: ScorecardContext, today: Day) {
+async function seedRfps(ctx: ScorecardContext, today: Day, storage?: StoragePort) {
   if (ctx.ai.kind !== "stand-in") return;
   if ((await ctx.db.select({ n: sql<number>`count(*)::int` }).from(rfps))[0]!.n > 0) return;
   const people = await ctx.db.select().from(users);
@@ -523,6 +572,49 @@ async function seedRfps(ctx: ScorecardContext, today: Day) {
   );
   await suggestDraft(rfp, desk.id, jonas);
 
+  // 4. In review (Q-13): version 1 went to two reviewers, who sent it back with comments and tracked changes in Word.
+  if (storage) {
+    const withFiles: RfpContext = { ...rfp, storage };
+    const travel = await createRfp(
+      withFiles,
+      {
+        title: "Travel booking tool",
+        need: "Business trips are booked by email through an agency. We want one tool to book, approve and pay for travel, with the company's travel policy built in.",
+        sponsor: "Head of finance operations",
+        demandApprovedOn: d(-20),
+        targetDecisionDate: d(120),
+        ownerUserId: mira.id,
+      },
+      mira,
+    );
+    const drafted = await suggestDraft(withFiles, travel.id, mira);
+    await reviewDraft(withFiles, travel.id, { action: "accept", suggestionId: drafted.draft!.id }, mira);
+    await moveStage(withFiles, travel.id, { to: "in_review" }, mira);
+    const { roundId } = await makeRound(withFiles, travel.id, mira);
+    const copy = await roundFile(withFiles, roundId);
+    const returned = await annotate(copy.data, [
+      {
+        comment: "Name the systems it must connect to: the HR system and the expense tool.",
+        on: "as described in the introduction",
+        author: "Chris Tanaka",
+        under: "Scope and requirements",
+      },
+      { replace: "as PDF or Word", by: "as PDF", author: "Chris Tanaka", under: "How to respond" },
+      {
+        comment: "Give vendors at least three weeks.",
+        on: "Responses due",
+        author: "Priya Raman",
+        under: "Timeline and process",
+        reply: { author: "Chris Tanaka", text: "Agreed, four if we can." },
+      },
+      { replace: "confidential", by: "strictly confidential", author: "Priya Raman", under: "Confidentiality and terms" },
+      { comment: "Ask for the price per traveller as well.", on: "pricing model", author: "Priya Raman", under: "Questions" },
+    ]);
+    const up = await uploadReturned(withFiles, roundId, { name: "Travel booking tool - comments Chris and Priya.docx", data: returned }, mira);
+    const pdfOnly = up.rfp.review.remarks.find((m) => m.addedText === "as PDF")!;
+    await actOnRemark(withFiles, pdfOnly.id, { action: "take_over" }, mira);
+  }
+
   // 3. Decided.
   const treasury = await approved(
     {
@@ -592,16 +684,12 @@ async function seedCore(db: Db, today: Day) {
   for (const s of sampleVendors(today)) {
     // Every sample vendor says in its legal name that it is made up, so it can never be mistaken for a real firm.
     const vendor = await createVendor(db, { legalName: `${s.vendor.name} (invented)`, ...s.vendor, ownerUserId: idOf(s.owner) }, admin, today);
-    if (s.contact)
+    // Addresses are invented too: each street is named after its made-up vendor.
+    for (const [i, [name, roles]] of (s.contacts ?? []).entries())
       await saveContact(
         db,
         { vendorId: vendor.id },
-        {
-          name: s.contact[0],
-          jobTitle: s.contact[1],
-          email: `${s.contact[0].split(" ")[0]!.toLowerCase()}@${s.vendor.name.split(" ")[0]!.toLowerCase()}.example.test`,
-          isPrimary: true,
-        },
+        { name, roles, email: `${name.split(" ")[0]!.toLowerCase()}@${s.vendor.name.split(" ")[0]!.toLowerCase()}.example.test`, isPrimary: i === 0 },
         admin,
       );
     const made = new Map<string, string>();

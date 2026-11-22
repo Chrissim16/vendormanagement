@@ -168,9 +168,9 @@ function rfpDraft(ask: RfpDraftAsk): string {
   const bodies = [
     // The need was written for colleagues; a real model rewords it for vendors. The stand-in leaves that to a person and does not copy it.
     `We invite you to respond to this request for proposal for ${ask.title}. [Describe here, in words meant for vendors, what you need and why. The need as recorded in the demand was written for colleagues and is not copied into this document.]`,
-    `The scope of this request is ${ask.title}, as described in the introduction. Please make clear what your offer includes as standard and what it does not. [Add what is out of scope.]`,
-    `Responses are compared on the written answers first. Vendors on the shortlist may then be invited to a demonstration or an interview. ${ask.decisionWantedBy ? `We intend to decide by ${ask.decisionWantedBy}.` : "[Add the day a decision is expected.]"}`,
-    "Answer every question in the answer sheet that comes with this document, in the Answer column, and return the sheet as an Excel file. Supporting material may be sent along as PDF or Word. [Add the closing date and whom to ask questions.]",
+    `The scope of this request is **${ask.title}**, as described in the introduction. Please make clear what your offer includes as standard and what it does not.\n\n## In scope\n\n- [Add what is in scope.]\n- [Add what is in scope.]\n\n## Out of scope\n\n- [Add what is out of scope.]`,
+    `Responses are compared on the written answers first. Vendors on the shortlist may then be invited to a demonstration or an interview.\n\n| Step | When |\n| --- | --- |\n| Questions from vendors | [Add the date] |\n| Responses due | [Add the date] |\n| Demonstrations | [Add the date] |\n| Decision | ${ask.decisionWantedBy ?? "[Add the date]"} |`,
+    "Send back, as one response:\n\n1. the answer sheet that comes with this document, filled in, in the Answer column, as an Excel file;\n2. any supporting material, as PDF or Word.\n\n*[Add the closing date and whom to ask questions.]*",
     "Every response is scored per criterion on a scale from 1 to 5. The criteria and their weights are listed in this document, so that you know what matters most to us.",
     "This document, and everything shared in the course of this request, is confidential and is to be used for preparing your response only. [Add the terms that apply.]",
   ];
@@ -607,6 +607,36 @@ function contractFieldsAnswer(ask: ContractFieldsAsk): string {
   });
 }
 
+interface SectionRewriteAsk {
+  task: "rfp_section_rewrite";
+  currentText: string;
+  instruction: string | null;
+  remarks: { reviewer: string; comment: string | null; onWords: string | null; removes: string | null; adds: string | null }[];
+}
+
+/**
+ * A section rewritten by simple rules: a reviewer's suggested edit is made where its words
+ * stand; "list" or "bullet" in the instruction turns the sentences into a list, "short"
+ * keeps the first sentence of each paragraph. What the rules cannot do is said in square
+ * brackets at the end, as a real model would leave a gap for the team to fill.
+ */
+function sectionRewrite(ask: SectionRewriteAsk): string {
+  let body = ask.currentText;
+  const todo: string[] = [];
+  for (const r of ask.remarks) {
+    if (r.removes && body.includes(r.removes)) body = body.replace(r.removes, r.adds ?? "");
+    else if (r.comment) todo.push(`${r.reviewer} asked: ${r.comment}`);
+  }
+  const how = (ask.instruction ?? "").toLowerCase();
+  const paragraphs = body.split(/\n{2,}/);
+  if (/\b(list|bullet)/.test(how))
+    body = paragraphs.map((p) => (/^(#|-|\d+\.|\|)/.test(p) ? p : (p.match(/[^.!?]+[.!?]+/g) ?? [p]).map((x) => `- ${x.trim()}`).join("\n"))).join("\n\n");
+  else if (/\bshort/.test(how)) body = paragraphs.map((p) => (/^(#|-|\d+\.|\|)/.test(p) ? p : (/^[^.!?]+[.!?]/.exec(p)?.[0] ?? p))).join("\n\n");
+  else if (ask.instruction?.trim()) todo.push(`Asked: ${ask.instruction.trim()}`);
+  if (todo.length) body += `\n\n*[${todo.join(" ").replace(/[[\]*]/g, "")} The stand-in AI cannot write this; a real model would.]*`;
+  return JSON.stringify({ body });
+}
+
 /** Answers the prompts it knows; anything else gets the plain stand-in answer. */
 export function standInAnswer(req: AiRequest): string | undefined {
   if (!req.json) return undefined;
@@ -617,6 +647,7 @@ export function standInAnswer(req: AiRequest): string | undefined {
     if (ask.task === "briefing") return briefing(ask as BriefingAsk);
     if (ask.task === "rfp_draft") return rfpDraft(ask as RfpDraftAsk);
     if (ask.task === "rfp_comparison") return rfpComparison(ask as RfpComparisonAsk);
+    if (ask.task === "rfp_section_rewrite") return sectionRewrite(ask as SectionRewriteAsk);
     if (ask.task === "contract_fields") return contractFieldsAnswer(ask as ContractFieldsAsk);
     if (ask.task === "ask_plan") return askPlan(ask as AskPlanAsk);
     if (ask.task === "ask_answer") return askAnswer(ask as AskAnswerAsk);

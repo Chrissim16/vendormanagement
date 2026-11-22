@@ -5,14 +5,33 @@ import { agreementSchema, checkAgreement, kinds, type AgreementInput, type Kind 
 import { isDay, type Day } from "../../../shared/dates";
 import { parseAmount } from "../../../shared/money";
 import type { User } from "../../../shared/types";
-import { cleanName, vendorSchema, type VendorInput } from "../../../shared/vendors";
+import { cleanName, cleanVat, vendorSchema, type VendorInput } from "../../../shared/vendors";
 import { AppError } from "../../platform/errors";
 import type { Db } from "../../platform/ports/types";
 import { unpacksWithin } from "../../platform/zip";
 import { createAgreement, findSameAgreement } from "../agreements/service";
-import { createVendor, findVendorByName, listPeople } from "../vendors/service";
+import { createVendor, findVendorByName, findVendorByVat, listPeople } from "../vendors/service";
 
-const vendorColumns = ["Name", "Type", "Status", "Owner email", "Legal name", "Website", "Country", "NDA required", "DPA required", "Scored", "Description"] as const;
+const vendorColumns = [
+  "Name",
+  "Type",
+  "Status",
+  "Owner email",
+  "Legal name",
+  "Website",
+  "Street",
+  "Second street line",
+  "Postal code",
+  "City",
+  "Country",
+  "VAT or tax number",
+  "NDA required",
+  "DPA required",
+  "Scored",
+  "Description",
+] as const;
+/** Columns added after the first template (V-5): a workbook made from the older template is still accepted without them. */
+const laterVendorColumns = ["Street", "Second street line", "Postal code", "City", "VAT or tax number"];
 const agreementColumns = [
   "Vendor name",
   "Kind",
@@ -42,7 +61,12 @@ const columnOf: Record<string, string> = {
   ownerUserId: "Owner email",
   legalName: "Legal name",
   website: "Website",
+  addressLine1: "Street",
+  addressLine2: "Second street line",
+  postalCode: "Postal code",
+  city: "City",
   country: "Country",
+  vatNumber: "VAT or tax number",
   description: "Description",
   title: "Title",
   reference: "Reference",
@@ -102,13 +126,32 @@ export async function template(): Promise<Buffer> {
   sheet(
     "Vendors",
     vendorColumns,
-    [`Example Vendor ${EXAMPLE}`, "software", "active", "", "Example Vendor B.V.", "https://example.test", "NL", "yes", "yes", "yes", ""],
+    [
+      `Example Vendor ${EXAMPLE}`,
+      "software",
+      "active",
+      "",
+      "Example Vendor B.V.",
+      "https://example.test",
+      "Examplestraat 1",
+      "",
+      "1000 AA",
+      "Amsterdam",
+      "NL",
+      "NL000000000B00",
+      "yes",
+      "yes",
+      "yes",
+      "",
+    ],
     [
       "One row per vendor. Name and Type are required. Delete the grey example row.",
       "Type: software, consultancy or advisory.",
       "Status: prospect, active, on_hold or offboarded. Empty means active.",
       "Owner email: a colleague who has opened the app. Empty means you.",
       "NDA required, DPA required, Scored: yes or no. Empty means yes.",
+      "Street, Second street line, Postal code, City, Country and VAT or tax number may be empty. Country is a two-letter code such as NL.",
+      "A VAT or tax number may be held by one vendor only.",
       "A vendor whose name is already in the app is left as it is.",
     ],
   );
@@ -253,13 +296,13 @@ async function read(buffer: Buffer) {
     tooLarge: "That workbook is too large to import. Keep it to the template's two sheets.",
     unreadable: "That file could not be read as an Excel workbook. Use the template.",
   });
-  const sheet = (name: string, columns: readonly string[]) => {
+  const sheet = (name: string, columns: readonly string[], later: string[] = []) => {
     const ws = wb.getWorksheet(name);
     if (!ws) throw new AppError(400, "sheet_missing", `The workbook has no sheet called "${name}". Use the template.`);
     // The row comes back with gaps for empty cells; Array.from fills them so every position is a string.
     const header = Array.from(ws.getRow(1).values as unknown[], str);
     const index = Object.fromEntries(columns.map((c) => [c, header.findIndex((h) => h.toLowerCase() === c.toLowerCase())])) as Record<string, number>;
-    const missing = columns.filter((c) => index[c]! < 0);
+    const missing = columns.filter((c) => index[c]! < 0 && !later.includes(c));
     if (missing.length)
       throw new AppError(400, "columns_missing", `The "${name}" sheet is missing the column${missing.length > 1 ? "s" : ""} ${missing.join(", ")}. Use the template.`);
     if (ws.actualRowCount > MAX_ROWS + 1) throw new AppError(400, "too_many_rows", `The "${name}" sheet has more than 2,000 rows.`);
@@ -267,11 +310,11 @@ async function read(buffer: Buffer) {
     ws.eachRow((r, n) => {
       const values = r.values as unknown[];
       if (n === 1 || !Array.from(values, str).some(Boolean)) return;
-      rows.push({ row: n, get: (c) => values[index[c]!] });
+      rows.push({ row: n, get: (c) => (index[c]! < 0 ? undefined : values[index[c]!]) });
     });
     return rows;
   };
-  return { vendors: sheet("Vendors", vendorColumns), agreements: sheet("Agreements", agreementColumns) };
+  return { vendors: sheet("Vendors", vendorColumns, laterVendorColumns), agreements: sheet("Agreements", agreementColumns) };
 }
 
 const VENDOR_STATUSES = "prospect, active, on_hold or offboarded";
@@ -299,6 +342,11 @@ export async function importWorkbook(db: Db, buffer: Buffer, by: User, today: Da
       const k = cleanName(str(r.get("Name"))).toLowerCase();
       count.set(k, (count.get(k) ?? 0) + 1);
     }
+    const vatCount = new Map<string, number>();
+    for (const r of book.vendors) {
+      const vat = cleanVat(str(r.get("VAT or tax number")).trim());
+      if (vat) vatCount.set(vat, (vatCount.get(vat) ?? 0) + 1);
+    }
     /** Vendors this file will add, by lower-case name. Each gets an id of its own up front, so preview and apply see the same thing. */
     const newVendors = new Map<string, { id: string; input: VendorInput }>();
     for (const r of book.vendors) {
@@ -321,7 +369,12 @@ export async function importWorkbook(db: Db, buffer: Buffer, by: User, today: Da
         ownerUserId: people.get(ownerEmail) ?? by.id,
         legalName: cell.text(r.get("Legal name"), "Legal name"),
         website: cell.text(r.get("Website"), "Website"),
+        addressLine1: cell.text(r.get("Street"), "Street"),
+        addressLine2: cell.text(r.get("Second street line"), "Second street line"),
+        postalCode: cell.text(r.get("Postal code"), "Postal code"),
+        city: cell.text(r.get("City"), "City"),
         country: cell.text(r.get("Country"), "Country"),
+        vatNumber: cell.text(r.get("VAT or tax number"), "VAT or tax number"),
         ndaRequired: cell.yesNo(r.get("NDA required"), "NDA required"),
         dpaRequired: cell.yesNo(r.get("DPA required"), "DPA required"),
         scoringEnabled: cell.yesNo(r.get("Scored"), "Scored"),
@@ -329,6 +382,13 @@ export async function importWorkbook(db: Db, buffer: Buffer, by: User, today: Da
       });
       if (!parsed.success) problems.push(...plain(parsed.error, VENDOR_STATUSES));
       if (name && count.get(k)! > 1) problems.push("This vendor appears more than once in the file.");
+      const vat = parsed.success ? parsed.data.vatNumber : null;
+      if (vat) {
+        if ((vatCount.get(vat) ?? 0) > 1) problems.push("VAT or tax number: it appears on more than one row of the file.");
+        const holder = await findVendorByVat(tx, vat);
+        // A vendor already in the app that holds its own number is left alone below, as any existing vendor is.
+        if (holder && holder.name.toLowerCase() !== k) problems.push(`VAT or tax number: ${holder.name} already has this number.`);
+      }
       if (problems.length) continue;
       if (await findVendorByName(tx, name)) row.outcome = "exists";
       else {
