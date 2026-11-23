@@ -37,21 +37,26 @@ export async function api<T>(path: string, options: { method?: string; body?: un
   } catch {
     throw new ApiError(0, "offline", "The app could not be reached. Check your connection and try again.");
   }
+  await checked(res, "application/json");
+  return res.json() as Promise<T>;
+}
+
+/** Turns a refusal into an ApiError, and a sign-in page where `type` was expected into "signed out". */
+async function checked(res: Response, type: string): Promise<void> {
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as Partial<ApiErrorBody> | null;
     throw new ApiError(res.status, body?.error?.code ?? "unknown", body?.error?.message ?? "Something went wrong. Try again.", body?.error?.fields);
   }
   // A sign-in page instead of data means the session ended and the request was redirected.
-  if (res.redirected || !res.headers.get("content-type")?.includes("application/json")) {
+  if (res.redirected || !res.headers.get("content-type")?.includes(type)) {
     throw new ApiError(401, "signed_out", "Your sign-in has ended. Reload the page to sign in again.");
   }
-  return res.json() as Promise<T>;
 }
 
 export const messageOf = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Try again.");
 
 /** Sends a file and saves the file the server makes from it, under the name the server gives. */
-export async function postForFile(path: string, file: File, fallbackName: string): Promise<void> {
+export async function postForFile(path: string, file: File, fallbackName: string, type = "spreadsheetml"): Promise<void> {
   const body = new FormData();
   body.append("file", file);
   let res: Response;
@@ -60,10 +65,7 @@ export async function postForFile(path: string, file: File, fallbackName: string
   } catch {
     throw new ApiError(0, "offline", "The app could not be reached. Check your connection and try again.");
   }
-  if (!res.ok) {
-    const err = (await res.json().catch(() => null)) as Partial<ApiErrorBody> | null;
-    throw new ApiError(res.status, err?.error?.code ?? "unknown", err?.error?.message ?? "Something went wrong. Try again.");
-  }
+  await checked(res, type);
   const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? fallbackName;
   const url = URL.createObjectURL(await res.blob());
   const a = document.createElement("a");

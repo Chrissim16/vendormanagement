@@ -429,6 +429,14 @@ const AGREEMENT_STATUSES = "draft, in_negotiation, out_for_signature, active or 
 const EXAMPLE_ROW = "This is the template's example row. Delete it.";
 const OFFBOARDED = "This vendor is offboarded and cannot receive new agreements.";
 
+/** A person's name for matching: capitals and repeated spaces do not count. */
+const personKey = (name: string) => name.trim().toLowerCase().replace(/\s+/g, " ");
+/** A date cell as a day for matching, however it was written; the text itself when it is not a date. */
+function dayKey(raw: unknown): string {
+  const problems: string[] = [];
+  return readers(problems).day(raw, "") ?? str(raw);
+}
+
 /** Thrown at the end of a preview to undo everything it saved, carrying what it found. */
 class Preview extends Error {
   constructor(public result: ImportResult) {
@@ -501,7 +509,7 @@ function analyseIn(db: Db, book: Book, by: User, today: Day, apply: boolean): Pr
       if (vat) vatCount.set(vat, (vatCount.get(vat) ?? 0) + 1);
     }
     /** Vendors this file will add, by lower-case name. Each gets an id of its own up front, so preview and apply see the same thing. */
-    const newVendors = new Map<string, { id: string; input: VendorInput }>();
+    const newVendors = new Map<string, { id: string; input: VendorInput; row: ImportRow }>();
     for (const r of book.Vendors) {
       const problems: string[] = [];
       const cell = readers(problems);
@@ -546,10 +554,14 @@ function analyseIn(db: Db, book: Book, by: User, today: Day, apply: boolean): Pr
       if (await findVendorByName(tx, name)) row.outcome = "exists";
       else {
         row.outcome = "add";
-        newVendors.set(k, { id: randomUUID(), input: parsed.data! });
+        newVendors.set(k, { id: randomUUID(), input: parsed.data!, row });
       }
     }
-    for (const v of newVendors.values()) v.id = (await createVendor(tx as unknown as Db, v.input, by, today, "import")).id;
+    for (const [k, v] of newVendors) {
+      // A refusal the checks above did not foresee becomes the row's problem, and later sheets see the vendor as missing.
+      await attempt(v.row, async () => (v.id = (await createVendor(tx as unknown as Db, v.input, by, today, "import")).id));
+      if (v.row.outcome !== "add") newVendors.delete(k);
+    }
     /** A vendor named on a later sheet: in the app (including those just added), or a reason it is not. */
     const vendorFor = async (name: string, problems: string[]) => {
       if (!name) {
@@ -564,7 +576,7 @@ function analyseIn(db: Db, book: Book, by: User, today: Day, apply: boolean): Pr
     // ---- Contacts (A-8): matched by vendor and email, or vendor and name without an email
     const contactKey = (r: SheetRow) => {
       const email = str(r.get("Email")).toLowerCase();
-      return `${cleanName(str(r.get("Vendor name"))).toLowerCase()}|${email ? `@${email}` : str(r.get("Name")).toLowerCase().replace(/\s+/g, " ")}`;
+      return `${cleanName(str(r.get("Vendor name"))).toLowerCase()}|${email ? `@${email}` : personKey(str(r.get("Name")))}`;
     };
     const twiceContact = counted(book.Contacts, contactKey);
     const primaries = counted(
@@ -596,7 +608,7 @@ function analyseIn(db: Db, book: Book, by: User, today: Day, apply: boolean): Pr
       if (problems.length || !vendor || !parsed.success) continue;
       const c = parsed.data;
       const existing = await contactsOf(tx, vendor.id);
-      const same = existing.find((x) => (c.email ? x.email?.toLowerCase() === c.email.toLowerCase() : x.name.toLowerCase() === c.name.toLowerCase()));
+      const same = existing.find((x) => (c.email ? x.email?.toLowerCase() === c.email.toLowerCase() : personKey(x.name) === personKey(c.name)));
       if (same) {
         row.outcome = "exists";
         continue;
@@ -701,13 +713,18 @@ function analyseIn(db: Db, book: Book, by: User, today: Day, apply: boolean): Pr
       const todo = pending.filter((p) => p.row.outcome === "add").sort((a, b) => Number(b.input.kind === "msa") - Number(a.input.kind === "msa"));
       for (const p of todo) {
         const parent = parents.get(p);
+        if (parent?.inFile && !created.has(parent.inFile)) {
+          p.row.outcome = "invalid";
+          p.row.problems.push(`Parent MSA title: the row for "${p.parentTitle}" has a problem, so this SOW cannot sit under it yet.`);
+          continue;
+        }
         const parentMsaId = parent?.existingId ?? (parent?.inFile ? created.get(parent.inFile) : undefined) ?? null;
-        created.set(p, (await createAgreement(tx as unknown as Db, { ...p.input, parentMsaId }, by, today, "import")).id);
+        await attempt(p.row, async () => created.set(p, (await createAgreement(tx as unknown as Db, { ...p.input, parentMsaId }, by, today, "import")).id));
       }
     }
 
     // ---- Day rates (M-9): matched by vendor, role and valid-from
-    const rateKey = (r: SheetRow) => `${cleanName(str(r.get("Vendor name"))).toLowerCase()}|${str(r.get("Role")).toLowerCase()}|${str(r.get("Valid from"))}`;
+    const rateKey = (r: SheetRow) => `${cleanName(str(r.get("Vendor name"))).toLowerCase()}|${str(r.get("Role")).toLowerCase()}|${dayKey(r.get("Valid from"))}`;
     const twiceRate = counted(book["Day rates"], rateKey);
     for (const r of book["Day rates"]) {
       const problems: string[] = [];
@@ -766,7 +783,7 @@ function analyseIn(db: Db, book: Book, by: User, today: Day, apply: boolean): Pr
           .from(agreements)
           .where(and(eq(agreements.vendorId, vendor.id), sql`lower(${agreements.title}) = lower(${title})`, inArray(agreements.kind, ["sow", "subscription"])));
         if (found.length === 1) agreement = found[0];
-        else if (found.length > 1) problems.push(`Agreement title: ${vendorName} has both a SOW and a subscription called "${title}". Rename one in the app first.`);
+        else if (found.length > 1) problems.push(`Agreement title: ${vendorName} has more than one SOW or subscription called "${title}". Rename one in the app first.`);
         else problems.push(`Agreement title: ${vendorName} has no SOW or subscription called "${title}", in the app or on the Agreements sheet.`);
       }
       const milestoneTitle = cell.text(r.get("Milestone title"), "Milestone title");
@@ -785,8 +802,9 @@ function analyseIn(db: Db, book: Book, by: User, today: Day, apply: boolean): Pr
       const invoiceDate = cell.day(r.get("Invoice date"), "Invoice date");
       if (!invoiceDate && !problems.some((p) => p.startsWith("Invoice date"))) problems.push("Invoice date: this is required.");
       // Q: the currency is always the agreement's; an amount written in another one is refused, never converted.
-      const amountMinor = cell.amount(r.get("Amount"), "Amount", agreement?.currency ?? "EUR");
-      if (amountMinor == null && !problems.some((p) => p.startsWith("Amount"))) problems.push("Amount: this is required.");
+      // Without its agreement the currency is unknown, so the amount is checked once the agreement is found.
+      const amountMinor = agreement ? cell.amount(r.get("Amount"), "Amount", agreement.currency) : null;
+      if (agreement && amountMinor == null && !problems.some((p) => p.startsWith("Amount"))) problems.push("Amount: this is required.");
       if (!number) problems.push("Invoice number: this is required.");
       else if (twiceInvoice(r)) problems.push("This invoice appears more than once in the file.");
       if (problems.length || !vendor || !agreement) continue;

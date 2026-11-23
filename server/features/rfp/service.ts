@@ -352,6 +352,8 @@ async function checkOwner(db: Queryable, ownerUserId: string) {
       .select({ id: users.id })
       .from(users)
       .where(and(eq(users.id, ownerUserId), eq(users.active, true)))
+      // Shares a lock on the owner, so a switch-off running at the same time waits for this save (F-6).
+      .for("share")
   )[0];
   if (!owner) failFields({ ownerUserId: "Choose an owner who has access to the app." });
 }

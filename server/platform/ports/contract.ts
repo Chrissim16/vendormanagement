@@ -75,6 +75,34 @@ export function databaseContract(port: DatabasePort): ContractCase[] {
       },
     },
     {
+      // The import saves each row in a transaction inside its own (A-8): a row the database refuses must undo only itself.
+      name: "a failed transaction inside another undoes only its own work, even after a database error",
+      async run() {
+        const marker = `nested-${Date.now()}`;
+        const count = async (tx: typeof port.db, id: string) =>
+          ((await tx.execute(sql`select 1 from audit_log where entity_id = ${id}`)) as unknown as { rows: unknown[] }).rows.length;
+        await assert.rejects(
+          () =>
+            port.db.transaction(async (tx) => {
+              await tx.execute(sql`insert into audit_log (user_email, action, entity_type, entity_id) values ('contract@example.test', 'create', 'contract', ${`${marker}-outer`})`);
+              await assert.rejects(() =>
+                tx.transaction(async (inner) => {
+                  await inner.execute(sql`insert into audit_log (user_email, action, entity_type, entity_id) values ('contract@example.test', 'create', 'contract', ${`${marker}-inner`})`);
+                  await inner.execute(sql`select 1 / 0`);
+                }),
+              );
+              const db = tx as unknown as typeof port.db;
+              assert.equal(await count(db, `${marker}-inner`), 0, "the inner work was undone");
+              assert.equal(await count(db, `${marker}-outer`), 1, "the outer work is still there and the outer transaction still usable");
+              // Undo the outer one as well, so the check leaves nothing behind.
+              throw new Error("done");
+            }),
+          /done/,
+        );
+        assert.equal(await count(port.db, `${marker}-outer`), 0);
+      },
+    },
+    {
       name: "the audit log cannot be changed or removed",
       async run() {
         const marker = `locked-${Date.now()}`;

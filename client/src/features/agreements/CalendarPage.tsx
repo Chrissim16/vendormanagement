@@ -17,6 +17,7 @@ import { AgreementTabs } from "./AgreementsPage";
 import { downloadClass } from "../rfp/parts";
 
 type View = "list" | "month";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const toneOf = (e: CalendarEntry): Tone => (e.kind === "renewal" ? "brand" : e.overdue ? "bad" : "warn");
@@ -154,7 +155,8 @@ export function CalendarPage() {
   const span = view === "month" ? monthSpan(month) : yearAhead(today);
   const query = {
     ...span,
-    vendorId: url.vendorId || undefined,
+    // An unreadable vendor in a shared link is ignored, as an unknown kind is.
+    vendorId: UUID.test(url.vendorId) ? url.vendorId : undefined,
     kind: dateKinds.includes(url.kind as never) ? url.kind : undefined,
     withOverdue: view === "list" ? "1" : undefined,
   };
@@ -162,15 +164,24 @@ export function CalendarPage() {
   const vendors = useQuery({ queryKey: ["vendors", "choices-all"], queryFn: () => api<Page<Vendor>>("/vendors", { query: { pageSize: 200, sort: "name", status: "all" } }) });
   const filtered = !!(url.vendorId || url.kind);
   const shown = q.data?.length;
-  const context = shown === undefined ? " " : view === "month" ? `${count(shown)} in ${monthName(month)}` : `${count(shown)} in the next twelve months`;
+  const passed = q.data?.filter((e) => e.date < today).length ?? 0;
+  const context =
+    shown === undefined
+      ? " "
+      : view === "month"
+        ? `${count(shown)} in ${monthName(month)}`
+        : `${count(shown - passed)} in the next twelve months${passed ? `, and ${passed} passed without a decision` : ""}`;
 
   return (
     <>
       <PageHeader context={context} title="Calendar">
         {/* A plain link, so the browser downloads the file the server builds from what is shown. */}
-        <a href={`/api/calendar.ics${queryString(query)}`} download className={downloadClass}>
-          Download for Outlook
-        </a>
+        {/* A calendar file must hold at least one date, so there is nothing to download when nothing is shown. */}
+        {!!shown && (
+          <a href={`/api/calendar.ics${queryString(query)}`} download className={downloadClass}>
+            Download for Outlook
+          </a>
+        )}
       </PageHeader>
       <AgreementTabs />
       <div className="flex flex-wrap items-end gap-3">
@@ -231,7 +242,15 @@ export function CalendarPage() {
       ) : q.isError ? (
         <ErrorState message={messageOf(q.error)} onRetry={() => void q.refetch()} />
       ) : view === "month" ? (
-        <MonthGrid month={month} entries={q.data} today={today} />
+        <>
+          {q.data.length === 0 && (
+            <p className="rounded-2xl bg-sunk px-5 py-4 text-ink-2">
+              No notice deadlines or renewal dates in {monthName(month)}
+              {filtered ? " for these filters" : ""}. Page to another month, or see the next twelve months.
+            </p>
+          )}
+          <MonthGrid month={month} entries={q.data} today={today} />
+        </>
       ) : q.data.length === 0 ? (
         <EmptyState title={filtered ? "No dates match these filters" : "No dates in the next twelve months"}>
           {filtered

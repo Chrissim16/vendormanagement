@@ -158,12 +158,14 @@ export const deleteDocument = (db: Queryable, id: string) => db.delete(documents
 
 export const getVendorBrief = async (db: Queryable, id: string) =>
   (await db.select({ id: vendors.id, name: vendors.name, status: vendors.status }).from(vendors).where(eq(vendors.id, id)))[0];
+/** An owner who has access. Shares a lock on them, so a switch-off running at the same time waits for this save, or this save sees it (F-6). */
 export const activeUser = async (db: Queryable, id: string) =>
   (
     await db
       .select({ id: users.id })
       .from(users)
       .where(and(eq(users.id, id), eq(users.active, true)))
+      .for("share")
   )[0];
 
 /** Active subscriptions of vendors that are not offboarded, for the renewal calendar (A-9). */

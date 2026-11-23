@@ -66,12 +66,14 @@ export const findByVat = async (db: Queryable, vatNumber: string, exceptId?: str
       .from(vendors)
       .where(and(eq(vendors.vatNumber, vatNumber), exceptId ? ne(vendors.id, exceptId) : undefined))
   )[0];
+/** An owner who has access. Shares a lock on them, so a switch-off running at the same time waits for this save, or this save sees it (F-6). */
 export const activeUser = async (db: Queryable, id: string) =>
   (
     await db
       .select({ id: users.id })
       .from(users)
       .where(and(eq(users.id, id), eq(users.active, true)))
+      .for("share")
   )[0];
 
 export const insertVendor = async (db: Queryable, v: VendorInput, by: string) =>

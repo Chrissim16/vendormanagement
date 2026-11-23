@@ -17,5 +17,5 @@ export async function listCalendar(db: Queryable, q: CalendarQuery, today: Day):
 /** The same dates as a calendar file, with a reminder on each notice deadline at the notice warning window. */
 export async function calendarFile(db: Queryable, q: CalendarQuery, today: Day, now: Date = new Date()): Promise<string> {
   const [entries, settings] = await Promise.all([listCalendar(db, q, today), getSettings(db)]);
-  return toIcs(entries, { reminderDays: settings.noticeDays, stamp: now });
+  return toIcs(entries, { reminderDays: settings.noticeDays, stamp: now, today });
 }

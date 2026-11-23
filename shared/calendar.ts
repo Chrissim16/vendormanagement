@@ -94,7 +94,7 @@ export function monthSpan(month: string): { from: Day; to: Day } {
 }
 
 /** Text as an iCalendar TEXT value: backslash, semicolon, comma and line breaks escaped. */
-export const icsText = (s: string) => s.replace(/[\\;,]/g, (c) => `\\${c}`).replace(/\r?\n/g, "\\n");
+export const icsText = (s: string) => s.replace(/[\\;,]/g, (c) => `\\${c}`).replace(/\r\n|\r|\n/g, "\\n");
 
 /** Lines longer than 75 bytes are folded, as the format requires, without splitting a character. */
 export function foldLine(line: string): string {
@@ -122,7 +122,7 @@ const stampOf = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{
  * The entries as an iCalendar file that Outlook and Teams open: one all-day event per entry,
  * and a reminder on each notice deadline `reminderDays` before it (the notice warning setting).
  */
-export function toIcs(entries: CalendarEntry[], { reminderDays, stamp }: { reminderDays: number; stamp: Date }): string {
+export function toIcs(entries: CalendarEntry[], { reminderDays, stamp, today }: { reminderDays: number; stamp: Date; today?: Day }): string {
   const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Vendor Management//Renewal calendar//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "X-WR-CALNAME:Renewal calendar"];
   for (const e of entries) {
     const name = `${e.vendorName} · ${e.title}`;
@@ -141,7 +141,8 @@ export function toIcs(entries: CalendarEntry[], { reminderDays, stamp }: { remin
       `DESCRIPTION:${icsText(description)}`,
       "TRANSP:TRANSPARENT",
     );
-    if (e.kind === "notice" && reminderDays > 0)
+    // A deadline that has already passed gets no reminder: it would only pop up as overdue when the file is opened.
+    if (e.kind === "notice" && reminderDays > 0 && (!today || e.date >= today))
       lines.push("BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${icsText(summary)}`, `TRIGGER:-P${reminderDays}D`, "END:VALARM");
     lines.push("END:VEVENT");
   }

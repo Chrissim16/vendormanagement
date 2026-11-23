@@ -45,6 +45,9 @@ export async function listOwned(db: Db, userId: string): Promise<Owned> {
 /** The records in a person's name; switching them off waits until this is empty. */
 export const ownedBy = (db: Queryable, userId: string) => owned(db, userId);
 
+/** Locks a person's row until the transaction ends; owner checks share-lock it, so they wait. */
+export const lockPerson = (db: Queryable, id: string) => db.select({ id: users.id }).from(users).where(eq(users.id, id)).for("update");
+
 export const stillOwns = (who: string, records: OwnedRecord[]) =>
   new AppError(409, "owns_records", `${who} still owns ${ownedSummary(records)}. Choose who takes them over before switching ${who} off.`);
 
@@ -59,6 +62,8 @@ export async function switchOff(db: Db, id: string, input: unknown, by: User) {
   return db.transaction(async (tx) => {
     // The same lock as role changes, so two admins cannot switch off the last admin together.
     await tx.execute(sql`select pg_advisory_xact_lock(4201)`);
+    // Lock the person first: a save naming them as owner waits until this is done, so nothing new lands in their name meanwhile.
+    await lockPerson(tx, id);
     const current = await repo.getUser(tx, id);
     if (!current) throw notFound("That person");
     const refusal = refuseUserChange(current, { active: false }, await repo.countOtherActiveAdmins(tx, id));

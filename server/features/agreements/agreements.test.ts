@@ -383,7 +383,10 @@ describe("A-9 renewal calendar", () => {
     expect(events).toBe((await cal({ vendorId, kind: "notice" })).body.length);
     expect(res.text).toContain("TRIGGER:-P90D");
     await t.as(ADMIN).put("/api/admin/settings").send({ noticeDays: 45, sowEndDays: 30, budgetWarningPct: 80 });
-    expect((await t.as(MEMBER).get("/api/calendar.ics").query({ ...span, vendorId, kind: "notice" })).text).toContain("TRIGGER:-P45D");
-    await t.as(ADMIN).put("/api/admin/settings").send({ noticeDays: 90, sowEndDays: 30, budgetWarningPct: 80 });
+    try {
+      expect((await t.as(MEMBER).get("/api/calendar.ics").query({ ...span, vendorId, kind: "notice" })).text).toContain("TRIGGER:-P45D");
+    } finally {
+      await t.as(ADMIN).put("/api/admin/settings").send({ noticeDays: 90, sowEndDays: 30, budgetWarningPct: 80 });
+    }
   });
 });

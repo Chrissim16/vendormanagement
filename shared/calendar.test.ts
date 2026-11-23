@@ -55,7 +55,13 @@ describe("A-9 calendar file", () => {
     expect(ics.match(/TRIGGER:-P90D/g)).toHaveLength(1);
     expect(ics).not.toMatch(/[^\r]\n/);
   });
+  it("leaves the reminder off a notice deadline that has passed", () => {
+    const es = calendarEntries([sub()], "2027-01-05");
+    expect(toIcs(es, { reminderDays: 90, stamp, today: "2027-01-05" })).not.toContain("VALARM");
+    expect(toIcs(es, { reminderDays: 90, stamp, today: "2026-12-31" })).toContain("TRIGGER:-P90D");
+  });
   it("escapes text and folds long lines without splitting a character", () => {
+    expect(icsText("x\ry")).toBe("x\\ny");
     expect(icsText("a, b; c\\d\ne")).toBe("a\\, b\\; c\\\\d\\ne");
     const folded = foldLine(`SUMMARY:${"é".repeat(80)}`);
     for (const line of folded.split("\r\n")) expect(new TextEncoder().encode(line).length).toBeLessThanOrEqual(75);

@@ -49,7 +49,8 @@ export function PeoplePage() {
   const [problem, setProblem] = useState<string | null>(null);
   useEffect(() => setProblem(null), [url.open]);
   const change = useMutation({
-    mutationFn: (patch: UpdateUser) => api<User>(`/admin/users/${url.open}`, { method: "PATCH", body: patch }),
+    // The person's id travels with the change, so opening someone else meanwhile never changes the wrong person.
+    mutationFn: ({ id, patch }: { id: string; patch: UpdateUser }) => api<User>(`/admin/users/${id}`, { method: "PATCH", body: patch }),
     onSuccess: async (u) => {
       setProblem(null);
       toast.success(`Saved changes for ${u.displayName ?? u.email}`);
@@ -62,7 +63,7 @@ export function PeoplePage() {
   const [handover, setHandover] = useState<{ user: User; owned: Owned } | null>(null);
   const switchOff = useMutation({
     mutationFn: async (u: User) => ({ user: u, owned: await api<Owned>(`/admin/users/${u.id}/owned`) }),
-    onSuccess: ({ user, owned }) => (owned.refusal ? setProblem(owned.refusal) : owned.records.length ? setHandover({ user, owned }) : change.mutate({ active: false })),
+    onSuccess: ({ user, owned }) => (owned.refusal ? setProblem(owned.refusal) : owned.records.length ? setHandover({ user, owned }) : change.mutate({ id: user.id, patch: { active: false } })),
     onError: (e) => setProblem(messageOf(e)),
   });
 
@@ -132,7 +133,7 @@ export function PeoplePage() {
                       label="Role"
                       value={open.role}
                       busy={change.isPending}
-                      onChange={(role) => change.mutate({ role })}
+                      onChange={(role) => change.mutate({ id: open.id, patch: { role } })}
                       options={[
                         { value: "member", label: "Member" },
                         { value: "admin", label: "Admin" },
@@ -145,7 +146,7 @@ export function PeoplePage() {
                       label="Access"
                       value={open.active ? "on" : "off"}
                       busy={change.isPending || switchOff.isPending}
-                      onChange={(v) => (v === "on" ? change.mutate({ active: true }) : switchOff.mutate(open))}
+                      onChange={(v) => (v === "on" ? change.mutate({ id: open.id, patch: { active: true } }) : switchOff.mutate(open))}
                       options={[
                         { value: "on", label: "Has access" },
                         { value: "off", label: "Switched off" },

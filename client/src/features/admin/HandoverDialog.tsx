@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { ownedKindLabels, ownedKinds, ownedSummary, type OwnedRecord } from "../../../../shared/handover";
+import { ownedKindLabels, ownedKinds, ownedSummary, type Owned, type OwnedRecord } from "../../../../shared/handover";
 import type { User } from "../../../../shared/types";
-import { api, messageOf } from "../../lib/api";
+import { api, ApiError, messageOf } from "../../lib/api";
 import { personName, usePeople } from "../../lib/data";
 import { Dialog } from "../../platform/Dialog";
 import { FormFooter } from "../../platform/form";
@@ -15,9 +15,10 @@ const capital = (s: string) => s[0]!.toUpperCase() + s.slice(1);
  * F-6: before a person who owns vendors, agreements or RFPs is switched off, each of those
  * gets a new owner, one person for everything or a person per record, in the same step.
  */
-export function HandoverDialog({ user, records, onClose, onDone }: { user: User; records: OwnedRecord[]; onClose: () => void; onDone: (u: User) => void }) {
+export function HandoverDialog({ user, records: first, onClose, onDone }: { user: User; records: OwnedRecord[]; onClose: () => void; onDone: (u: User) => void }) {
   const who = user.displayName ?? user.email;
   const people = (usePeople().data ?? []).filter((p) => p.id !== user.id);
+  const [records, setRecords] = useState(first);
   const [mode, setMode] = useState<Mode>("all");
   const [all, setAll] = useState("");
   const [each, setEach] = useState<Record<string, string>>({});
@@ -41,6 +42,16 @@ export function HandoverDialog({ user, records, onClose, onDone }: { user: User;
     } catch (err) {
       // Nothing was changed; what was chosen stays so it can be corrected.
       setProblem(messageOf(err));
+      // Something was given to them, or taken from them, while the dialog was open: show the list as it is now.
+      if (err instanceof ApiError && (err.code === "owns_records" || err.code === "changed")) {
+        const now = await api<Owned>(`/admin/users/${user.id}/owned`).catch(() => null);
+        if (now) {
+          setRecords(now.records);
+          const added = now.records.filter((r) => !records.some((x) => keyOf(x) === keyOf(r)));
+          setMissing(new Set(mode === "each" ? added.map(keyOf) : []));
+          setProblem(`${messageOf(err)} The list has been brought up to date.`);
+        }
+      }
     } finally {
       setBusy(false);
     }
@@ -114,10 +125,16 @@ export function HandoverDialog({ user, records, onClose, onDone }: { user: User;
                               value={each[keyOf(r)] ?? ""}
                               onChange={(e) => setEach((x) => ({ ...x, [keyOf(r)]: e.target.value }))}
                               aria-invalid={bad || undefined}
+                              aria-describedby={bad ? `${id}-problem` : undefined}
                               className="w-56 shrink-0"
                             >
                               {options}
                             </Select>
+                            {bad && (
+                              <span id={`${id}-problem`} className="sr-only">
+                                Choose who takes this over.
+                              </span>
+                            )}
                           </>
                         )}
                       </li>
