@@ -57,7 +57,7 @@ db/schema, db/migrations, db/seed
 e2e/                      Playwright tests, one file per requirement group
 ```
 
-Features built so far: `admin`, `vendors`, `agreements`, `warnings`, `import`, `settings`, `sow` (milestones, change requests,
+Features built so far: `admin` (people, the hand-over when someone is switched off, audit log, system check), `vendors`, `agreements` (with renewals and the renewal calendar and its calendar file), `warnings`, `import` (the Excel import of vendors, contacts, agreements, day rates and invoices, open to every member; each row is saved through its own feature's save, and a preview does the same and then undoes it all), `settings`, `sow` (milestones, change requests,
 consultants, rate cards), `invoices` (invoices and spend), `performance` (board links, Jira sync, monthly metrics, targets), `scorecards` (criteria, monthly AI proposals, quarterly scorecards, vendor PDF), `warnings` (warnings and risk flags), `dashboard` (the landing page's figures, shared with the report and briefings), `reports` (monthly management report and its PDF), `briefings` (vendor briefings and their PDF), `rfp` (demand, document with its editor and AI rewrites, review with rounds and reviewers' remarks from Word, the company's Word template, candidates, responses, comparison, scores, decision, with the Word, Excel and PDF files it makes), `chat` (Ask: the read-only look-ups, the search over document text, the one endpoint), `reading` (contract reading: the AI's proposal for an agreement's fields from a document, and taking values over). A feature imports from `platform`, `ai`
 and `shared`, and from another feature only through that feature's `service.ts`.
 

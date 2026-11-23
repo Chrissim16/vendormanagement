@@ -227,7 +227,14 @@ export async function getRateCard(db: Queryable, vendorId: string, today: Day): 
 const SAME_DAY = "This role already has a rate starting on that date.";
 
 /** Adds a rate that applies from a date, or removes a line. A rate is changed by adding a newer line, which keeps the old one on record. */
-export async function saveRateLine(db: Db, target: { vendorId: string } | { lineId: string }, input: unknown, by: User, today: Day): Promise<RateLine[]> {
+export async function saveRateLine(
+  db: Db,
+  target: { vendorId: string } | { lineId: string },
+  input: unknown,
+  by: User,
+  today: Day,
+  action: "update" | "import" = "update",
+): Promise<RateLine[]> {
   try {
     return await db.transaction(async (tx) => {
       const existing = "lineId" in target ? await repo.getRateLine(tx, target.lineId) : undefined;
@@ -236,7 +243,7 @@ export async function saveRateLine(db: Db, target: { vendorId: string } | { line
       await tx.execute(sql`select 1 from vendors where id = ${vendorId} for update`);
       const vendor = await repo.getVendor(tx, vendorId);
       if (!vendor) throw notFound("That vendor");
-      const entry = { userEmail: by.email, action: "update" as const, entityType: "vendor", entityId: vendorId, summary: vendor.name };
+      const entry = { userEmail: by.email, action, entityType: "vendor", entityId: vendorId, summary: vendor.name };
       const lines = await repo.rateLinesOf(tx, vendorId);
       if (existing) {
         const left = lines.filter((l) => l.id !== existing.id);

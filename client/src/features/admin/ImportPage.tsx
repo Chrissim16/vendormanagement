@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { api, messageOf } from "../../lib/api";
+import { api, messageOf, postForFile } from "../../lib/api";
 import { DropZone, FileButton, oneFileProblem } from "../../platform/files";
 import { Button, EmptyState, ErrorState, PageHeader, Pill } from "../../platform/ui";
 
@@ -16,20 +16,23 @@ interface Result {
   counts: { add: number; exists: number; invalid: number };
   applied: boolean;
 }
+const SHEETS = ["Vendors", "Contacts", "Agreements", "Day rates", "Invoices"];
 const outcome = { add: ["ok", "Will be added"], exists: ["none", "Already there"], invalid: ["bad", "Has problems"] } as const;
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
-/** Bring vendors and agreements in from the Excel template: check first, then import (A-8). */
+/** Bring vendors, contacts, agreements, day rates and past invoices in from the Excel template: check first, then import (A-8, M-9). Any member. */
 export function ImportPage() {
   const qc = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const run = useMutation({
-    mutationFn: ({ f, apply }: { f: File; apply: boolean }) => api<Result>(`/admin/import/${apply ? "apply" : "preview"}`, { file: f }),
+    mutationFn: ({ f, apply }: { f: File; apply: boolean }) => api<Result>(`/import/${apply ? "apply" : "preview"}`, { file: f }),
     onSuccess: async (r) => {
       if (r.applied) await qc.invalidateQueries();
     },
   });
+  // A-8: the rows with a problem, in the template's shape with the reason beside each, to fix and upload again.
+  const fix = useMutation({ mutationFn: (f: File) => postForFile("/import/problems.xlsx", f, "vendorapp-import-rows-to-fix.xlsx"), onError: (e) => setProblem(messageOf(e)) });
   const r = run.data;
   const reset = () => {
     setFile(null);
@@ -47,9 +50,9 @@ export function ImportPage() {
 
   return (
     <>
-      <PageHeader context="Bring in vendors and agreements from Excel" title="Import">
+      <PageHeader context="Bring in vendors, contacts, agreements, day rates and past invoices from Excel" title="Import">
         <a
-          href="/api/admin/import/template.xlsx"
+          href="/api/import/template.xlsx"
           download
           className="inline-flex h-[38px] items-center rounded-full border border-line-2 px-[18px] text-[13.5px] font-semibold transition hover:bg-sunk active:scale-[.96]"
         >
@@ -57,9 +60,14 @@ export function ImportPage() {
         </a>
       </PageHeader>
       <ol className="-mt-4 flex max-w-[70ch] list-decimal flex-col gap-1.5 pl-5 text-ink-2">
-        <li>Download the template and fill in the Vendors and Agreements sheets. Each has a help sheet next to it.</li>
+        <li>
+          Download the template and fill in the sheets you need: {SHEETS.slice(0, -1).join(", ")} and {SHEETS[SHEETS.length - 1]}. Any sheet may stay empty. Each has a help sheet next to it.
+        </li>
         <li>Choose the file here. Nothing is saved yet: you first see what each row would do.</li>
-        <li>Import the rows that are fine. Rows with problems are skipped, and rows already in the app are left alone, so the same file can be imported again safely.</li>
+        <li>
+          Import the rows that are fine. Rows already in the app are left alone, so the same file can be imported again safely. Rows with problems are skipped: download them, fix
+          them and upload that file.
+        </li>
       </ol>
       <DropZone enabled label="Drop the filled-in template here" busy={run.isPending} onFiles={choose} onProblem={setProblem} className="flex flex-wrap items-center gap-3">
         <FileButton
@@ -80,7 +88,19 @@ export function ImportPage() {
       {r && (
         <>
           {r.applied ? (
-            <EmptyState title={`Imported ${plural(r.counts.add, "row")}`} action={<Button onClick={reset}>Import another file</Button>}>
+            <EmptyState
+              title={`Imported ${plural(r.counts.add, "row")}`}
+              action={
+                <div className="flex flex-wrap justify-center gap-2.5">
+                  {r.counts.invalid > 0 && file && (
+                    <Button variant="primary" aria-disabled={fix.isPending || undefined} onClick={() => !fix.isPending && fix.mutate(file)}>
+                      Download the rows with problems
+                    </Button>
+                  )}
+                  <Button onClick={reset}>Import another file</Button>
+                </div>
+              }
+            >
               {plural(r.counts.exists, "row")} already in the app {r.counts.exists === 1 ? "was" : "were"} left alone, and {plural(r.counts.invalid, "row")} with problems{" "}
               {r.counts.invalid === 1 ? "was" : "were"} skipped.
             </EmptyState>
@@ -91,6 +111,11 @@ export function ImportPage() {
                 {plural(r.counts.invalid, "row")} with problems.
               </p>
               <Button onClick={reset}>Cancel</Button>
+              {r.counts.invalid > 0 && file && (
+                <Button aria-disabled={fix.isPending || undefined} onClick={() => !fix.isPending && fix.mutate(file)}>
+                  Download the rows with problems
+                </Button>
+              )}
               <Button variant="primary" aria-disabled={r.counts.add === 0 || undefined} onClick={() => r.counts.add > 0 && file && run.mutate({ f: file, apply: true })}>
                 Import {plural(r.counts.add, "row")}
               </Button>

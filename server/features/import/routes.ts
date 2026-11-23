@@ -1,14 +1,14 @@
 import { Router } from "express";
 import type { Day } from "../../../shared/dates";
-import { currentUser, requireRole } from "../../platform/auth";
+import { currentUser } from "../../platform/auth";
 import { AppError } from "../../platform/errors";
 import { upload } from "../../platform/http";
 import type { Db } from "../../platform/ports/types";
 import * as service from "./service";
 
 export function importRoutes(db: Db, today: () => Day) {
+  // A-8: open to every member since M13; each row is checked by the same rules as its form.
   const r = Router();
-  r.use(requireRole("admin"));
   r.get("/template.xlsx", async (_req, res) => {
     res
       .set({ "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": 'attachment; filename="vendorapp-import-template.xlsx"' })
@@ -24,5 +24,15 @@ export function importRoutes(db: Db, today: () => Day) {
     ] as const;
   r.post("/preview", ...run(false));
   r.post("/apply", ...run(true));
+  r.post("/problems.xlsx", upload.single("file"), async (req, res) => {
+    if (!req.file) throw new AppError(400, "file_missing", "Choose the filled-in template.");
+    res
+      .set({
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": 'attachment; filename="vendorapp-import-rows-to-fix.xlsx"',
+        "Cache-Control": "private, no-store",
+      })
+      .send(await service.problemRows(db, req.file.buffer, currentUser(req), today()));
+  });
   return r;
 }

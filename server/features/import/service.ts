@@ -1,17 +1,22 @@
 import { randomUUID } from "node:crypto";
 import ExcelJS from "exceljs";
-import { sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { ZodError } from "zod";
+import { agreements, invoices, milestones, rateCardLines } from "../../../db/schema";
 import { agreementSchema, checkAgreement, kinds, type AgreementInput, type Kind } from "../../../shared/agreements";
 import { isDay, type Day } from "../../../shared/dates";
 import { parseAmount, typedCurrency } from "../../../shared/money";
 import type { User } from "../../../shared/types";
-import { cleanName, cleanVat, vendorSchema, type VendorInput } from "../../../shared/vendors";
+import { cleanName, cleanVat, contactSchema, vendorSchema, type VendorInput } from "../../../shared/vendors";
+import { rateLineSchema } from "../../../shared/sow";
 import { AppError } from "../../platform/errors";
 import type { Db } from "../../platform/ports/types";
 import { unpacksWithin } from "../../platform/zip";
 import { createAgreement, findSameAgreement } from "../agreements/service";
 import { listCurrencies } from "../settings/service";
-import { createVendor, findVendorByName, findVendorByVat, listPeople } from "../vendors/service";
+import { saveInvoice } from "../invoices/service";
+import { saveRateLine } from "../sow/service";
+import { contactsOf, createVendor, findVendorByName, findVendorByVat, listPeople, saveContact } from "../vendors/service";
 
 const vendorColumns = [
   "Name",
@@ -53,6 +58,35 @@ const agreementColumns = [
   "Renewal term months",
   "Notes",
 ] as const;
+
+/** M13: contacts (A-8), day rates and past invoices (M-9). */
+const contactColumns = ["Vendor name", "Name", "Email", "Phone", "Roles", "Primary"] as const;
+const rateColumns = ["Vendor name", "Role", "Day rate", "Currency", "Valid from"] as const;
+const invoiceColumns = ["Vendor name", "Agreement title", "Invoice number", "Invoice date", "Amount", "Milestone title", "Description"] as const;
+
+/** The sheets in the order they are saved, so each can name what the ones before it add. */
+export const SHEETS = ["Vendors", "Contacts", "Agreements", "Day rates", "Invoices"] as const;
+export type SheetName = (typeof SHEETS)[number];
+const columnsOfSheet: Record<SheetName, readonly string[]> = {
+  Vendors: vendorColumns,
+  Contacts: contactColumns,
+  Agreements: agreementColumns,
+  "Day rates": rateColumns,
+  Invoices: invoiceColumns,
+};
+/** Where a field's problem goes on each of the later sheets. */
+const columnsBySheet: Partial<Record<SheetName, Record<string, string>>> = {
+  Contacts: { name: "Name", email: "Email", phone: "Phone", roles: "Roles", isPrimary: "Primary" },
+  "Day rates": { role: "Role", dayRateMinor: "Day rate", currency: "Currency", validFrom: "Valid from" },
+  Invoices: {
+    agreementId: "Agreement title",
+    milestoneId: "Milestone title",
+    invoiceNumber: "Invoice number",
+    invoiceDate: "Invoice date",
+    amountMinor: "Amount",
+    description: "Description",
+  },
+};
 
 /** Which column a field's problem belongs to, and how to say what is allowed there. */
 const columnOf: Record<string, string> = {
@@ -107,7 +141,7 @@ const MAX_ROWS = 2000;
 const MAX_UNPACKED_BYTES = 60 * 1024 * 1024;
 
 export interface ImportRow {
-  sheet: "Vendors" | "Agreements";
+  sheet: SheetName;
   row: number;
   label: string;
   /** add: will be created. exists: already there, left alone. invalid: has problems, skipped. */
@@ -122,11 +156,16 @@ export interface ImportResult {
 
 /** The empty workbook people fill in (A-8). */
 export async function template(): Promise<Buffer> {
+  return Buffer.from(await templateBook(true).xlsx.writeBuffer());
+}
+
+/** The template's workbook; without the example rows for the file of rows to fix. */
+function templateBook(examples: boolean): ExcelJS.Workbook {
   const wb = new ExcelJS.Workbook();
-  const sheet = (name: string, columns: readonly string[], example: (string | number)[], notes: string[]) => {
+  const sheet = (name: SheetName, columns: readonly string[], example: (string | number)[], notes: string[]) => {
     const ws = wb.addWorksheet(name);
     ws.addRow([...columns]).font = { bold: true };
-    ws.addRow(example).font = { italic: true, color: { argb: "FF6A7285" } };
+    if (examples) ws.addRow(example).font = { italic: true, color: { argb: "FF6A7285" } };
     ws.columns.forEach((c) => (c.width = 22));
     const help = wb.addWorksheet(`${name} help`);
     help.getColumn(1).width = 110;
@@ -165,6 +204,18 @@ export async function template(): Promise<Buffer> {
     ],
   );
   sheet(
+    "Contacts",
+    contactColumns,
+    [`Example Vendor ${EXAMPLE}`, "Sam Example", "sam@example.test", "+31 20 000 0000", "Account Manager; Billing / Finance", "yes"],
+    [
+      "One row per contact. Vendor name and Name are required. Delete the grey example row.",
+      "Vendor name must match a vendor in the app or on the Vendors sheet.",
+      "Roles: as many as apply, separated by semicolons, such as Account Manager; Helpdesk. A role that is not on the app's list is added to it, as when typing it on a contact.",
+      "Primary: yes for the vendor's main contact, at most one per vendor. Empty means no. A vendor that already has a main contact keeps it.",
+      "A contact already in the app is left as it is: the same vendor and email, or the same vendor and name when there is no email.",
+    ],
+  );
+  sheet(
     "Agreements",
     agreementColumns,
     [`Example Vendor ${EXAMPLE}`, "SOW", "SOW 01 Example project", "", "active", "", "EUR", "2026-01-15", "2026-02-01", "2026-12-31", "", "fixed", "120000", "", "", "", "", ""],
@@ -183,7 +234,32 @@ export async function template(): Promise<Buffer> {
       "An agreement with the same vendor, kind and title as one already in the app is left as it is.",
     ],
   );
-  return Buffer.from(await wb.xlsx.writeBuffer());
+  sheet(
+    "Day rates",
+    rateColumns,
+    [`Example Vendor ${EXAMPLE}`, "Lead architect", "1250", "EUR", "2026-01-01"],
+    [
+      "One row per day rate. Every column is required except Currency. Delete the grey example row.",
+      "Vendor name must match a vendor in the app or on the Vendors sheet.",
+      "Day rate: an amount above zero with at most two decimals, in the row's currency. Currency: a code on the app's list; empty means EUR.",
+      "Valid from: the first day the rate applies, as an Excel date or typed as 2026-12-31 or 31-12-2026.",
+      "A rate already in the app for the same vendor, role and valid-from date is left as it is.",
+    ],
+  );
+  sheet(
+    "Invoices",
+    invoiceColumns,
+    [`Example Vendor ${EXAMPLE}`, "SOW 01 Example project", "INV-0001", "2026-03-31", "12500", "", ""],
+    [
+      "One row per invoice. Vendor name, Agreement title, Invoice number, Invoice date and Amount are required. Delete the grey example row.",
+      "Agreement title: a SOW or subscription of that vendor, in the app or on the Agreements sheet.",
+      "The invoice is in the agreement's currency. Write the amount without a currency, or with the agreement's own.",
+      "Milestone title: optional, a milestone of that SOW already in the app.",
+      "The same rules apply as when typing an invoice in: the date may not be in the future, and an invoice number may be used once per vendor.",
+      "An invoice already in the app with the same vendor and invoice number is left as it is.",
+    ],
+  );
+  return wb;
 }
 
 /** Marks a cell whose formula failed (#N/A, #REF! and so on), so it is reported instead of read as empty. */
@@ -309,14 +385,21 @@ export async function loadWorkbook(buffer: Buffer, hint: { tooLarge: string; unr
 /** The text of a cell as a person sees it: a formula gives its result, rich text its text. */
 export const cellText = (raw: unknown): string => str(raw);
 
-async function read(buffer: Buffer) {
+export type SheetRow = { row: number; get: (c: string) => unknown };
+export type Book = Record<SheetName, SheetRow[]>;
+
+async function read(buffer: Buffer): Promise<Book> {
   const wb = await loadWorkbook(buffer, {
-    tooLarge: "That workbook is too large to import. Keep it to the template's two sheets.",
+    tooLarge: "That workbook is too large to import. Keep it to the template's sheets.",
     unreadable: "That file could not be read as an Excel workbook. Use the template.",
   });
-  const sheet = (name: string, columns: readonly string[], later: string[] = []) => {
+  if (!SHEETS.some((n) => wb.getWorksheet(n)))
+    throw new AppError(400, "sheet_missing", `The workbook has none of the template's sheets (${SHEETS.join(", ")}). Use the template.`);
+  // Q123: any sheet may be left out or left empty.
+  const sheet = (name: SheetName, later: string[] = []): SheetRow[] => {
     const ws = wb.getWorksheet(name);
-    if (!ws) throw new AppError(400, "sheet_missing", `The workbook has no sheet called "${name}". Use the template.`);
+    if (!ws) return [];
+    const columns = columnsOfSheet[name];
     // The row comes back with gaps for empty cells; Array.from fills them so every position is a string.
     const header = Array.from(ws.getRow(1).values as unknown[], str);
     const index = Object.fromEntries(columns.map((c) => [c, header.findIndex((h) => h.toLowerCase() === c.toLowerCase())])) as Record<string, number>;
@@ -324,7 +407,7 @@ async function read(buffer: Buffer) {
     if (missing.length)
       throw new AppError(400, "columns_missing", `The "${name}" sheet is missing the column${missing.length > 1 ? "s" : ""} ${missing.join(", ")}. Use the template.`);
     if (ws.actualRowCount > MAX_ROWS + 1) throw new AppError(400, "too_many_rows", `The "${name}" sheet has more than 2,000 rows.`);
-    const rows: { row: number; get: (c: string) => unknown }[] = [];
+    const rows: SheetRow[] = [];
     ws.eachRow((r, n) => {
       const values = r.values as unknown[];
       if (n === 1 || !Array.from(values, str).some(Boolean)) return;
@@ -332,7 +415,13 @@ async function read(buffer: Buffer) {
     });
     return rows;
   };
-  return { vendors: sheet("Vendors", vendorColumns, laterVendorColumns), agreements: sheet("Agreements", agreementColumns) };
+  return {
+    Vendors: sheet("Vendors", laterVendorColumns),
+    Contacts: sheet("Contacts"),
+    Agreements: sheet("Agreements"),
+    "Day rates": sheet("Day rates"),
+    Invoices: sheet("Invoices"),
+  };
 }
 
 const VENDOR_STATUSES = "prospect, active, on_hold or offboarded";
@@ -340,14 +429,59 @@ const AGREEMENT_STATUSES = "draft, in_negotiation, out_for_signature, active or 
 const EXAMPLE_ROW = "This is the template's example row. Delete it.";
 const OFFBOARDED = "This vendor is offboarded and cannot receive new agreements.";
 
+/** Thrown at the end of a preview to undo everything it saved, carrying what it found. */
+class Preview extends Error {
+  constructor(public result: ImportResult) {
+    super("preview");
+  }
+}
+
 /**
- * Reads the workbook and works out what each row would do. With `apply`, the valid new
- * rows are created, all or nothing. Rows already in the app are left alone, so importing
- * the same file twice adds nothing the second time. Preview and apply run the same
- * analysis; apply only adds the writing.
+ * Saves one row through the app's own save for that record, in a savepoint: a refusal
+ * becomes the row's problems, in the words the form would use, and undoes only that row.
+ */
+async function attempt(row: ImportRow, save: () => Promise<unknown>) {
+  const columns = columnsBySheet[row.sheet] ?? columnOf;
+  try {
+    await save();
+    row.outcome = "add";
+  } catch (e) {
+    row.outcome = "invalid";
+    if (e instanceof AppError && e.status < 500)
+      row.problems.push(...(e.fields && Object.keys(e.fields).length ? Object.entries(e.fields).map(([f, m]) => `${columns[f] ?? f}: ${m}`) : [e.message]));
+    else if (e instanceof ZodError) row.problems.push(...plain(e, "").map((p) => p.replace(/^(\w+):/, (m, f: string) => `${columns[f] ?? f}:`)));
+    else throw e;
+  }
+}
+
+/** How many times each key appears, so a row that is in the file twice is a problem for every copy. */
+function counted<T>(rows: T[], keyOf: (r: T) => string) {
+  const n = new Map<string, number>();
+  for (const r of rows) n.set(keyOf(r), (n.get(keyOf(r)) ?? 0) + 1);
+  return (r: T) => (n.get(keyOf(r)) ?? 0) > 1;
+}
+
+/**
+ * Reads the workbook and works out what each row would do, in the order of the sheets.
+ * Every good row is saved through the app's own save for that record, so the rules are the
+ * form's; rows already in the app are left alone, so importing the same file twice adds
+ * nothing the second time. A preview does exactly the same and then undoes it all, so the
+ * preview and the import always agree.
  */
 export async function importWorkbook(db: Db, buffer: Buffer, by: User, today: Day, apply: boolean): Promise<ImportResult> {
-  const book = await read(buffer);
+  return analyse(db, await read(buffer), by, today, apply);
+}
+
+async function analyse(db: Db, book: Book, by: User, today: Day, apply: boolean): Promise<ImportResult> {
+  try {
+    return await analyseIn(db, book, by, today, apply);
+  } catch (e) {
+    if (e instanceof Preview) return e.result;
+    throw e;
+  }
+}
+
+function analyseIn(db: Db, book: Book, by: User, today: Day, apply: boolean): Promise<ImportResult> {
   return db.transaction(async (tx) => {
     // One import at a time, so two cannot both decide the same row is new.
     await tx.execute(sql`select pg_advisory_xact_lock(4202)`);
@@ -357,18 +491,18 @@ export async function importWorkbook(db: Db, buffer: Buffer, by: User, today: Da
 
     // ---- Vendors
     const count = new Map<string, number>();
-    for (const r of book.vendors) {
+    for (const r of book.Vendors) {
       const k = cleanName(str(r.get("Name"))).toLowerCase();
       count.set(k, (count.get(k) ?? 0) + 1);
     }
     const vatCount = new Map<string, number>();
-    for (const r of book.vendors) {
+    for (const r of book.Vendors) {
       const vat = cleanVat(str(r.get("VAT or tax number")).trim());
       if (vat) vatCount.set(vat, (vatCount.get(vat) ?? 0) + 1);
     }
     /** Vendors this file will add, by lower-case name. Each gets an id of its own up front, so preview and apply see the same thing. */
     const newVendors = new Map<string, { id: string; input: VendorInput }>();
-    for (const r of book.vendors) {
+    for (const r of book.Vendors) {
       const problems: string[] = [];
       const cell = readers(problems);
       const name = cleanName(cell.text(r.get("Name"), "Name"));
@@ -415,15 +549,74 @@ export async function importWorkbook(db: Db, buffer: Buffer, by: User, today: Da
         newVendors.set(k, { id: randomUUID(), input: parsed.data! });
       }
     }
-    if (apply) for (const v of newVendors.values()) v.id = (await createVendor(tx as unknown as Db, v.input, by, today, "import")).id;
+    for (const v of newVendors.values()) v.id = (await createVendor(tx as unknown as Db, v.input, by, today, "import")).id;
+    /** A vendor named on a later sheet: in the app (including those just added), or a reason it is not. */
+    const vendorFor = async (name: string, problems: string[]) => {
+      if (!name) {
+        problems.push("Vendor name: this is required.");
+        return undefined;
+      }
+      const found = await findVendorByName(tx, name);
+      if (!found) problems.push(`Vendor name: "${name}" is not in the app and not a valid row on the Vendors sheet.`);
+      return found;
+    };
+
+    // ---- Contacts (A-8): matched by vendor and email, or vendor and name without an email
+    const contactKey = (r: SheetRow) => {
+      const email = str(r.get("Email")).toLowerCase();
+      return `${cleanName(str(r.get("Vendor name"))).toLowerCase()}|${email ? `@${email}` : str(r.get("Name")).toLowerCase().replace(/\s+/g, " ")}`;
+    };
+    const twiceContact = counted(book.Contacts, contactKey);
+    const primaries = counted(
+      book.Contacts.filter((r) => ["yes", "y", "true", "1"].includes(str(r.get("Primary")).toLowerCase())),
+      (r) => cleanName(str(r.get("Vendor name"))).toLowerCase(),
+    );
+    for (const r of book.Contacts) {
+      const problems: string[] = [];
+      const cell = readers(problems);
+      const vendorName = cleanName(cell.text(r.get("Vendor name"), "Vendor name"));
+      const name = cell.text(r.get("Name"), "Name");
+      const row: ImportRow = { sheet: "Contacts", row: r.row, label: `${vendorName || "(no vendor)"} · ${name || "(no name)"}`, outcome: "invalid", problems };
+      rows.push(row);
+      if (vendorName.includes(EXAMPLE)) {
+        problems.push(EXAMPLE_ROW);
+        continue;
+      }
+      const vendor = await vendorFor(vendorName, problems);
+      const roles = cell
+        .text(r.get("Roles"), "Roles")
+        .split(";")
+        .map((x) => x.trim())
+        .filter(Boolean);
+      const isPrimary = cell.yesNo(r.get("Primary"), "Primary") ?? false;
+      const parsed = contactSchema.safeParse({ name, email: cell.text(r.get("Email"), "Email"), phone: cell.text(r.get("Phone"), "Phone"), roles, isPrimary });
+      if (!parsed.success) problems.push(...plain(parsed.error, "").map((p) => p.replace(/^(\w+):/, (m, f: string) => `${columnsBySheet.Contacts![f] ?? f}:`)));
+      if (name && twiceContact(r)) problems.push("This contact appears more than once in the file.");
+      if (isPrimary && primaries(r)) problems.push("Primary: more than one contact of this vendor is marked as the main one.");
+      if (problems.length || !vendor || !parsed.success) continue;
+      const c = parsed.data;
+      const existing = await contactsOf(tx, vendor.id);
+      const same = existing.find((x) => (c.email ? x.email?.toLowerCase() === c.email.toLowerCase() : x.name.toLowerCase() === c.name.toLowerCase()));
+      if (same) {
+        row.outcome = "exists";
+        continue;
+      }
+      const main = c.isPrimary && existing.find((x) => x.isPrimary);
+      // The import never changes what is there, so it cannot take the main contact from someone.
+      if (main) {
+        problems.push(`Primary: ${main.name} is already the main contact. Leave Primary empty, or change the main contact in the app.`);
+        continue;
+      }
+      await attempt(row, () => saveContact(tx as unknown as Db, { vendorId: vendor.id }, c, by, "import"));
+    }
 
     // ---- Agreements, first pass: read and check each row on its own
     const seen = new Map<string, number>();
-    const dupKey = (r: (typeof book.agreements)[number]) => `${cleanName(str(r.get("Vendor name"))).toLowerCase()}|${key(str(r.get("Kind")))}|${str(r.get("Title")).toLowerCase()}`;
-    for (const r of book.agreements) seen.set(dupKey(r), (seen.get(dupKey(r)) ?? 0) + 1);
+    const dupKey = (r: (typeof book.Agreements)[number]) => `${cleanName(str(r.get("Vendor name"))).toLowerCase()}|${key(str(r.get("Kind")))}|${str(r.get("Title")).toLowerCase()}`;
+    for (const r of book.Agreements) seen.set(dupKey(r), (seen.get(dupKey(r)) ?? 0) + 1);
 
     const pending: { input: AgreementInput; parentTitle: string; row: ImportRow }[] = [];
-    for (const r of book.agreements) {
+    for (const r of book.Agreements) {
       const problems: string[] = [];
       const cell = readers(problems);
       const vendorName = cleanName(cell.text(r.get("Vendor name"), "Vendor name"));
@@ -503,7 +696,7 @@ export async function importWorkbook(db: Db, buffer: Buffer, by: User, today: Da
       } else parents.set(p, { inFile, existingId: existing?.id });
     }
 
-    if (apply) {
+    {
       const created = new Map<(typeof pending)[number], string>();
       const todo = pending.filter((p) => p.row.outcome === "add").sort((a, b) => Number(b.input.kind === "msa") - Number(a.input.kind === "msa"));
       for (const p of todo) {
@@ -513,9 +706,143 @@ export async function importWorkbook(db: Db, buffer: Buffer, by: User, today: Da
       }
     }
 
-    rows.sort((a, b) => (a.sheet === b.sheet ? a.row - b.row : a.sheet === "Vendors" ? -1 : 1));
+    // ---- Day rates (M-9): matched by vendor, role and valid-from
+    const rateKey = (r: SheetRow) => `${cleanName(str(r.get("Vendor name"))).toLowerCase()}|${str(r.get("Role")).toLowerCase()}|${str(r.get("Valid from"))}`;
+    const twiceRate = counted(book["Day rates"], rateKey);
+    for (const r of book["Day rates"]) {
+      const problems: string[] = [];
+      const cell = readers(problems);
+      const vendorName = cleanName(cell.text(r.get("Vendor name"), "Vendor name"));
+      const role = cell.text(r.get("Role"), "Role");
+      const row: ImportRow = { sheet: "Day rates", row: r.row, label: `${vendorName || "(no vendor)"} · ${role || "(no role)"}`, outcome: "invalid", problems };
+      rows.push(row);
+      if (vendorName.includes(EXAMPLE)) {
+        problems.push(EXAMPLE_ROW);
+        continue;
+      }
+      const vendor = await vendorFor(vendorName, problems);
+      const currency = currencyCell(cell.text(r.get("Currency"), "Currency"), listed, problems) ?? "EUR";
+      const validFrom = cell.day(r.get("Valid from"), "Valid from");
+      const dayRateMinor = cell.amount(r.get("Day rate"), "Day rate", currency);
+      if (!validFrom && !problems.some((p) => p.startsWith("Valid from"))) problems.push("Valid from: this is required.");
+      if (dayRateMinor == null && !problems.some((p) => p.startsWith("Day rate"))) problems.push("Day rate: this is required.");
+      const parsed = rateLineSchema.safeParse({ role, dayRateMinor, currency, validFrom });
+      if (!parsed.success)
+        for (const p of plain(parsed.error, "").map((x) => x.replace(/^(\w+):/, (m, f: string) => `${columnsBySheet["Day rates"]![f] ?? f}:`)))
+          // A value already refused as unreadable is not refused again as missing.
+          if (!problems.some((q) => q.split(":")[0] === p.split(":")[0])) problems.push(p);
+      if (role && twiceRate(r)) problems.push("This day rate appears more than once in the file.");
+      if (problems.length || !vendor || !parsed.success) continue;
+      const v = parsed.data;
+      const there = await tx
+        .select({ id: rateCardLines.id })
+        .from(rateCardLines)
+        .where(and(eq(rateCardLines.vendorId, vendor.id), sql`lower(${rateCardLines.role}) = lower(${v.role})`, eq(rateCardLines.validFrom, v.validFrom)));
+      if (there.length) row.outcome = "exists";
+      else await attempt(row, () => saveRateLine(tx as unknown as Db, { vendorId: vendor.id }, v, by, today, "import"));
+    }
+
+    // ---- Invoices (M-9): matched by vendor and invoice number; checked by the invoice form's own rules
+    const invoiceKey = (r: SheetRow) => `${cleanName(str(r.get("Vendor name"))).toLowerCase()}|${str(r.get("Invoice number")).toLowerCase().replace(/\s+/g, " ")}`;
+    const twiceInvoice = counted(book.Invoices, invoiceKey);
+    for (const r of book.Invoices) {
+      const problems: string[] = [];
+      const cell = readers(problems);
+      const vendorName = cleanName(cell.text(r.get("Vendor name"), "Vendor name"));
+      const number = cell.text(r.get("Invoice number"), "Invoice number").replace(/\s+/g, " ");
+      const row: ImportRow = { sheet: "Invoices", row: r.row, label: `${vendorName || "(no vendor)"} · ${number || "(no number)"}`, outcome: "invalid", problems };
+      rows.push(row);
+      if (vendorName.includes(EXAMPLE)) {
+        problems.push(EXAMPLE_ROW);
+        continue;
+      }
+      const vendor = await vendorFor(vendorName, problems);
+      const title = cell.text(r.get("Agreement title"), "Agreement title");
+      let agreement: { id: string; kind: Kind; currency: string } | undefined;
+      if (!title) problems.push("Agreement title: name the SOW or subscription this invoice is for.");
+      else if (vendor) {
+        const found = await tx
+          .select({ id: agreements.id, kind: agreements.kind, currency: agreements.currency })
+          .from(agreements)
+          .where(and(eq(agreements.vendorId, vendor.id), sql`lower(${agreements.title}) = lower(${title})`, inArray(agreements.kind, ["sow", "subscription"])));
+        if (found.length === 1) agreement = found[0];
+        else if (found.length > 1) problems.push(`Agreement title: ${vendorName} has both a SOW and a subscription called "${title}". Rename one in the app first.`);
+        else problems.push(`Agreement title: ${vendorName} has no SOW or subscription called "${title}", in the app or on the Agreements sheet.`);
+      }
+      const milestoneTitle = cell.text(r.get("Milestone title"), "Milestone title");
+      let milestoneId: string | null = null;
+      if (milestoneTitle && agreement) {
+        if (agreement.kind !== "sow") problems.push("Milestone title: only a SOW has milestones. Leave it empty for a subscription.");
+        else {
+          const m = await tx
+            .select({ id: milestones.id })
+            .from(milestones)
+            .where(and(eq(milestones.sowId, agreement.id), sql`lower(${milestones.title}) = lower(${milestoneTitle})`));
+          if (m.length === 1) milestoneId = m[0]!.id;
+          else problems.push(m.length ? `Milestone title: the SOW has more than one milestone called "${milestoneTitle}".` : `Milestone title: the SOW has no milestone called "${milestoneTitle}".`);
+        }
+      }
+      const invoiceDate = cell.day(r.get("Invoice date"), "Invoice date");
+      if (!invoiceDate && !problems.some((p) => p.startsWith("Invoice date"))) problems.push("Invoice date: this is required.");
+      // Q: the currency is always the agreement's; an amount written in another one is refused, never converted.
+      const amountMinor = cell.amount(r.get("Amount"), "Amount", agreement?.currency ?? "EUR");
+      if (amountMinor == null && !problems.some((p) => p.startsWith("Amount"))) problems.push("Amount: this is required.");
+      if (!number) problems.push("Invoice number: this is required.");
+      else if (twiceInvoice(r)) problems.push("This invoice appears more than once in the file.");
+      if (problems.length || !vendor || !agreement) continue;
+      const there = await tx
+        .select({ id: invoices.id })
+        .from(invoices)
+        .where(and(eq(invoices.vendorId, vendor.id), sql`lower(${invoices.invoiceNumber}) = lower(${number})`));
+      if (there.length) {
+        row.outcome = "exists";
+        continue;
+      }
+      const description = cell.text(r.get("Description"), "Description");
+      await attempt(row, () =>
+        saveInvoice(tx as unknown as Db, null, { agreementId: agreement.id, milestoneId, invoiceNumber: number, invoiceDate, amountMinor, description }, by, today, "import"),
+      );
+    }
+
+    rows.sort((a, b) => SHEETS.indexOf(a.sheet) - SHEETS.indexOf(b.sheet) || a.row - b.row);
     const counts = { add: 0, exists: 0, invalid: 0 };
     for (const r of rows) counts[r.outcome]++;
-    return { rows, counts, applied: apply };
+    const result = { rows, counts, applied: apply };
+    if (!apply) throw new Preview(result);
+    return result;
   });
+}
+
+/** A cell's value as it was typed, for the file of rows to fix: a failed formula comes back empty. */
+function original(raw: unknown): ExcelJS.CellValue {
+  const v = unwrap(raw);
+  if (v == null || v instanceof CellError) return null;
+  return v instanceof Date || typeof v === "number" || typeof v === "boolean" ? v : String(v);
+}
+
+/**
+ * The rows with a problem, in the template's shape with the reason in a last column, to fix
+ * and upload again (A-8). Worked out with the same analysis as the preview.
+ */
+export async function problemRows(db: Db, buffer: Buffer, by: User, today: Day): Promise<Buffer> {
+  const book = await read(buffer);
+  const result = await analyse(db, book, by, today, false);
+  const wb = templateBook(false);
+  for (const name of SHEETS) {
+    const ws = wb.getWorksheet(name)!;
+    const columns = columnsOfSheet[name];
+    const header = ws.getRow(1);
+    header.getCell(columns.length + 1).value = "Problem";
+    header.getCell(columns.length + 1).font = { bold: true, color: { argb: "FFB42318" } };
+    ws.getColumn(columns.length + 1).width = 80;
+    const bad = new Map(result.rows.filter((r) => r.sheet === name && r.outcome === "invalid").map((r) => [r.row, r.problems.join(" ")]));
+    for (const r of book[name]) {
+      if (!bad.has(r.row)) continue;
+      const added = ws.addRow([...columns.map((c) => original(r.get(c))), bad.get(r.row)!]);
+      columns.forEach((c, i) => {
+        if (/date|signed on|valid from/i.test(c) && added.getCell(i + 1).value instanceof Date) added.getCell(i + 1).numFmt = "yyyy-mm-dd";
+      });
+    }
+  }
+  return Buffer.from(await wb.xlsx.writeBuffer());
 }

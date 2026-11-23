@@ -364,7 +364,7 @@ test.describe("V-5 import columns", () => {
     const tag = Date.now().toString(36);
     const holder = await newVendor(request, "Import VAT holder", { vatNumber: `NL${tag.toUpperCase()}B01` });
     await signInAs(context, ADMIN);
-    await page.goto("/admin/import");
+    await page.goto("/import");
     const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: "Download the template" }).click()]);
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.readFile(await download.path());
@@ -385,7 +385,7 @@ test.describe("V-5 import columns", () => {
     );
     vendors.addRow(row(`Bare import ${tag}`, {}));
     vendors.addRow(row(`Taken import ${tag}`, { "VAT or tax number": holder.vatNumber!.toLowerCase() }));
-    wb.getWorksheet("Agreements")!.spliceRows(2, 1);
+    for (const name of ["Contacts", "Agreements", "Day rates", "Invoices"]) wb.getWorksheet(name)!.spliceRows(2, 1);
     const file = { name: "filled.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: Buffer.from(await wb.xlsx.writeBuffer()) };
     await page.getByLabel("Choose the filled-in template").setInputFiles(file);
     const rows = page.getByRole("table", { name: "Rows in the file" }).getByRole("row");
@@ -395,10 +395,10 @@ test.describe("V-5 import columns", () => {
 });
 
 test.describe("A-8 import", () => {
-  test("A-8 an admin fills the template, previews what each row would do, imports, and can import again without duplicates", async ({ page, context }) => {
+  test("A-8 a member fills the template, previews what each row would do, imports, and can import again without duplicates", async ({ page, context }) => {
     const tag = Date.now().toString(36);
-    await signInAs(context, ADMIN);
-    await page.goto("/admin/import");
+    await signInAs(context, MEMBER);
+    await page.goto("/import");
     const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: "Download the template" }).click()]);
     expect(download.suggestedFilename()).toBe("vendorapp-import-template.xlsx");
     const wb = new ExcelJS.Workbook();
@@ -413,6 +413,7 @@ test.describe("A-8 import", () => {
     agreements.addRow([`Imported ${tag}`, "MSA", "Imported MSA", "", "active", "", "", "2026-03-01"]);
     agreements.addRow([`Imported ${tag}`, "SOW", "Imported SOW", "", "", "", "", "", "01-04-2026", "31-12-2026", "Imported MSA", "fixed", "64.000,00"]);
     agreements.addRow([`Imported ${tag}`, "SOW", "Bad SOW", "", "", "", "", "", "2026-04-01", "31-02-2026", "", "fixed", "lots"]);
+    for (const name of ["Contacts", "Day rates", "Invoices"]) wb.getWorksheet(name)!.spliceRows(2, 1);
     const file = { name: "filled.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: Buffer.from(await wb.xlsx.writeBuffer()) };
 
     const input = page.getByLabel("Choose the filled-in template");
@@ -431,7 +432,7 @@ test.describe("A-8 import", () => {
     await page.goto(`/vendors?q=Imported+${tag}`);
     await expect(page.getByRole("heading", { name: "No vendors match these filters" })).toBeVisible();
 
-    await page.goto("/admin/import");
+    await page.goto("/import");
     await page.getByLabel("Choose the filled-in template").setInputFiles(file);
     await page.getByRole("button", { name: "Import 3 rows" }).click();
     await expect(page.getByRole("heading", { name: "Imported 3 rows" })).toBeVisible();
@@ -443,18 +444,57 @@ test.describe("A-8 import", () => {
     await expect(panel.getByRole("link").nth(1)).toContainText("€ 64,000.00");
     await expect(panel.getByRole("link").nth(1)).toContainText("Ends 31 Dec 2026");
 
-    await page.goto("/admin/import");
+    await page.goto("/import");
     await page.getByLabel("Choose the filled-in template").setInputFiles(file);
     await expect(page.getByText("0 rows can be imported.")).toBeVisible();
     await expect(page.getByText("4 rows already in the app, 2 rows with problems.")).toBeVisible();
     await expect(page.getByRole("button", { name: "Import 0 rows" })).toHaveAttribute("aria-disabled", "true");
   });
 
-  test("A-8 members have no import page", async ({ page, context }) => {
+  test("A-8 M-9 contacts, day rates and past invoices come in by the forms' rules, and the rows with problems can be downloaded to fix", async ({ page, context }) => {
+    const tag = Date.now().toString(36);
+    const vendor = `Sheets ${tag}`;
     await signInAs(context, MEMBER);
-    await page.goto("/admin/import");
-    await expect(page.getByRole("heading", { name: "That page does not exist" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Import" })).toHaveCount(0);
+    await page.goto("/");
+    await page.getByRole("navigation").getByRole("link", { name: "Import" }).click();
+    await expect(page).toHaveURL(/\/import$/);
+    const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: "Download the template" }).click()]);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.readFile(await download.path());
+    expect(wb.worksheets.map((w) => w.name).filter((n) => !n.endsWith("help"))).toEqual(["Vendors", "Contacts", "Agreements", "Day rates", "Invoices"]);
+    for (const name of ["Vendors", "Contacts", "Agreements", "Day rates", "Invoices"]) wb.getWorksheet(name)!.spliceRows(2, 1);
+    wb.getWorksheet("Vendors")!.addRow([vendor, "consultancy"]);
+    wb.getWorksheet("Contacts")!.addRow([vendor, "Pia Import", `pia.${tag}@example.test`, "", `Account Manager; Import role ${tag}`, "yes"]);
+    wb.getWorksheet("Agreements")!.addRow([vendor, "SOW", "Sheets SOW", "", "active", "", "", "2026-01-05", "2026-01-10", "2027-06-30", "", "fixed", 1000]);
+    wb.getWorksheet("Day rates")!.addRow([vendor, "Analyst", 800, "", "2026-01-01"]);
+    wb.getWorksheet("Day rates")!.addRow([vendor, "Tester", "lots", "", "2026-01-01"]);
+    wb.getWorksheet("Invoices")!.addRow([vendor, "Sheets SOW", "S-1", "2026-03-31", 850]);
+    wb.getWorksheet("Invoices")!.addRow([vendor, "Sheets SOW", "S-2", "2026-12-31", 10]);
+    const file = { name: "filled.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: Buffer.from(await wb.xlsx.writeBuffer()) };
+
+    await page.getByLabel("Choose the filled-in template").setInputFiles(file);
+    await expect(page.getByText("5 rows can be imported.")).toBeVisible();
+    const rows = page.getByRole("table", { name: "Rows in the file" }).getByRole("row");
+    await expect(rows.filter({ hasText: `${vendor} · Tester` })).toContainText('Day rate: "lots" is not an amount with at most two decimals.');
+    await expect(rows.filter({ hasText: `${vendor} · S-2` })).toContainText("Invoice date: The invoice date cannot be in the future.");
+    await expectAccessible(page);
+
+    await page.getByRole("button", { name: "Import 5 rows" }).click();
+    await expect(page.getByRole("heading", { name: "Imported 5 rows" })).toBeVisible();
+    const [fix] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Download the rows with problems" }).click()]);
+    expect(fix.suggestedFilename()).toBe("vendorapp-import-rows-to-fix.xlsx");
+    const back = new ExcelJS.Workbook();
+    await back.xlsx.readFile(await fix.path());
+    expect(back.getWorksheet("Day rates")!.getRow(2).getCell(2).value).toBe("Tester");
+    expect(String(back.getWorksheet("Invoices")!.getRow(2).getCell(8).value)).toMatch(/cannot be in the future/);
+    expect(back.getWorksheet("Vendors")!.actualRowCount).toBe(1);
+
+    // The imported invoice counts towards the SOW's budget: 850 of 1,000 puts it on the warnings page.
+    await page.goto("/warnings");
+    await expect(page.getByRole("link", { name: new RegExp(`${vendor} · Sheets SOW`) }).first()).toBeVisible();
+    await page.goto(`/vendors?q=${encodeURIComponent(vendor)}`);
+    await page.getByRole("button", { name: `Open ${vendor}` }).click();
+    await expect(page.getByRole("region", { name: vendor })).toContainText("Pia Import");
   });
 });
 
@@ -463,7 +503,7 @@ test.describe("throughout M1", () => {
     await signInAs(context, ADMIN);
     for (const mode of ["light", "dark"]) {
       await page.addInitScript((m) => localStorage.setItem("mode", m), mode);
-      for (const path of ["/", "/vendors", "/agreements", "/agreements/renewals", "/warnings", "/admin/import"]) {
+      for (const path of ["/", "/vendors", "/agreements", "/agreements/renewals", "/agreements/calendar", "/warnings", "/import"]) {
         await page.goto(path);
         await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
         if (path === "/vendors") await page.getByRole("button", { name: "Open Bluefinch Systems" }).click();
@@ -674,9 +714,9 @@ test.describe("X-7 dropping files", () => {
 
   test("X-7 the import page takes one dropped template", async ({ page, context, request }) => {
     await signInAs(context, ADMIN);
-    const res = await request.get("http://127.0.0.1:4173/api/admin/import/template.xlsx", { headers: { "x-dev-user": ADMIN, cookie: "" } });
+    const res = await request.get("http://127.0.0.1:4173/api/import/template.xlsx", { headers: { "x-dev-user": ADMIN, cookie: "" } });
     const template = { name: "template.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: await res.body() };
-    await page.goto("/admin/import");
+    await page.goto("/import");
     const place = page.locator("button", { hasText: "Choose the filled-in template" });
     await page.locator("body").dispatchEvent("dragenter", { dataTransfer: await dragFiles(page, [template]) });
     await expect(dropOutline(page, "Drop the filled-in template here")).toBeVisible();

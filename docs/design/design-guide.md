@@ -82,7 +82,7 @@ Figures that line up use tabular numerals. Dates read `21 Nov 2026`. Money reads
 
 ## Layout
 
-- Fixed left sidebar: Dashboard, Vendors, Agreements, Money, Performance, RFPs, Ask. A top bar with search, the theme switch and the warnings bell.
+- Fixed left sidebar: Dashboard, Vendors, Agreements, Money, Performance, RFPs, Ask, Import; under it, for admins only, People, Settings, Audit log and System check. A top bar with search, the theme switch and the warnings bell.
 - **Lists open records in a side panel.** The list shrinks to a narrow column of names and the panel takes the rest. The selected row is marked. Closing the panel restores the list.
 - Inside a panel, sections are tabs.
 - A record with a lot of its own content (a SOW, a scorecard, an RFP) gets a full page.

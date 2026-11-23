@@ -49,3 +49,28 @@ export async function api<T>(path: string, options: { method?: string; body?: un
 }
 
 export const messageOf = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong. Try again.");
+
+/** Sends a file and saves the file the server makes from it, under the name the server gives. */
+export async function postForFile(path: string, file: File, fallbackName: string): Promise<void> {
+  const body = new FormData();
+  body.append("file", file);
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, { method: "POST", body, credentials: "same-origin" });
+  } catch {
+    throw new ApiError(0, "offline", "The app could not be reached. Check your connection and try again.");
+  }
+  if (!res.ok) {
+    const err = (await res.json().catch(() => null)) as Partial<ApiErrorBody> | null;
+    throw new ApiError(res.status, err?.error?.code ?? "unknown", err?.error?.message ?? "Something went wrong. Try again.");
+  }
+  const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? fallbackName;
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}

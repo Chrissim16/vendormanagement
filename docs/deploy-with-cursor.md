@@ -167,8 +167,8 @@ Do these with the owner; they decide what is good enough.
    one RFP review copy and opens it in Word. If they can, a colleague comments in Word and
    sends it back, and the owner uploads it to its round (W11).
 4. **Real data**: the owner first saves the real exchange rates in Settings, "Currencies and
-   exchange rates" (the starting rates are rough and marked as such), then enters vendors
-   and agreements with Admin, Import.
+   exchange rates" (the starting rates are rough and marked as such), then enters vendors,
+   contacts, agreements, day rates and past invoices with Import in the menu.
 5. A 25 MB upload (any large PDF on an agreement) to see that the platform lets it through.
 
 ## Going back, and backups

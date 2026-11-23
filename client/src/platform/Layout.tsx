@@ -23,10 +23,10 @@ const main: Item[] = [
   { to: "/performance", label: "Performance", icon: TrendingUp },
   { to: "/rfps", label: "RFPs", icon: MessageSquare },
   { to: "/ask", label: "Ask", icon: Search },
+  { to: "/import", label: "Import", icon: FileUp },
 ];
 const admin: Item[] = [
   { to: "/admin/people", label: "People", icon: Users },
-  { to: "/admin/import", label: "Import", icon: FileUp },
   { to: "/admin/settings", label: "Settings", icon: Settings },
   { to: "/admin/audit", label: "Audit log", icon: ScrollText },
   { to: "/admin/system-check", label: "System check", icon: Activity },

@@ -265,7 +265,7 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 **X-5** Every page loads within 2 seconds with the volumes in section 12 of the PRD.
 **X-6** No real company, vendor, person or ticket data appears anywhere in the repository; sample data is invented.
 
-**X-7 Dropping files.** Every place where a file is chosen with a button (an agreement's documents, an RFP candidate's answer sheet and other documents, the admin Excel import) also takes a file dragged onto it from the computer, by the same rules as the button.
+**X-7 Dropping files.** Every place where a file is chosen with a button (an agreement's documents, an RFP candidate's answer sheet and other documents, the Excel import) also takes a file dragged onto it from the computer, by the same rules as the button.
 - While a file is dragged over the window, each place that takes it shows a dashed outline and says what dropping does ("Drop to attach"). Nothing changes on the page otherwise, and the buttons stay.
 - On the two document places several files can be dropped, or picked with "Attach document", at once. Each is checked on its own: the fine ones are attached, each refused one is named with its reason, and a message says how many were attached ("Attached 2 documents").
 - The answer sheet and the Excel import take one file. Dropping several there is refused with "Drop one file at a time" and nothing is sent.

@@ -121,8 +121,10 @@ The app sets up its own database tables every time it starts. There is nothing t
 
 First, in Settings, "Currencies and exchange rates": save the real rate for each currency the
 team uses (the dollar and the three kronor start with rough rates, and every euro total says
-so until an admin saves a real one). Then enter the real vendors and agreements with Admin,
-Import. The import template is on that page.
+so until an admin saves a real one). Then enter the real vendors, contacts, agreements, day
+rates and past invoices with Import in the menu on the left (anyone in the team can). The
+import template is on that page; rows with a problem can be downloaded, fixed and uploaded
+again.
 
 ## Going back to an earlier version
 

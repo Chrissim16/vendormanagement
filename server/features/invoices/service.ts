@@ -45,7 +45,7 @@ export async function listInvoices(db: Db, filter: repo.InvoiceFilter): Promise<
 const DUPLICATE = "This vendor already has an invoice with this number.";
 
 /** Adds or changes an invoice (M-4). The currency always follows the agreement it is booked against. */
-export async function saveInvoice(db: Db, id: string | null, input: unknown, by: User, today: Day): Promise<Invoice> {
+export async function saveInvoice(db: Db, id: string | null, input: unknown, by: User, today: Day, action: "create" | "import" = "create"): Promise<Invoice> {
   try {
     return await db.transaction(async (tx) => {
       const found = id ? (await repo.getInvoice(tx, id))?.invoice : undefined;
@@ -84,7 +84,7 @@ export async function saveInvoice(db: Db, id: string | null, input: unknown, by:
         savedId = (await repo.insertInvoice(tx, row, by.email)).id;
         await audit(tx, {
           userEmail: by.email,
-          action: "create",
+          action,
           entityType: "invoice",
           entityId: savedId,
           summary,

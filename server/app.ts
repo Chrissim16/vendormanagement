@@ -141,7 +141,7 @@ export function createApp(config: Config, ports: Ports) {
   api.post("/admin/currencies", requireRole("admin"), async (req, res) => res.status(201).json(await addCurrency(db, req.body, currentUser(req))));
   api.put("/admin/currencies/:code", requireRole("admin"), async (req, res) => res.json(await setCurrencyRate(db, code(req.params.code), req.body, currentUser(req))));
   api.delete("/admin/currencies/:code", requireRole("admin"), async (req, res) => res.json(await removeCurrency(db, code(req.params.code), currentUser(req))));
-  api.use("/admin/import", importRoutes(db, today));
+  api.use("/import", importRoutes(db, today));
   api.use((_req, _res, next) => next(new AppError(404, "not_found", "That address does not exist.")));
 
   app.use("/api", catchAsync(api));

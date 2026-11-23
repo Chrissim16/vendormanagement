@@ -203,9 +203,9 @@ async function writeContact(tx: Tx, vendorId: string, existing: Contact | undefi
  * Adds, changes or removes a contact. A change may send only the fields that change.
  * Contact changes appear in the vendor's history.
  */
-export async function saveContact(db: Db, target: { vendorId: string } | { contactId: string }, input: unknown, by: User): Promise<Contact[]> {
+export async function saveContact(db: Db, target: { vendorId: string } | { contactId: string }, input: unknown, by: User, action: "update" | "import" = "update"): Promise<Contact[]> {
   try {
-    return await saveContactIn(db, target, input, by);
+    return await saveContactIn(db, target, input, by, action);
   } catch (e) {
     // An admin removed a chosen role while this was being saved.
     if (isForeignKeyViolation(e)) throw ROLE_GONE;
@@ -213,7 +213,7 @@ export async function saveContact(db: Db, target: { vendorId: string } | { conta
   }
 }
 
-function saveContactIn(db: Db, target: { vendorId: string } | { contactId: string }, input: unknown, by: User): Promise<Contact[]> {
+function saveContactIn(db: Db, target: { vendorId: string } | { contactId: string }, input: unknown, by: User, action: "update" | "import"): Promise<Contact[]> {
   return db.transaction(async (tx) => {
     const existing = "contactId" in target ? await repo.getContact(tx, target.contactId) : undefined;
     if ("contactId" in target && !existing) throw notFound("That contact");
@@ -221,7 +221,7 @@ function saveContactIn(db: Db, target: { vendorId: string } | { contactId: strin
     await tx.execute(sql`select 1 from vendors where id = ${vendorId} for update`);
     const vendor = (await repo.getVendor(tx, vendorId))?.vendor;
     if (!vendor) throw notFound("That vendor");
-    const entry = { userEmail: by.email, action: "update" as const, entityType: "vendor", entityId: vendorId, summary: vendor.name };
+    const entry = { userEmail: by.email, action, entityType: "vendor", entityId: vendorId, summary: vendor.name };
     if (input === null) {
       await repo.deleteContact(tx, existing!.id);
       await audit(tx, { ...entry, changes: { [contactLabel(existing!)]: { from: "listed", to: "removed" } } });
@@ -236,6 +236,9 @@ function saveContactIn(db: Db, target: { vendorId: string } | { contactId: strin
 }
 
 export const listPeople = (db: Db) => repo.listActiveUsers(db);
+
+/** A vendor's contacts, for the import to tell which are already there (A-8). */
+export const contactsOf = (db: Queryable, vendorId: string) => repo.listContacts(db, vendorId);
 
 // ---- Contact roles (V-7)
 

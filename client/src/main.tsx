@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MotionConfig } from "motion/react";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AskPage } from "./features/ask/AskPage";
 import { AuditPage } from "./features/admin/AuditPage";
@@ -72,14 +72,9 @@ const router = createBrowserRouter([
       { path: "/rfps", element: <RfpsPage /> },
       { path: "/rfps/:id", element: <RfpPage /> },
       { path: "/ask", element: <AskPage /> },
-      {
-        path: "/admin/import",
-        element: (
-          <AdminOnly>
-            <ImportPage />
-          </AdminOnly>
-        ),
-      },
+      // A-8: the import is open to every member since M13; the old address still leads there.
+      { path: "/import", element: <ImportPage /> },
+      { path: "/admin/import", element: <Navigate to="/import" replace /> },
       {
         path: "/admin/people",
         element: (
