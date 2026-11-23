@@ -19,11 +19,25 @@ Newest entry first. Written for the owner, in plain language.
 | M10 Vendor details, contact roles, history tabs | Done |
 | M11 RFP editor, review rounds, company template | Done here; the company's own template, real Word and the AI's rewriting are unproven until tried at work |
 | M12 Any currency | Done here; how well a real AI reads amounts in other currencies is unproven until tried with the company's model |
-| M9 Move to Databricks | Prepared here; done at work by the AI in Cursor, with you |
+| M13 Renewal calendar, handover, bigger import | Not started; asked for on 23 Nov 2026 |
+| M9 Move to Databricks | Prepared here; done at work by the AI in Cursor, with you; waits for M13 |
 
-**Next:** M9 Move to Databricks, at work: give the AI in Cursor `docs/deploy-with-cursor.md` and `docs/runbook.md` and follow along. It downloads the branch GitHub opens by default, `claude/jolly-curie-d4v8z0`, which holds everything. Everything that can be built outside the company is now built.
+**Next:** M13 Renewal calendar, handover and bigger import, built here. Then M9 Move to Databricks, at work: give the AI in Cursor `docs/deploy-with-cursor.md` and `docs/runbook.md` and follow along.
 
 ## Log
+
+### 2026-11-23 Three requests from a side branch written down again, and three finished pieces brought in
+You asked to look at the other branches. Three held finished work, now brought in and checked together with everything else: dropping files onto the app (several at once, on agreements, RFP responses and the import page), NDA and DPA warnings that lead straight to the agreement being worked on, and a change to how requests are written down (looking at how other tools do it first). The full set of automated checks passes on the result.
+
+The fourth branch held three requests that were written down but never built, against a much older plan. You still want all three, before the move. They are now written down again, as part M13, after your answers:
+
+- **Renewal calendar (A-9).** A page with the notice deadlines and renewal dates of active subscriptions: a month you can page through and a list of the next twelve months. Overdue deadlines are marked, each entry leads to its subscription, and a deadline goes once a renewal decision is recorded. Filters by vendor and by kind of date. A button downloads what is shown as a calendar file for Outlook or Teams, with a reminder as many days before each notice deadline as the warning setting. No live link, because Outlook could not sign in to the app inside Databricks.
+- **Handover when someone leaves (F-6).** Switching off a person who owns vendors, agreements or RFPs first shows what they own and asks for a new owner, for everything at once or one by one. Only then are they switched off. Each handover is in the record's history.
+- **Bigger Excel import (A-8 changed, M-9).** Any team member may import, not only admins. The template gets sheets for contacts (with roles; a new role is added as in the form), day rates and past invoices (by the same rules as typing an invoice in, in the agreement's currency). Records already there are left alone. Good rows are saved; rows with a problem can be downloaded with the reason, fixed and uploaded again. Imported invoices count toward budgets and warnings.
+
+What it costs: M13 is a medium-sized part, mostly the import. The move to Databricks waits until it is done, so it starts with everything.
+
+Decided on your behalf (see `docs/open-questions.md`, Q122 to Q125): several roles in one cell are separated by semicolons; any sheet of the template may be left empty; decided and cancelled RFPs are handed over too; calendar entries are all-day events.
 
 ### 2026-11-22 Ready for the move to Databricks
 You chose how the move is done: the AI in Cursor on your work laptop carries out the steps through its Databricks connection, while you watch. Your rules for it: it changes only settings (never the program), it tells you before it creates anything, you type the Jira access key yourself, it never sends anything back to GitHub, and when something needs more than a setting it writes a report that you bring back here.

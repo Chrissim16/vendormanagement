@@ -14,7 +14,7 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 - A deactivated user sees a "no access" page and can do nothing.
 
 **F-2 Admin.**
-- An admin can change roles and deactivate users. The last active admin cannot be demoted or deactivated.
+- An admin can change roles and deactivate users. The last active admin cannot be demoted or deactivated. Someone who still owns records is handed over first (F-6, from M13).
 - A member sees no admin pages and is refused when calling an admin endpoint directly.
 
 **F-3 Audit trail.**
@@ -28,6 +28,12 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 - Behind the password every page says that this is a sample version with invented data and that real company data must not be entered.
 - The password setting is refused inside Databricks, where people sign in with their company account.
 - Not built: a hosted sample version on a link. Tried on 22 Nov 2026 for Render: with its built-in database the app needs 600 to 800 MB of memory, more than the free plan's 512 MB; with a separate Postgres database it needs under 200 MB. The owner chose to run it on their own computer instead.
+
+**F-6 Handover when someone leaves.** Added on 23 Nov 2026 at the owner's request; built in M13.
+- When an admin switches off a person who owns vendors, agreements or RFPs, the app first lists what they own, by kind, and asks for a new owner: one active person for everything at once, or a person per record.
+- The person is switched off only once nothing is left in their name; until then the app says what is still theirs. Switching off someone who owns nothing works as before.
+- Each record handed over shows the change of owner in its own history, with who did it. After a switch-off no vendor, agreement or RFP has an inactive owner.
+- A member is refused when calling the handover directly; only an admin switches people off (F-2).
 
 **F-4 System check.**
 - An admin page tests each connection (database, sign-in identity, file storage, Jira, AI model) and shows per connection: working or not, and if not, a plain-language cause and what to do.
@@ -85,7 +91,13 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 - From the dashboard, the record a warning is about is two clicks away (the kind, then the warning), and its edit form three.
 - A missing or expired NDA or DPA leads to the one being worked on (draft, in negotiation or out for signature), the one closest to signed first, and the warning names it and its status. With none under way, an expired one leads to the expired agreement, and a missing one opens the form to add one for that vendor with the kind already chosen.
 
-**A-8 Import.** An admin can download an Excel template, fill in vendors and agreements, and upload it. A preview shows valid rows and the reason for each invalid one before anything is saved. Importing the same file twice creates no duplicates.
+**A-8 Import.** Any team member can download an Excel template, fill it in and upload it (changed on 23 Nov 2026; built in M13; before, only admins could import vendors and agreements).
+- The template has sheets for vendors, contacts and agreements, and from M-9 for day rates and invoices, each with a help sheet that explains every column. A sheet may be left empty.
+- A contact row names its vendor (in the file or already in the app), and may carry roles separated by semicolons. A role not on the shared list is added to it, as when typing it on a contact (V-7): "account manager" picks the existing Account Manager.
+- Before anything is saved, a preview shows per sheet the rows that will be added, the rows left alone because the record is already there, and the rows with a problem, each with the reason and its row number.
+- Importing saves the good rows and leaves the rest. The rows with a problem can be downloaded as a file in the template's shape, with the reason beside each row, to fix and upload again.
+- A record already in the app is never changed: a vendor by name, a contact by its vendor and email (or its vendor and name when there is no email), an agreement by vendor, kind and title. Importing the same file twice adds nothing the second time.
+- Every row is checked by the same rules as the form for that record; every imported record is in its history as imported, by the person who imported it.
 
 ## SOW delivery and money (M2)
 
@@ -116,6 +128,12 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 - Changing a rate changes converted totals only; no stored amount changes. A briefing keeps the figures and rates of the day it was made. The monthly report is worked out afresh, at the current rates, like all its figures, and says when they have changed since its summary was written (D-2).
 - Amounts are shown with € for euros, £ for pounds and $ for US dollars, and with the code for every other currency (SEK 85,000.00), so kronor of different countries cannot be confused.
 - Contract reading (E-1) and Ask (C-1) recognise amounts in every currency on the list. An amount in a currency not on the list, or written only as "kr" without saying which kronor, is left out and named as left out.
+
+**M-9 Import day rates and past invoices.** Added on 23 Nov 2026; built in M13.
+- The import template (A-8) has a sheet for day rates (vendor, role, day rate, currency, valid from) and one for invoices (vendor, the agreement's title, invoice number, date, amount, optionally the milestone).
+- A day rate already there (same vendor, role and valid-from date) and an invoice already there (same vendor and invoice number) are left alone.
+- An invoice row is checked exactly as an invoice typed in (M-4): its SOW or subscription must exist, its currency is the agreement's, and whatever the invoice form refuses is listed as a problem with the same reason.
+- After importing, each SOW's budget used includes the imported invoices, and a SOW that reaches the budget warning appears on the warnings page (M-5).
 
 ## Performance from Jira (M3)
 
@@ -228,6 +246,15 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 - The kind is compared but never changed. A field the agreement's kind does not have is shown as not applying.
 - The proposal can be rejected, and the AI can be asked to read again. What was done with a proposal, by whom and when, stays visible and is in the agreement's history.
 - A document without readable text cannot be read by the AI, and the page says so.
+
+## Renewal calendar (M13)
+
+**A-9 Renewal calendar.** Added on 23 Nov 2026 at the owner's request; built in M13.
+- A calendar page shows the notice deadlines and renewal dates of active subscriptions of vendors that are not offboarded, as a month that can be paged forwards and back, and as a list of the next twelve months grouped by month.
+- Each entry names the vendor, the subscription and whether it is a notice deadline or a renewal date, and links to the subscription. A notice deadline that has passed is marked as overdue.
+- Once a renewal decision is recorded for the current term (A-6), that term's notice deadline leaves the calendar. The dates are the ones the renewals page and the warnings use, so the three never disagree.
+- It can be filtered by vendor and by kind of date; the filters survive a reload.
+- A button downloads what is shown, with the filters, as a calendar file that Outlook and Teams open. Each notice deadline in it carries a reminder as many days before it as the notice warning setting (M-7). It is a download only: there is no link a calendar can subscribe to.
 
 ## Throughout
 

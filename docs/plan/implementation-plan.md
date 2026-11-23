@@ -24,9 +24,10 @@ can click through. A milestone is done when:
 | M10 | Vendor details, contact roles, history tabs | V-5 to V-7; changes to F-3 and Q-11 | M8 |
 | M11 | RFP editor, review rounds, company template | Q-12 to Q-14; change to Q-3 | M10 |
 | M12 | Any currency | M-8; changes to M-6, M-7, C-1 and E-1 | M11 |
+| M13 | Renewal calendar, handover, bigger import | A-9, F-6, M-9; change to A-8 and F-2 | M12 |
 | M9 | Move to Databricks | none new | all; needs the owner at work |
 
-M10, M11 and M12 were asked for after M8 was done (22 Nov 2026) and are built before M9, so the move to Databricks starts with the final database layout.
+M10, M11 and M12 were asked for after M8 was done (22 Nov 2026), and M13 on 23 Nov 2026 (written down earlier on a side branch, never built, and rewritten against the app as it is now). All are built before M9, so the move to Databricks starts with the final database layout.
 
 X-1 to X-7 apply to every milestone. M2 and M3 touch different features and may be built in parallel.
 
@@ -93,6 +94,11 @@ Reworks what was built:
 - Contract reading: recognising amounts in every listed currency, and leaving "kr" alone out.
 - Sample data: a few vendors invoicing in USD, SEK, NOK and DKK, so the Money page shows the mix.
 - Tests and the acceptance checks for M-6, M-7, M-8, C-1 and E-1.
+
+## M13 Renewal calendar, handover, bigger import
+A calendar page of notice deadlines and renewal dates with a calendar-file download (A-9); handing over a person's records in the same step as switching them off (F-6); the Excel import open to every member, with contacts, day rates and past invoices, good rows saved and problem rows downloadable to fix (A-8, M-9).
+
+Reworks what was built: the people page's deactivate action (F-2); the import feature, its template, preview and route (admin-only until now), including the address, VAT, roles and any-currency rules M10 and M12 added; the navigation (a Calendar entry); the sample data. No change to the move's guides beyond the import being open to every member.
 
 ## M9 Move to Databricks
 Done at work by the AI in Cursor on the owner's work laptop, through its Databricks connection to the company workspace, with the owner watching (decided 22 Nov 2026). It follows `docs/deploy-with-cursor.md`, may change only `app.yaml` settings, and reports anything else back to this project. The preparation is done here first.
