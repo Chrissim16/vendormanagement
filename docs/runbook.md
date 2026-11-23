@@ -29,7 +29,7 @@ You need, at work:
    the storage folder or the secrets yourself, IT creates them; the AI tells you what to ask.
 3. The company's Jira address and a Jira service account: its email and an access key.
 4. The project: the branch GitHub opens by default, `claude/jolly-curie-d4v8z0`, which holds
-   everything up to and including M12.
+   everything up to and including M13.
 5. For the template step: the company's Word template, with [Title], [Date] and [Version]
    typed on its cover page where they should appear.
 
@@ -125,6 +125,20 @@ so until an admin saves a real one). Then enter the real vendors, contacts, agre
 rates and past invoices with Import in the menu on the left (anyone in the team can). The
 import template is on that page; rows with a problem can be downloaded, fixed and uploaded
 again.
+
+Import a small file first (a few vendors and their contacts), then the rest. Note how long
+the check and the import take for your largest file (open question W14): if it takes more
+than a minute or so, split the file into smaller ones and tell us here.
+
+## After the first deployment: the renewal calendar in Outlook
+
+1. Agreements, Calendar: press "Download for Outlook" and open the file in Outlook.
+2. The notice deadlines and renewal dates should appear as all-day events on the right days.
+3. Open one notice deadline: it should carry a reminder 90 days ahead (or whatever your notice
+   warning setting is). Outlook's own choices stop at two weeks, so note whether it kept 90.
+4. Download the file again and open it once more: note whether Outlook replaced the dates or
+   added them a second time (open question W13). Either way it goes in the report; if it adds
+   them twice, delete the first set before opening a newer file.
 
 ## Going back to an earlier version
 

@@ -56,7 +56,7 @@ out what works, fix what is a setting, and report the rest precisely.
 ## Step 1: get the code
 
 Download the repository from GitHub: the branch it opens by default,
-`claude/jolly-curie-d4v8z0` (it holds everything up to and including M12), unless the owner
+`claude/jolly-curie-d4v8z0` (it holds everything up to and including M13), unless the owner
 names another. Use a fresh folder. Leave out `node_modules`, `dist`, `.data` and `.git` when you upload it in
 step 5; Databricks installs and builds the app itself.
 
@@ -168,8 +168,13 @@ Do these with the owner; they decide what is good enough.
    sends it back, and the owner uploads it to its round (W11).
 4. **Real data**: the owner first saves the real exchange rates in Settings, "Currencies and
    exchange rates" (the starting rates are rough and marked as such), then enters vendors,
-   contacts, agreements, day rates and past invoices with Import in the menu.
-5. A 25 MB upload (any large PDF on an agreement) to see that the platform lets it through.
+   contacts, agreements, day rates and past invoices with Import in the menu. Note how long
+   the check and the import take for their largest file (W14).
+5. **The renewal calendar in Outlook** (W13, runbook "the renewal calendar in Outlook"): the
+   owner downloads the calendar file from Agreements, Calendar, opens it in Outlook, checks
+   the reminder on one notice deadline, then opens a second download and notes whether
+   Outlook replaced or doubled the dates.
+6. A 25 MB upload (any large PDF on an agreement) to see that the platform lets it through.
 
 ## Going back, and backups
 
@@ -199,7 +204,7 @@ repository folder (for example on the desktop), in plain language, with:
 4. The system check: each row's state and detail text.
 5. For every failure: the exact message on screen and the relevant log lines, with any
    email, name, URL with a company name, or token removed.
-6. Answers to the open checks W1 to W12 in `docs/open-questions.md` that this session
+6. Answers to the open checks W1 to W14 in `docs/open-questions.md` that this session
    could answer.
 7. The evaluation results, if run.
 
@@ -217,6 +222,9 @@ part from outside the company):
 - The Files API path used to write to the volume (`server/platform/ports/storage.ts`).
 - The serving endpoints' invocation path and token scope (`server/platform/ports/ai.ts`,
   `databricks.ts`).
-- The limits on upload size and request time.
+- The limits on upload size and request time. A large import does all its work in one
+  request (W14), so this limit matters there first.
+- How Outlook treats the downloaded renewal calendar: long reminders and a newer file
+  opened over an older one (W13).
 
 Each of these shows up in the system check or in the first use; report what you see.

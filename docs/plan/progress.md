@@ -588,7 +588,7 @@ First version of the brief, requirements, plan and agent workflow. No applicatio
 - M12: the agreement list sorts by value in euros but shows each value in its own currency, as every record's page does.
 - M12: a contract amount written next to a year ("in 2027 EUR 9,000") can be read as the year; such a value is then left out, never taken.
 - M12: the file downloads give amounts in euros but do not say which rates were starting rates.
-- The check of the RFP list's search (Q-11) failed once during a full run on 22 Nov 2026, while the machine was busy, and passed in every run since, alone and in full. Probably the search box and the "All" button changing the address at nearly the same moment. To be watched.
+- The check of the RFP list's search (Q-11) failed once during a full run on 22 Nov 2026, and once more on 23 Nov 2026, while the machine was busy, and passed in every run since, alone and in full. Probably the search box and the "All" button changing the address at nearly the same moment. To be watched.
 - Pressing Tab past the last button of a dialog moves on to the browser itself before coming back. That is how the browser's own dialogs work and it predates M10, but the design guide says focus stays inside; to be looked at.
 - At a very narrow window (a phone) the vendor form is cramped and the vendor list scrolls sideways. The app is made for a laptop screen.
 - M11: the settings page has two sections called "History" (the settings' own and the contact roles'); they could be named apart.

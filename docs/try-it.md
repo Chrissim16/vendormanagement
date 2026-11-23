@@ -58,6 +58,9 @@ To get what was built since, download the ZIP again (step 2), and in the new fol
 - **Contract reading**: Agreements, open "Reporting suite", press "Read with AI" on the order form.
 - **RFPs**: open "Expense management tool" and walk through its tabs.
 - **Performance**: open a vendor and click a number to see the tickets behind it.
+- **Renewal calendar**: Agreements, Calendar. Switch to Month, page forward, and press "Download for Outlook".
+- **Import**: Import in the menu. Download the template, fill in a contact or an invoice, and upload it to see what each row would do before anything is saved.
+- **Hand-over**: under "Viewing as" choose the admin (admin@example.test), go to People, open Jonas Brandt and press "Switched off": the app first asks who takes over Jonas's vendors, agreements and RFP. Cancel leaves everything as it was.
 
 The AI in this copy is a simple stand-in that only understands plain wordings; the real one comes with the company's model.
 
