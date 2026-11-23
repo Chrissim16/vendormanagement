@@ -1,12 +1,14 @@
 import { Router } from "express";
 import { z } from "zod";
 import { agreementStatuses, kinds } from "../../../shared/agreements";
+import { calendarQuery } from "../../../shared/calendar";
 import type { Day } from "../../../shared/dates";
 import { currentUser } from "../../platform/auth";
 import { AppError } from "../../platform/errors";
 import { day, dir, id, paging, text, upload } from "../../platform/http";
 import type { Db, StoragePort } from "../../platform/ports/types";
 import { agreementSorts } from "./repo";
+import * as calendar from "./calendar";
 import * as service from "./service";
 
 const filters = {
@@ -40,6 +42,11 @@ export function agreementRoutes(db: Db, storage: StoragePort, today: () => Day) 
   r.get("/renewals", async (req, res) => {
     const q = renewalsQuery.parse(req.query);
     res.json(await service.listRenewals(db, q.window, q.owner, today()));
+  });
+  r.get("/calendar", async (req, res) => res.json(await calendar.listCalendar(db, calendarQuery.parse(req.query), today())));
+  r.get("/calendar.ics", async (req, res) => {
+    const ics = await calendar.calendarFile(db, calendarQuery.parse(req.query), today());
+    res.set({ "Content-Type": "text/calendar; charset=utf-8", "Content-Disposition": `attachment; filename="renewal-calendar-${today()}.ics"`, "Cache-Control": "private, no-store" }).send(ics);
   });
   r.post("/agreements", async (req, res) => res.status(201).json(await service.createAgreement(db, req.body, currentUser(req), today())));
   r.get("/agreements/:id", async (req, res) => res.json(await service.getAgreement(db, id.parse(req.params.id), today())));

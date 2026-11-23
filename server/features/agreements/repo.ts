@@ -165,3 +165,20 @@ export const activeUser = async (db: Queryable, id: string) =>
       .from(users)
       .where(and(eq(users.id, id), eq(users.active, true)))
   )[0];
+
+/** Active subscriptions of vendors that are not offboarded, for the renewal calendar (A-9). */
+export const calendarSubscriptions = (db: Queryable) =>
+  db
+    .select({
+      id: agreements.id,
+      vendorId: agreements.vendorId,
+      vendorName: vendors.name,
+      title: agreements.title,
+      endDate: agreements.endDate,
+      noticePeriodDays: agreements.noticePeriodDays,
+      decisionId: renewalDecisions.id,
+    })
+    .from(agreements)
+    .innerJoin(vendors, eq(vendors.id, agreements.vendorId))
+    .leftJoin(renewalDecisions, and(eq(renewalDecisions.agreementId, agreements.id), eq(renewalDecisions.termEndDate, agreements.endDate)))
+    .where(and(eq(agreements.kind, "subscription"), eq(agreements.status, "active"), sql`${vendors.status} <> 'offboarded'`));

@@ -14,6 +14,7 @@ import { InvoicesPage, SpendPage } from "./features/invoices/MoneyPage";
 import { AgreementPage } from "./features/agreements/AgreementPage";
 import { AgreementsPage } from "./features/agreements/AgreementsPage";
 import { RenewalsPage } from "./features/agreements/RenewalsPage";
+import { CalendarPage } from "./features/agreements/CalendarPage";
 import { PerformancePage } from "./features/performance/PerformancePage";
 import { TicketsPage } from "./features/performance/TicketsPage";
 import { VendorPerformancePage } from "./features/performance/VendorPerformancePage";
@@ -49,6 +50,7 @@ const router = createBrowserRouter([
       { path: "/vendors", element: <VendorsPage /> },
       { path: "/agreements", element: <AgreementsPage /> },
       { path: "/agreements/renewals", element: <RenewalsPage /> },
+      { path: "/agreements/calendar", element: <CalendarPage /> },
       { path: "/agreements/:id", element: <AgreementPage /> },
       { path: "/warnings", element: <WarningsPage /> },
       { path: "/money", element: <SpendPage /> },

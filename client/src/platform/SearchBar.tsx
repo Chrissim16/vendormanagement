@@ -18,6 +18,7 @@ const pages: [label: string, to: string][] = [
   ["Vendors", "/vendors"],
   ["Agreements", "/agreements"],
   ["Renewals", "/agreements/renewals"],
+  ["Renewal calendar", "/agreements/calendar"],
   ["Money: spend", "/money"],
   ["Money: invoices", "/money/invoices"],
   ["Performance", "/performance"],

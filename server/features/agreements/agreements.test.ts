@@ -343,3 +343,47 @@ describe("A-7 warnings", () => {
     await other.close();
   });
 });
+
+describe("A-9 renewal calendar", () => {
+  const span = { from: "2026-11-01", to: "2027-10-31" };
+  const cal = (q: Record<string, string> = {}) => t.as(MEMBER).get("/api/calendar").query({ ...span, ...q });
+  type Entry = { title: string; kind: string; date: string; overdue: boolean; vendorId: string };
+  it("lists the notice deadline and renewal date of active subscriptions, the same as renewals", async () => {
+    const a = (await add({ ...sub, title: "Calendar sub", endDate: "2027-05-01", noticePeriodDays: 30 })).body;
+    await add({ ...sub, status: "draft", title: "Calendar draft" });
+    const mine = (await cal({ vendorId })).body.filter((e: Entry) => e.title.startsWith("Calendar"));
+    expect(mine).toEqual([
+      expect.objectContaining({ title: "Calendar sub", kind: "notice", date: a.noticeDeadline, overdue: false, agreementId: a.id }),
+      expect.objectContaining({ title: "Calendar sub", kind: "renewal", date: "2027-05-01" }),
+    ]);
+    const overdue = (await cal()).body.find((e: Entry) => e.title === "Reporting suite" && e.kind === "notice");
+    expect(overdue.overdue).toBe(true);
+    expect((await t.as(MEMBER).get("/api/renewals")).body.find((r: { title: string }) => r.title === "Reporting suite").noticeDeadline).toBe(overdue.date);
+  });
+  it("leaves out a notice deadline once the term has a decision", async () => {
+    const a = (await add({ ...sub, title: "Calendar decided", endDate: "2027-06-01" })).body;
+    await t.as(MEMBER).post(`/api/agreements/${a.id}/decisions`).send({ decision: "renew", decidedOn: TODAY });
+    const kinds = (await cal({ vendorId })).body.filter((e: Entry) => e.title === "Calendar decided").map((e: Entry) => e.kind);
+    expect(kinds).toEqual(["renewal"]);
+  });
+  it("filters by vendor and kind of date, and refuses a span that is too long", async () => {
+    const all = (await cal()).body as Entry[];
+    expect(new Set(all.map((e) => e.vendorId)).size).toBeGreaterThan(1);
+    expect((await cal({ kind: "renewal" })).body.every((e: Entry) => e.kind === "renewal")).toBe(true);
+    expect((await cal({ vendorId })).body.every((e: Entry) => e.vendorId === vendorId)).toBe(true);
+    expect((await cal({ to: "2028-12-31" })).status).toBe(400);
+    expect((await cal({ kind: "start" })).status).toBe(400);
+  });
+  it("downloads the same dates as a calendar file with reminders at the notice warning window", async () => {
+    const res = await t.as(MEMBER).get("/api/calendar.ics").query({ ...span, vendorId, kind: "notice" });
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/^text\/calendar/);
+    expect(res.headers["content-disposition"]).toBe(`attachment; filename="renewal-calendar-${TODAY}.ics"`);
+    const events = (res.text.match(/BEGIN:VEVENT/g) ?? []).length;
+    expect(events).toBe((await cal({ vendorId, kind: "notice" })).body.length);
+    expect(res.text).toContain("TRIGGER:-P90D");
+    await t.as(ADMIN).put("/api/admin/settings").send({ noticeDays: 45, sowEndDays: 30, budgetWarningPct: 80 });
+    expect((await t.as(MEMBER).get("/api/calendar.ics").query({ ...span, vendorId, kind: "notice" })).text).toContain("TRIGGER:-P45D");
+    await t.as(ADMIN).put("/api/admin/settings").send({ noticeDays: 90, sowEndDays: 30, budgetWarningPct: 80 });
+  });
+});

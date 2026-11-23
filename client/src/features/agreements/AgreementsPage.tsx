@@ -28,6 +28,9 @@ export function AgreementTabs() {
       <NavLink to="/agreements/renewals" className={cls}>
         Renewals
       </NavLink>
+      <NavLink to="/agreements/calendar" className={cls}>
+        Calendar
+      </NavLink>
     </nav>
   );
 }
