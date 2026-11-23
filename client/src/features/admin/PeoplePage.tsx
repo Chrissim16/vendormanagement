@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import type { Owned } from "../../../../shared/handover";
 import type { Page, UpdateUser, User } from "../../../../shared/types";
 import { api, messageOf } from "../../lib/api";
 import { formatDate } from "../../lib/format";
@@ -9,6 +10,7 @@ import { DataTable, Pager, type Column } from "../../platform/DataTable";
 import { History } from "../../platform/History";
 import { Panel, SplitView } from "../../platform/SplitView";
 import { useMe } from "../../platform/session";
+import { HandoverDialog } from "./HandoverDialog";
 import { EmptyState, ErrorState, Field, Loading, PageHeader, Pill, Segmented, Select, TextInput } from "../../platform/ui";
 
 const columns: Column<User>[] = [
@@ -53,6 +55,14 @@ export function PeoplePage() {
       toast.success(`Saved changes for ${u.displayName ?? u.email}`);
       await qc.invalidateQueries();
     },
+    onError: (e) => setProblem(messageOf(e)),
+  });
+
+  // F-6: switching off someone who owns records goes through the hand-over; anyone else is switched off as before.
+  const [handover, setHandover] = useState<{ user: User; owned: Owned } | null>(null);
+  const switchOff = useMutation({
+    mutationFn: async (u: User) => ({ user: u, owned: await api<Owned>(`/admin/users/${u.id}/owned`) }),
+    onSuccess: ({ user, owned }) => (owned.refusal ? setProblem(owned.refusal) : owned.records.length ? setHandover({ user, owned }) : change.mutate({ active: false })),
     onError: (e) => setProblem(messageOf(e)),
   });
 
@@ -134,8 +144,8 @@ export function PeoplePage() {
                     <Segmented
                       label="Access"
                       value={open.active ? "on" : "off"}
-                      busy={change.isPending}
-                      onChange={(v) => change.mutate({ active: v === "on" })}
+                      busy={change.isPending || switchOff.isPending}
+                      onChange={(v) => (v === "on" ? change.mutate({ active: true }) : switchOff.mutate(open))}
                       options={[
                         { value: "on", label: "Has access" },
                         { value: "off", label: "Switched off" },
@@ -149,6 +159,19 @@ export function PeoplePage() {
               </Panel>
             )
           }
+        />
+      )}
+      {handover && (
+        <HandoverDialog
+          user={handover.user}
+          records={handover.owned.records}
+          onClose={() => setHandover(null)}
+          onDone={async (u) => {
+            setHandover(null);
+            setProblem(null);
+            toast.success(`Handed over and switched off ${u.displayName ?? u.email}`);
+            await qc.invalidateQueries();
+          }}
         />
       )}
     </>

@@ -85,6 +85,62 @@ test.describe("F-2 admin", () => {
   });
 });
 
+test.describe("F-6 handover when someone leaves", () => {
+  test("F-6 switching off someone who owns records hands them over first, all to one person or per record", async ({ page, context, request }) => {
+    const leaver = await newPerson(request, "leaver");
+    const other = await newPerson(request, "leaver2");
+    const vendor = await newVendor(request, "Handover", { ownerUserId: leaver.id });
+    const agreement = await newAgreement(request, { id: vendor.id, ownerUserId: leaver.id }, { kind: "msa", title: "Handover MSA" });
+    await signInAs(context, ADMIN);
+    await page.goto(`/admin/people?q=${encodeURIComponent(leaver.email)}`);
+    await page.getByRole("button", { name: `Open ${leaver.email}` }).click();
+    const panel = page.getByRole("region", { name: leaver.email });
+    await panel.getByRole("button", { name: "Switched off" }).click();
+
+    const dialog = page.getByRole("dialog", { name: `Hand over before switching off ${leaver.email}` });
+    await expect(dialog).toContainText(`${leaver.email} owns 1 vendor and 1 agreement.`);
+    await expect(dialog.getByRole("list", { name: "Vendors" })).toContainText(vendor.name);
+    await expect(dialog.getByRole("list", { name: "Agreements" })).toContainText(`${vendor.name} · Handover MSA`);
+    await expectAccessible(page);
+    // Nothing chosen: refused in place, nothing changes.
+    await dialog.getByRole("button", { name: "Hand over and switch off" }).click();
+    await expect(dialog.getByRole("alert")).toContainText("Choose who takes everything over.");
+
+    // Per record: one to Mira, the other to a second person.
+    await dialog.getByRole("button", { name: "A person per record" }).click();
+    await dialog.getByLabel(`New owner of ${vendor.name}`, { exact: true }).selectOption({ label: "Mira Okafor" });
+    await dialog.getByRole("button", { name: "Hand over and switch off" }).click();
+    await expect(dialog.getByRole("alert")).toContainText("Choose a new owner for the record still without one.");
+    await dialog.getByLabel(`New owner of ${vendor.name} · Handover MSA`).selectOption({ label: other.email });
+    await dialog.getByRole("button", { name: "Hand over and switch off" }).click();
+    await expect(page.getByText(`Handed over and switched off ${leaver.email}`)).toBeVisible();
+    await expect(dialog).toHaveCount(0);
+    await expect(panel.getByRole("button", { name: "Switched off" })).toHaveAttribute("aria-pressed", "true");
+    await expect(panel.getByText("records handed over set to 1 vendor and 1 agreement")).toBeVisible();
+
+    await page.goto(`/agreements/${agreement.id}`);
+    await expect(page.getByText(`owner from ${leaver.email} to ${other.email}`)).toBeVisible();
+    await page.goto(`/vendors?open=${vendor.id}`);
+    await expect(page.getByRole("region", { name: vendor.name })).toContainText("Mira Okafor");
+  });
+
+  test("F-6 all to one person in one go", async ({ page, context, request }) => {
+    const leaver = await newPerson(request, "leaver-all");
+    const vendor = await newVendor(request, "Handover all", { ownerUserId: leaver.id });
+    await newAgreement(request, { id: vendor.id, ownerUserId: leaver.id }, { kind: "nda", title: "Handover NDA" });
+    await signInAs(context, ADMIN);
+    await page.goto(`/admin/people?q=${encodeURIComponent(leaver.email)}`);
+    await page.getByRole("button", { name: `Open ${leaver.email}` }).click();
+    await page.getByRole("region", { name: leaver.email }).getByRole("button", { name: "Switched off" }).click();
+    const dialog = page.getByRole("dialog", { name: `Hand over before switching off ${leaver.email}` });
+    await dialog.getByLabel("New owner of everything").selectOption({ label: "Sanne de Wit" });
+    await dialog.getByRole("button", { name: "Hand over and switch off" }).click();
+    await expect(page.getByText(`Handed over and switched off ${leaver.email}`)).toBeVisible();
+    const owned = await (await request.get(`http://127.0.0.1:4173/api/admin/users/${leaver.id}/owned`, { headers: { "x-dev-user": ADMIN, cookie: "" } })).json();
+    expect(owned.records).toEqual([]);
+  });
+});
+
 test.describe("F-3 audit trail", () => {
   test("F-3 admins can browse the full log and filter by person, record type and date", async ({ page, context, request }) => {
     const person = await newPerson(request, "audit");

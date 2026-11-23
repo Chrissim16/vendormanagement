@@ -7,6 +7,7 @@ import { toUser } from "../../platform/auth";
 import { AppError, notFound } from "../../platform/errors";
 import { aiContract, databaseContract, identityContract, jiraContract, runCases, storageContract } from "../../platform/ports/contract";
 import type { Db, Ports } from "../../platform/ports/types";
+import { ownedBy, stillOwns } from "./handover";
 import * as repo from "./repo";
 
 export async function listUsers(db: Db, filter: repo.UserFilter): Promise<Page<User>> {
@@ -28,6 +29,11 @@ export async function changeUser(db: Db, id: string, change: UpdateUser, by: Use
     if (!current) throw notFound("That person");
     const refusal = refuseUserChange(current, change, await repo.countOtherActiveAdmins(tx, id));
     if (refusal) throw new AppError(409, "last_admin", refusal);
+    // F-6: someone who still owns records is switched off only through the hand-over.
+    if (change.active === false && current.active) {
+      const mine = await ownedBy(tx, id);
+      if (mine.length) throw stillOwns(current.displayName ?? current.email, mine);
+    }
     const changes = diff({ role: current.role, active: current.active }, change);
     if (!Object.keys(changes).length) return toUser(current);
     const updated = await repo.updateUser(tx, id, change, by.email);

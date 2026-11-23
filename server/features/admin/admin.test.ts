@@ -76,10 +76,11 @@ describe("F-2 admin", () => {
     expect((await t.as(MEMBER).get("/api/me")).body.role).toBe("member");
   });
   it("lets an admin change a role and switch access off and on", async () => {
-    const id = await userId("jonas@example.test");
+    // Someone who owns nothing, so switching them off needs no hand-over (F-6).
+    const id = (await t.as("switchable@example.test").get("/api/me")).body.id;
     expect((await t.as(ADMIN).patch(`/api/admin/users/${id}`).send({ role: "admin" })).body.role).toBe("admin");
     expect((await t.as(ADMIN).patch(`/api/admin/users/${id}`).send({ role: "member", active: false })).body).toMatchObject({ role: "member", active: false });
-    expect((await t.as("jonas@example.test").get("/api/me")).status).toBe(403);
+    expect((await t.as("switchable@example.test").get("/api/me")).status).toBe(403);
     expect((await t.as(ADMIN).patch(`/api/admin/users/${id}`).send({ active: true })).body.active).toBe(true);
   });
   it("refuses demoting or switching off the last admin", async () => {
@@ -228,5 +229,95 @@ describe("errors", () => {
     const res = await t.as(ADMIN).get("/api/nope");
     expect(res.status).toBe(404);
     expect(res.body.error).toMatchObject({ code: "not_found" });
+  });
+});
+
+describe("F-6 handover when someone leaves", () => {
+  const person = async (label: string) => {
+    const email = `${label}-${Math.random().toString(36).slice(2)}@example.test`;
+    return { email, id: (await t.as(email).get("/api/me")).body.id as string };
+  };
+  /** A person who owns a vendor, an agreement of another vendor and an RFP. */
+  const owner = async () => {
+    const p = await person("leaver");
+    const vendor = (await t.as(MEMBER).post("/api/vendors").send({ name: `Leaver Co ${Math.random().toString(36).slice(2)}`, type: "software", ownerUserId: p.id })).body;
+    const other = (await t.as(MEMBER).post("/api/vendors").send({ name: `Other Co ${Math.random().toString(36).slice(2)}`, type: "software", ownerUserId: await userId(MEMBER) })).body;
+    const agreement = (await t.as(MEMBER).post("/api/agreements").send({ vendorId: other.id, ownerUserId: p.id, kind: "msa", title: "Leaver MSA" })).body;
+    const rfp = (await t.as(MEMBER).post("/api/rfps").send({ title: `Leaver RFP ${Math.random().toString(36).slice(2)}`, need: "A need.", ownerUserId: p.id })).body;
+    return { ...p, vendor, agreement, rfp };
+  };
+  const owned = async (id: string) => (await t.as(ADMIN).get(`/api/admin/users/${id}/owned`)).body.records as { type: string; id: string; label: string }[];
+
+  it("lists what a person owns, by kind", async () => {
+    const p = await owner();
+    const records = await owned(p.id);
+    expect(records.map((r) => [r.type, r.id])).toEqual([
+      ["vendor", p.vendor.id],
+      ["agreement", p.agreement.id],
+      ["rfp", p.rfp.id],
+    ]);
+    expect(records[1]!.label).toMatch(/^Other Co .* · Leaver MSA$/);
+  });
+  it("refuses to switch off someone who still owns records, saying what is theirs", async () => {
+    const p = await owner();
+    const res = await t.as(ADMIN).patch(`/api/admin/users/${p.id}`).send({ active: false });
+    expect(res.status).toBe(409);
+    expect(res.body.error.message).toMatch(/still owns 1 vendor, 1 agreement and 1 RFP/);
+    const partial = await t.as(ADMIN).post(`/api/admin/users/${p.id}/switch-off`).send({ records: [{ type: "vendor", id: p.vendor.id, ownerUserId: await userId(MEMBER) }] });
+    expect(partial.status).toBe(409);
+    expect(partial.body.error.message).toMatch(/still owns 1 agreement and 1 RFP/);
+    // Nothing changed: the vendor is still theirs and they still have access.
+    expect((await t.as(MEMBER).get(`/api/vendors/${p.vendor.id}`)).body.ownerUserId).toBe(p.id);
+    expect((await t.as(ADMIN).get(`/api/admin/users/${p.id}`)).body.active).toBe(true);
+  });
+  it("hands each record to its new owner and switches the person off in one step, with history", async () => {
+    const p = await owner();
+    const [mira, sanne] = [await userId(MEMBER), await userId("sanne@example.test")];
+    const res = await t
+      .as(ADMIN)
+      .post(`/api/admin/users/${p.id}/switch-off`)
+      .send({
+        records: [
+          { type: "vendor", id: p.vendor.id, ownerUserId: mira },
+          { type: "agreement", id: p.agreement.id, ownerUserId: sanne },
+          { type: "rfp", id: p.rfp.id, ownerUserId: mira },
+        ],
+      });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body.active).toBe(false);
+    expect((await t.as(MEMBER).get(`/api/vendors/${p.vendor.id}`)).body.ownerUserId).toBe(mira);
+    expect((await t.as(MEMBER).get(`/api/agreements/${p.agreement.id}`)).body.ownerUserId).toBe(sanne);
+    expect((await t.as(MEMBER).get(`/api/rfps/${p.rfp.id}`)).body.ownerUserId).toBe(mira);
+    expect(await owned(p.id)).toEqual([]);
+    const history = (await t.as(MEMBER).get("/api/audit/history").query({ entityType: "agreement", entityId: p.agreement.id })).body.items;
+    expect(history[0]).toMatchObject({ userEmail: ADMIN, action: "update", changes: { owner: { from: p.email, to: "Sanne de Wit" } } });
+    const own = (await t.as(ADMIN).get("/api/audit/history").query({ entityType: "user", entityId: p.id })).body.items;
+    expect(own[0].changes).toEqual({ active: { from: true, to: false }, "records handed over": { from: null, to: "1 vendor, 1 agreement and 1 RFP" } });
+  });
+  it("refuses an inactive new owner, the leaver themselves, or a record that is not theirs, changing nothing", async () => {
+    const p = await owner();
+    const gone = await person("gone");
+    await t.as(ADMIN).patch(`/api/admin/users/${gone.id}`).send({ active: false });
+    const all = (ownerUserId: string) => (["vendor", "agreement", "rfp"] as const).map((type) => ({ type, id: p[type].id, ownerUserId }));
+    for (const bad of [gone.id, p.id]) expect((await t.as(ADMIN).post(`/api/admin/users/${p.id}/switch-off`).send({ records: all(bad) })).status).toBe(400);
+    const mira = await userId(MEMBER);
+    const extra = [...all(mira), { type: "vendor", id: (await t.as(MEMBER).get("/api/vendors").query({ pageSize: 1 })).body.items[0].id, ownerUserId: mira }];
+    expect((await t.as(ADMIN).post(`/api/admin/users/${p.id}/switch-off`).send({ records: extra })).status).toBe(409);
+    expect(await owned(p.id)).toHaveLength(3);
+    expect((await t.as(ADMIN).get(`/api/admin/users/${p.id}`)).body.active).toBe(true);
+  });
+  it("switches off someone who owns nothing as before, and keeps the last admin", async () => {
+    const p = await person("nothing");
+    expect((await t.as(ADMIN).patch(`/api/admin/users/${p.id}`).send({ active: false })).body.active).toBe(false);
+    const q = await person("nothing2");
+    expect((await t.as(ADMIN).post(`/api/admin/users/${q.id}/switch-off`).send({})).body.active).toBe(false);
+    const me = await userId(ADMIN);
+    const last = await t.as(ADMIN).post(`/api/admin/users/${me}/switch-off`).send({ records: (await owned(me)).map((r) => ({ ...r, ownerUserId: me })) });
+    expect(last.status).toBe(409);
+  });
+  it("refuses a member", async () => {
+    const p = await person("member-try");
+    expect((await t.as(MEMBER).get(`/api/admin/users/${p.id}/owned`)).status).toBe(403);
+    expect((await t.as(MEMBER).post(`/api/admin/users/${p.id}/switch-off`).send({})).status).toBe(403);
   });
 });
