@@ -196,6 +196,20 @@ export interface Warning {
   date: Day | null;
 }
 
+/**
+ * A-7: where a warning leads, the same on the warnings page and in Ask. An agreement's
+ * warning opens the agreement; a worsening metric the vendor's performance; a missing NDA
+ * or DPA with none under way opens the form to add one; anything else the vendor.
+ */
+export const warningLink = (w: Pick<Warning, "agreementId" | "type" | "vendorId">) =>
+  w.agreementId
+    ? `/agreements/${w.agreementId}`
+    : w.type === "risk_metric_worsening"
+      ? `/performance/${w.vendorId}`
+      : w.type === "nda_missing" || w.type === "dpa_missing"
+        ? `/vendors?open=${w.vendorId}&add=${w.type.slice(0, 3)}`
+        : `/vendors?open=${w.vendorId}`;
+
 export interface WarningVendor {
   id: string;
   name: string;

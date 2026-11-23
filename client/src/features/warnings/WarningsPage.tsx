@@ -1,7 +1,7 @@
 import { useSettings } from "../../platform/session";
 import { motion } from "motion/react";
 import { Link } from "react-router-dom";
-import { isRiskFlag, warningTypeLabels, warningTypes, type Warning, type WarningType } from "../../../../shared/vendors";
+import { isRiskFlag, warningLink, warningTypeLabels, warningTypes, type Warning, type WarningType } from "../../../../shared/vendors";
 import { messageOf } from "../../lib/api";
 import { useWarnings } from "../../lib/data";
 import { item, list } from "../../lib/motion";
@@ -12,15 +12,6 @@ import { EmptyState, ErrorState, Field, Loading, PageHeader, Pill, Select } from
  * Where a warning leads: the agreement it is about, the vendor's helpdesk figures, or the vendor.
  * A missing NDA or data processing agreement with none under way opens the form to add one, with its kind chosen.
  */
-export const warningLink = (w: Warning) =>
-  w.agreementId
-    ? `/agreements/${w.agreementId}`
-    : w.type === "risk_metric_worsening"
-      ? `/performance/${w.vendorId}`
-      : w.type === "nda_missing" || w.type === "dpa_missing"
-        ? `/vendors?open=${w.vendorId}&add=${w.type.slice(0, 3)}`
-        : `/vendors?open=${w.vendorId}`;
-
 export function WarningRow({ w }: { w: Warning }) {
   return (
     <motion.li variants={item}>

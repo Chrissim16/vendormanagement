@@ -27,7 +27,7 @@ Newest entry first. Written for the owner, in plain language.
 ## Log
 
 ### 2026-11-23 Three requests from a side branch written down again, and three finished pieces brought in
-You asked to look at the other branches. Three held finished work, now brought in and checked together with everything else: dropping files onto the app (several at once, on agreements, RFP responses and the import page), NDA and DPA warnings that lead straight to the agreement being worked on, and a change to how requests are written down (looking at how other tools do it first). The full set of automated checks passes on the result.
+You asked to look at the other branches. Three held finished work, now brought in and checked together with everything else: dropping files onto the app (several at once, on agreements, RFP responses and the import page), NDA and DPA warnings that lead straight to the agreement being worked on, and a change to how requests are written down (looking at how other tools do it first). The full set of automated checks passes on the result, and an independent tester checked dropping files and the warnings again in the running app. It found one gap, now fixed with a test: in Ask, a vendor with no NDA at all linked to the vendor instead of opening the form to add one, as the warnings page does. Both now use one rule.
 
 The fourth branch held three requests that were written down but never built, against a much older plan. You still want all three, before the move. They are now written down again, as part M13, after your answers:
 

@@ -554,3 +554,15 @@ describe("C-1 a list longer than the answer can read", () => {
     expect(a.answer).toContain("Only the first ones are listed here");
   });
 });
+
+describe("A-7 Ask leads to the same place as the warnings page", () => {
+  it("opens the form to add an NDA for a vendor that has none at all", async () => {
+    const me = (await t.as(MEMBER).get("/api/me")).body.id as string;
+    const bare = (await t.as(MEMBER).post("/api/vendors").send({ name: `Bare Vendor ${Math.random().toString(36).slice(2, 7)}`, type: "software", ownerUserId: me })).body as {
+      id: string;
+      name: string;
+    };
+    const nda = await ask("Which vendors have no NDA?");
+    expect(nda.lookups[0]!.rows.find((r) => r.facts.Vendor === bare.name)?.href).toBe(`/vendors?open=${bare.id}&add=nda`);
+  });
+});

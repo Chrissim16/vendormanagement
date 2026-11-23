@@ -5,7 +5,7 @@ import { convertedNote, currenciesIn, formatMoney, isMixed, type Money, type Rat
 import { formatMetric, formatTarget, metricInfo, metricKeys, monthName, type MonthMetrics } from "../../../shared/performance";
 import { candidateListLabels, formatHundredths, rfpStageLabels } from "../../../shared/rfp";
 import { formatScore, paperworkWords, quarterName } from "../../../shared/scorecards";
-import { isRiskFlag, vendorStatusLabels, vendorTypeLabels, warningTypeLabels, type Vendor, type WarningType } from "../../../shared/vendors";
+import { isRiskFlag, vendorStatusLabels, vendorTypeLabels, warningLink, warningTypeLabels, type Vendor, type WarningType } from "../../../shared/vendors";
 import { getAgreement, listAgreements, listRenewals } from "../agreements/service";
 import { sowBudgetRows } from "../dashboard/service";
 import { defaultPeriod, getSpend, listInvoices } from "../invoices/service";
@@ -538,7 +538,7 @@ const runners: { [N in LookupName]: Runner<N> } = {
       rows: list.slice(0, MAX_ROWS).map((w) => ({
         label: `${w.label}: ${w.title}`,
         names: [w.title, w.vendorName],
-        href: w.agreementId ? `/agreements/${w.agreementId}` : `/vendors${query({ open: w.vendorId })}`,
+        href: warningLink(w),
         facts: facts({ Vendor: w.vendorName, Facts: w.detail, Kind: isRiskFlag(w) ? "risk flag" : "warning" }),
       })),
       more: Math.max(0, list.length - MAX_ROWS),
