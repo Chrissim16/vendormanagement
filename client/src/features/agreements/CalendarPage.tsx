@@ -79,11 +79,19 @@ function MonthGrid({ month, entries, today }: { month: string; entries: Calendar
                           <Link
                             to={`/agreements/${e.agreementId}`}
                             title={`${what(e)}: ${e.vendorName} · ${e.title}`}
-                            className="flex items-center gap-1.5 rounded-md bg-sunk px-1.5 py-0.5 text-[12px] font-medium underline-offset-2 hover:underline"
+                            className="block rounded-md bg-sunk px-1.5 py-1 text-[12px] leading-tight underline-offset-2 hover:underline"
                           >
-                            <span aria-hidden className={clsx("h-1.5 w-1.5 shrink-0 rounded-full", dotOf(e))} />
-                            <span className="sr-only">{what(e)}: </span>
-                            <span className="truncate">{e.vendorName}</span>
+                            {/* The kind in words as well as by colour, then vendor and subscription (A-9). */}
+                            <span className="flex items-center gap-1.5 text-[11px] font-semibold text-ink-2">
+                              <span aria-hidden className={clsx("h-1.5 w-1.5 shrink-0 rounded-full", dotOf(e))} />
+                              <span>
+                                {what(e)}
+                                <span className="sr-only">: </span>
+                              </span>
+                            </span>
+                            <span className="block truncate font-medium">{e.vendorName}</span>
+                            <span className="sr-only"> · </span>
+                            <span className="block truncate text-ink-2">{e.title}</span>
                           </Link>
                         </li>
                       ))}

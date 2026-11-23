@@ -48,7 +48,10 @@ test.describe("A-9 renewal calendar", () => {
     const grid = page.getByRole("table", { name: "December 2026" });
     await expect(grid).toBeVisible();
     await expectAccessible(page);
-    await grid.getByRole("link", { name: `Notice deadline: ${v.name}` }).click();
+    // A-9: the chip names the kind of date, the vendor and the subscription.
+    const chip = grid.getByRole("link", { name: new RegExp(`^Notice deadline ?: ${v.name} · Calendar licence$`) });
+    await expect(chip).toContainText("Calendar licence");
+    await chip.click();
     await expect(page).toHaveURL(new RegExp(`/agreements/${soon.id}$`));
     await page.goBack();
     await expect(page.getByRole("table", { name: "December 2026" })).toBeVisible();

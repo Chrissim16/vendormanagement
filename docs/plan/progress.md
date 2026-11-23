@@ -19,12 +19,25 @@ Newest entry first. Written for the owner, in plain language.
 | M10 Vendor details, contact roles, history tabs | Done |
 | M11 RFP editor, review rounds, company template | Done here; the company's own template, real Word and the AI's rewriting are unproven until tried at work |
 | M12 Any currency | Done here; how well a real AI reads amounts in other currencies is unproven until tried with the company's model |
-| M13 Renewal calendar, handover, bigger import | Not started; asked for on 23 Nov 2026 |
-| M9 Move to Databricks | Prepared here; done at work by the AI in Cursor, with you; waits for M13 |
+| M13 Renewal calendar, handover, bigger import | Done here; how Outlook treats the calendar file and how fast a large import runs on Lakebase are to be seen at work |
+| M9 Move to Databricks | Prepared here; done at work by the AI in Cursor, with you |
 
-**Next:** M13 Renewal calendar, handover and bigger import, built here. Then M9 Move to Databricks, at work: give the AI in Cursor `docs/deploy-with-cursor.md` and `docs/runbook.md` and follow along.
+**Next:** M9 Move to Databricks, at work: give the AI in Cursor `docs/deploy-with-cursor.md` and `docs/runbook.md` and follow along.
 
 ## Log
+
+### 2026-11-23 M13 Renewal calendar, handover and bigger import done
+What you can now do:
+
+- **See renewals on a calendar.** Agreements has a third tab, Calendar. It shows each active subscription's notice deadline (until a renewal decision is recorded) and its renewal date, as the next twelve months grouped by month or as a month to page through. Deadlines that passed without a decision sit at the top, marked overdue. Filter by vendor and by kind of date; the choice stays after a reload. "Download for Outlook" saves what is shown as a calendar file, with a reminder on each notice deadline as many days ahead as your warning setting.
+- **Hand over when someone leaves.** On the People page, switching off someone who still owns vendors, agreements or RFPs first lists what they own and asks who takes it over: one person for everything, or a person per record. They are switched off once nothing is left in their name, and every record's history shows the new owner and who made the change.
+- **Import more, as anyone.** Import is in the main menu for the whole team. The template has five sheets: vendors, contacts (several roles separated by semicolons; a new role is added to the list), agreements, day rates and past invoices (by the same rules as typing an invoice in, in the agreement's currency). Records already there are left alone. Good rows are saved; the rows with a problem can be downloaded with the reason beside each, fixed and uploaded again. Imported invoices count toward budgets and warnings.
+
+How it was checked: the full set of automated checks passes, an independent tester used all three in the running app as admin and as members, and a code review read every change. The review found a rare timing gap (a record given to someone at the very moment they were being switched off could stay in their name) and a few smaller things; all are fixed. The tester found one gap: in the month view a date showed only the vendor; it now shows the kind of date, the vendor and the subscription.
+
+Decided on your behalf (`docs/open-questions.md`, Q126 to Q132): the calendar is a tab under Agreements; it shows each subscription's current term only; a contact row without an email is the same person as a contact of that name; the import never takes the main contact from someone; Import sits in the main menu.
+
+To see at work (W13, W14): how Outlook treats the calendar file (long reminders, opening a newer file), and how long a large import takes on the company's database.
 
 ### 2026-11-23 Three requests from a side branch written down again, and three finished pieces brought in
 You asked to look at the other branches. Three held finished work, now brought in and checked together with everything else: dropping files onto the app (several at once, on agreements, RFP responses and the import page), NDA and DPA warnings that lead straight to the agreement being worked on, and a change to how requests are written down (looking at how other tools do it first). The full set of automated checks passes on the result, and an independent tester checked dropping files and the warnings again in the running app. It found one gap, now fixed with a test: in Ask, a vendor with no NDA at all linked to the vendor instead of opening the form to add one, as the warnings page does. Both now use one rule.
@@ -562,6 +575,13 @@ architecture and plan were rewritten to match. The plan now has ten milestones.
 First version of the brief, requirements, plan and agent workflow. No application code yet.
 
 ## Follow-ups
+- M13: an amount typed as text with three decimals ("12.345") is read as twelve thousand, as in the forms, where a point before three digits separates thousands. A number cell with three decimals is refused.
+- M13: a negative day rate in the import says it is not an amount rather than that it must be above zero.
+- M13: an invoice or contact whose agreement or vendor row has a problem says the agreement or vendor is not there, rather than that its row has a problem.
+- M13: the import's table of rows does not slide in as lists do elsewhere, and its summary gives totals only, not per sheet.
+- M13: a hand-over records the owner change by name; a change of owner in a form records it as "owner changed". Both are in the history, worded differently.
+- M13: the hand-over and the import read and write some records of other parts of the app directly rather than through those parts; no rule is skipped today.
+- M13: a hand-over and someone activating one of the same agreements at the very same moment could clash and ask to try again. Very unlikely with five people.
 - M12: when the currency list replaced the pound rate, the saved pound rate counted as "set by an admin" whenever the settings had been saved, also when only the warning days were changed. Nothing like that exists at work yet, so it was left; check the pound's rate there once.
 - M12: briefings made before the currency list say they were converted at the pound rate of the day of the change, not of the day they were made. Their euro figures are right. Nothing like that exists at work yet.
 - M12: the rate field takes at most 99,999.9999 of a currency for one euro, so the Lebanese pound and the Iranian rial cannot be added at today's market rates.
