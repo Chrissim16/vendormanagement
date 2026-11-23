@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { agreementName, statusLabels } from "../../../../shared/agreements";
 import { formatDay } from "../../../../shared/dates";
-import { formatMoney } from "../../../../shared/money";
+import { isMixed, moneyLine } from "../../../../shared/money";
 import { metricTrendWords, pointsOf, type Briefing, type BriefingFacts } from "../../../../shared/overview";
 import { formatMetric, formatTarget, metricInfo, metricKeys, monthName } from "../../../../shared/performance";
 import { formatScore, paperworkWords, quarterName } from "../../../../shared/scorecards";
@@ -14,6 +14,7 @@ import { burst } from "../../lib/burst";
 import { formatDateTime } from "../../lib/format";
 import { TextAreaField, useForm } from "../../platform/form";
 import { History } from "../../platform/History";
+import { ConvertedNote, shownMoney, wholeAmounts } from "../../platform/Money";
 import { Button, ConfirmButton, ErrorState, Loading, PageHeader, Pill } from "../../platform/ui";
 import { agreementTone } from "../agreements/display";
 import { AiTextPanel, budgetPill, Figures, linkClass, Nothing, Section, TrendWords } from "../overview/parts";
@@ -82,11 +83,15 @@ function TextForm({ briefing: b, onSaved }: { briefing: Briefing; onSaved: (b: B
 
 /** The facts of a briefing, as they stood on the day it was prepared. Every figure here is the app's own. */
 function Facts({ f, vendorId }: { f: BriefingFacts; vendorId: string }) {
-  const money = formatMoney;
-  const invoiced =
-    [f.spend.total.EUR ? money(f.spend.total.EUR, "EUR") : null, f.spend.total.GBP ? money(f.spend.total.GBP, "GBP") : null].filter(Boolean).join(" and ") || "Nothing";
+  const money = shownMoney;
+  const mixed = isMixed(f.spend.total.amounts);
+  const invoiced = Object.keys(f.spend.total.amounts).length ? money(f.spend.total.eurMinor, "EUR") : "Nothing";
   const tiles: [string, string, string][] = [
-    ["Invoiced, last 12 months", invoiced, `${formatDay(f.spend.from)} to ${formatDay(f.spend.to)}`],
+    [
+      mixed ? "Invoiced, last 12 months · converted to euros" : "Invoiced, last 12 months",
+      invoiced,
+      `${mixed ? `${wholeAmounts(moneyLine(f.spend.total.amounts))} · ` : ""}${formatDay(f.spend.from)} to ${formatDay(f.spend.to)}`,
+    ],
     [
       "Latest scorecard",
       f.score ? `${formatScore(f.score.overallTenths)} out of 5` : "None yet",
@@ -110,6 +115,11 @@ function Facts({ f, vendorId }: { f: BriefingFacts; vendorId: string }) {
                 note
               )}
             </dd>
+            {label.startsWith("Invoiced") && mixed && (
+              <dd>
+                <ConvertedNote rates={f.spend.rates} className="mt-1" />
+              </dd>
+            )}
           </div>
         ))}
       </dl>

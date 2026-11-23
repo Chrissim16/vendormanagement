@@ -249,8 +249,8 @@ test.describe("M-4 invoices and M-5 budget view", () => {
   });
 });
 
-test.describe("M-6 spend overview and M-7 exchange rate", () => {
-  test("M-6 spend per vendor and month in each currency with a converted total, and M-7 the admin's rate changes only that total", async ({ page, context, request }) => {
+test.describe("M-6 spend overview, M-7 warning thresholds and M-8 currencies", () => {
+  test("M-6 M-8 spend per vendor and month as a euro total with each currency beneath it, and the admin's rate changes only the converted figures", async ({ page, context, request }) => {
     // A period nobody else uses, so the figures are this test's own.
     const a = await newVendor(request, "Spend Euro");
     const b = await newVendor(request, "Spend Pound");
@@ -259,31 +259,30 @@ test.describe("M-6 spend overview and M-7 exchange rate", () => {
     await newInvoice(request, sa.id, { invoiceDate: "2019-01-15", amountMinor: 100_00 });
     await newInvoice(request, sa.id, { invoiceDate: "2019-02-01", amountMinor: 50_00 });
     await newInvoice(request, sb.id, { invoiceDate: "2019-02-28", amountMinor: 200_00 });
-    const rate = (gbpToEurE4: number) => asAdminApi(request, "put", "/admin/settings", { gbpToEurE4, noticeDays: 90, sowEndDays: 30, budgetWarningPct: 80 });
-    await rate(11700);
+    // 1 EUR = 0.80 GBP, so £ 200.00 is € 250.00.
+    const rate = (unitsPerEurE4: number) => asAdminApi(request, "put", "/admin/currencies/GBP", { unitsPerEurE4 });
+    await rate(8000);
     try {
       await signInAs(context, MEMBER);
       await page.goto("/money?period=custom&from=2019-01-01&to=2019-03-31");
       await expect(page.getByText("1 Jan 2019 to 31 Mar 2019")).toBeVisible();
-      const totals = page.getByRole("definition");
-      await expect(totals.filter({ hasText: "€ 150.00" }).first()).toBeVisible();
-      await expect(page.getByText("£ 200.00").first()).toBeVisible();
-      await expect(page.getByText("€ 384.00").first()).toBeVisible();
-      await expect(page.getByText("Pounds converted at 1.17")).toBeVisible();
+      const totals = page.locator("dl[aria-label=Totals]");
+      await expect(totals).toContainText("Invoiced · converted to euros");
+      await expect(totals).toContainText("€ 400.00");
+      await expect(totals).toContainText("€ 150.00 · £ 200.00");
+      await expect(totals).toContainText("Converted at 1 EUR = 0.80 GBP.");
 
       const vendors = page.getByRole("list", { name: "Spend per vendor" }).getByRole("listitem");
       await expect(vendors).toHaveCount(2);
       await expect(vendors.nth(0)).toContainText(b.name);
-      await expect(vendors.nth(0)).toContainText("£ 200.00");
-      await expect(vendors.nth(0)).toContainText("€ 234.00 in euros");
+      await expect(vendors.nth(0)).toContainText("€ 250.00 (£ 200.00)");
       await expect(vendors.nth(1)).toContainText(a.name);
       await expect(vendors.nth(1)).toContainText("€ 150.00");
+      await expect(vendors.nth(1)).not.toContainText("(");
       const months = page.getByRole("table", { name: "Spend per month" }).getByRole("row");
       await expect(months).toHaveCount(3);
       await expect(months.nth(1)).toContainText("Feb 2019");
-      await expect(months.nth(1)).toContainText("€ 50.00");
-      await expect(months.nth(1)).toContainText("£ 200.00");
-      await expect(months.nth(1)).toContainText("€ 284.00");
+      await expect(months.nth(1)).toContainText("€ 300.00 (€ 50.00 · £ 200.00)");
       await expect(months.nth(2)).toContainText("Jan 2019");
       await expectAccessible(page);
 
@@ -298,33 +297,179 @@ test.describe("M-6 spend overview and M-7 exchange rate", () => {
       const lines = Buffer.concat(chunks).toString("utf8").trim().split("\r\n");
       expect(lines).toHaveLength(3);
       expect(lines[1]).toContain(`"${a.name}","Euro SOW","",`);
-      expect(lines[1]).toContain('"2019-02-01","50.00","EUR"');
+      expect(lines[1]).toContain('"2019-02-01","50.00","EUR","50.00"');
 
-      // M-7: a member has no settings page; the admin changes the rate there.
+      // The pound invoice in the list: in euros, with the pounds in brackets.
+      await page.goto(`/money/invoices?vendorId=${b.id}`);
+      await expect(page.getByText("1 invoice, € 250.00 in euros, converted (£ 200.00)")).toBeVisible();
+      await expect(page.getByRole("table", { name: "Invoices" })).toContainText("€ 250.00 (£ 200.00)");
+
+      // M-8: a member has no settings page; the admin changes the rate there.
       await page.goto("/admin/settings");
       await expect(page.getByRole("heading", { name: "That page does not exist" })).toBeVisible();
       await signInAs(context, ADMIN);
       await page.goto("/admin/settings");
-      const box = page.getByLabel("One pound in euros");
-      await expect(box).toHaveValue("1.17");
-      await box.fill("one point two");
-      await page.getByRole("button", { name: "Save settings" }).click();
-      await expect(page.getByText("Enter a rate like 1.17, with at most four decimals.")).toBeVisible();
-      await box.fill("1,20");
-      await expect(page.getByText("£ 1,000.00 counts as € 1,200.00")).toBeVisible();
-      await page.getByRole("button", { name: "Save settings" }).click();
-      await expect(page.getByText("Settings saved")).toBeVisible();
-      await expect(page.getByText("Changed: pound to euro rate from 1.17 to 1.20")).toBeVisible();
+      const row = page.getByRole("list", { name: "Currencies" }).getByRole("listitem").filter({ hasText: "Pound sterling" });
+      const box = row.getByLabel("Rate for GBP");
+      await expect(box).toHaveValue("0.80");
+      await box.fill("zero point eight");
+      await row.getByRole("button", { name: "Save rate" }).click();
+      await expect(row.getByText("Enter a rate like 11.49, with at most four decimals.")).toBeVisible();
+      await box.fill("1,00");
+      await expect(row.getByText("€ 100.00 is £ 100.00")).toBeVisible();
+      await row.getByRole("button", { name: "Save rate" }).click();
+      await expect(page.getByText("Rate for GBP saved")).toBeVisible();
+      await expect(page.getByText("Changed: rate GBP from 1 EUR = 0.80 GBP to 1 EUR = 1.00 GBP")).toBeVisible();
 
       await page.goto("/money?period=custom&from=2019-01-01&to=2019-03-31");
-      await expect(page.getByText("€ 390.00").first()).toBeVisible();
-      await expect(page.getByText("Pounds converted at 1.20")).toBeVisible();
+      await expect(page.locator("dl[aria-label=Totals]")).toContainText("€ 350.00");
+      await expect(page.getByText("Converted at 1 EUR = 1.00 GBP.")).toBeVisible();
       // The amounts themselves are untouched.
-      await expect(page.getByText("€ 150.00").first()).toBeVisible();
-      await expect(page.getByText("£ 200.00").first()).toBeVisible();
+      await expect(page.locator("dl[aria-label=Totals]")).toContainText("€ 150.00 · £ 200.00");
     } finally {
-      await rate(11700);
+      // Back to the sample data's own rate.
+      await rate(8547);
     }
+  });
+
+  test("M-8 an admin keeps the currency list: adds one with cents, is refused one without, sees starting rates, and cannot remove one in use", async ({ page, context }) => {
+    await signInAs(context, ADMIN);
+    await page.goto("/admin/settings");
+    const section = page.getByRole("region", { name: "Currencies and exchange rates" });
+    const rows = section.getByRole("list", { name: "Currencies" }).getByRole("listitem");
+    await expect(rows.nth(0)).toContainText("EUR");
+    await expect(rows.nth(0)).toContainText("The main currency. Its rate is always 1.");
+    await expect(rows).toHaveCount(6);
+    // The sample data leaves the kronor and the dollar at their starting rates.
+    const sek = rows.filter({ hasText: "Swedish krona" });
+    await expect(sek).toContainText("Starting rate, not yet set by an admin");
+    await expect(sek).toContainText("Used by 1 agreement");
+    await expect(section).toContainText("4 rates are still rough starting rates, not yet set by an admin.");
+    await expect(rows.filter({ hasText: "Pound sterling" })).toContainText("by Alex Admin");
+
+    // A currency in use cannot be removed; the page says what uses it.
+    await sek.getByRole("button", { name: "Remove SEK" }).click();
+    await sek.getByRole("button", { name: "Really remove?" }).click();
+    await expect(sek.getByRole("alert")).toContainText("Swedish krona (SEK) is still used by 1 agreement.");
+
+    // Yen has no cents: refused in words. Swiss francs can be added.
+    await section.getByRole("button", { name: "Add a currency" }).click();
+    await section.getByLabel("Currency code").fill("jpy");
+    await expect(section.locator("#add-currency-code-name")).toHaveText("Japanese yen");
+    await section.getByLabel("Rate", { exact: true }).fill("162");
+    await section.getByRole("button", { name: "Add currency" }).click();
+    await expect(section.getByText("Japanese yen (JPY) has no cents.", { exact: false })).toBeVisible();
+    await section.getByLabel("Currency code").fill("CHF");
+    await section.getByLabel("Rate", { exact: true }).fill("0,94");
+    await expect(section.getByText("€ 100.00 is CHF 94.00")).toBeVisible();
+    await section.getByRole("button", { name: "Add currency" }).click();
+    await expect(page.getByText("Added CHF")).toBeVisible();
+    const chf = rows.filter({ hasText: "Swiss franc" });
+    await expect(chf.getByLabel("Rate for CHF")).toHaveValue("0.94");
+    await expect(chf).toContainText("Not in use");
+    await expectAccessible(page);
+
+    // The new currency can be chosen at once, by a member too.
+    await signInAs(context, MEMBER);
+    await page.goto("/agreements");
+    await page.getByRole("button", { name: "Add agreement" }).click();
+    const dialog = page.getByRole("dialog", { name: "Add agreement" });
+    await dialog.getByLabel("Kind").selectOption("subscription");
+    await expect(dialog.getByLabel("Currency").locator("option", { hasText: "CHF · Swiss franc" })).toHaveCount(1);
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+
+    // Unused, it can be removed again.
+    await signInAs(context, ADMIN);
+    await page.goto("/admin/settings");
+    await chf.getByRole("button", { name: "Remove CHF" }).click();
+    await chf.getByRole("button", { name: "Really remove?" }).click();
+    await expect(page.getByText("Removed Swiss franc (CHF)")).toBeVisible();
+    await expect(rows).toHaveCount(6);
+  });
+
+  test("M-8 a day rate and an RFP budget in another currency; an amount typed in a different currency is refused", async ({ page, context, request }) => {
+    await signInAs(context, MEMBER);
+    const v = await newVendor(request, "Day rates in kroner");
+    await page.goto(`/vendors?open=${v.id}`);
+    await page.getByRole("tab", { name: "Money" }).click();
+    await page.getByRole("button", { name: "Add day rate" }).click();
+    const dialog = page.getByRole("dialog", { name: "Add day rate" });
+    await dialog.getByLabel("Role").fill("Senior advisor");
+    await dialog.getByLabel("Currency").selectOption("DKK");
+    await dialog.getByLabel("Rate per day").fill("SEK 9,800");
+    await dialog.getByRole("button", { name: "Add rate" }).click();
+    await expect(dialog.getByText("This is written in SEK, but the amount is in DKK.", { exact: false })).toBeVisible();
+    await dialog.getByLabel("Rate per day").fill("9 800");
+    await expect(dialog.getByText("Read as DKK 9,800.00 a day")).toBeVisible();
+    await dialog.getByRole("button", { name: "Add rate" }).click();
+    await expect(page.getByText("DKK 9,800.00 a day")).toBeVisible();
+
+    await page.goto("/rfps");
+    await page.getByRole("button", { name: "New RFP" }).click();
+    const rfp = page.getByRole("dialog", { name: "New RFP" });
+    await rfp.getByLabel("Currency").selectOption("NOK");
+    await rfp.getByLabel("Budget").fill("50 000");
+    await expect(rfp.getByText("Read as NOK 50,000.00")).toBeVisible();
+  });
+
+  test("M-8 the dashboard, the monthly report and a briefing show one euro total with each currency beneath it; a briefing keeps its rates", async ({ page, context, request }) => {
+    await signInAs(context, MEMBER);
+    await page.goto("/");
+    const spend = page.getByRole("region", { name: "Spend, last 12 months" });
+    await expect(spend).toContainText("converted to euros:");
+    await expect(spend).toContainText("SEK 285,000.00");
+    await expect(spend).toContainText("(starting rate, not yet set by an admin)");
+    await expect(spend.getByRole("link", { name: "Set the rates" })).toHaveCount(0);
+
+    await page.goto("/report");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Monthly report, October 2026");
+    await expect(page.getByText(/^Invoiced in October 2026: €\s[\d,.]+ in euros, converted \(€\s[\d,.]+ · \$\s30,000\.00\)\.$/)).toBeVisible();
+    await expect(page.getByText("Converted at 1 EUR = 1.08 USD (starting rate, not yet set by an admin).")).toBeVisible();
+
+    const vendors = (await (await request.get("/api/vendors", { params: { q: "Hvidsand", status: "all" } })).json()) as { items: { id: string }[] };
+    await page.goto(`/vendors?open=${vendors.items[0]!.id}`);
+    await page.getByRole("tab", { name: "Briefings" }).click();
+    await page.getByRole("button", { name: "Prepare a briefing" }).click();
+    await expect(page).toHaveURL(/\/briefings\/[0-9a-f-]+$/);
+    const facts = page.locator("dl[aria-label='Key facts']");
+    // DKK 60,000.00 at 1 EUR = 7.46 DKK.
+    await expect(facts).toContainText("Invoiced, last 12 months · converted to euros");
+    await expect(facts).toContainText("€ 8,042.90");
+    await expect(facts).toContainText("DKK 60,000.00");
+    await expect(facts).toContainText("Converted at 1 EUR = 7.46 DKK (starting rate, not yet set by an admin).");
+    const rate = (unitsPerEurE4: number) => asAdminApi(request, "put", "/admin/currencies/DKK", { unitsPerEurE4 });
+    await rate(80000);
+    try {
+      await page.reload();
+      await expect(facts).toContainText("€ 8,042.90");
+      await expect(facts).toContainText("Converted at 1 EUR = 7.46 DKK");
+    } finally {
+      await rate(74600);
+    }
+  });
+
+  test("M-8 an agreement in any listed currency, shown with its code, and the sample data's mix on the Money page", async ({ page, context, request }) => {
+    await signInAs(context, MEMBER);
+    const v = await newVendor(request, "Kronor");
+    await page.goto("/agreements");
+    await page.getByRole("button", { name: "Add agreement" }).click();
+    const dialog = page.getByRole("dialog", { name: "Add agreement" });
+    await dialog.getByLabel("Vendor").selectOption({ label: v.name });
+    await dialog.getByLabel("Kind").selectOption("subscription");
+    await dialog.getByLabel("Title").fill("Kronor subscription");
+    await dialog.getByLabel("Currency").selectOption("NOK");
+    await expect(dialog.getByLabel("Currency").locator("option")).toHaveText(["EUR · Euro", "DKK · Danish krone", "GBP · Pound sterling", "NOK · Norwegian krone", "SEK · Swedish krona", "USD · US dollar"]);
+    await dialog.getByLabel("Annual value").fill("196 000");
+    await expect(dialog.getByText("Read as NOK 196,000.00")).toBeVisible();
+
+    await page.goto("/money");
+    const totals = page.locator("dl[aria-label=Totals]");
+    await expect(totals).toContainText("Invoiced · converted to euros");
+    for (const part of ["£ ", "$ 30,000.00", "SEK 285,000.00", "NOK 147,000.00", "DKK 60,000.00"]) await expect(totals).toContainText(part);
+    await expect(totals).toContainText("(starting rate, not yet set by an admin)");
+    const vendors = page.getByRole("list", { name: "Spend per vendor" }).getByRole("listitem");
+    await expect(vendors.filter({ hasText: "Norrvik Software" })).toContainText("(SEK 285,000.00)");
+    await expect(vendors.filter({ hasText: "Wexmoor Labs" })).toContainText("($ 30,000.00)");
   });
 
   test("M-7 the admin's warning thresholds decide what appears on the warnings page, and M-5 an overrun shows there", async ({ page, context, request }) => {

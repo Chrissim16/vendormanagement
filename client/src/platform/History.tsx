@@ -4,7 +4,7 @@ import { Button } from "./ui";
 import type { AuditEntry, Page } from "../../../shared/types";
 import { api, messageOf } from "../lib/api";
 import { formatDay, isDay } from "../../../shared/dates";
-import { formatRate } from "../../../shared/sow";
+import { formatRate } from "../../../shared/money";
 import { formatDateTime } from "../lib/format";
 
 const verbs: Record<string, string> = { create: "Added", update: "Changed", delete: "Removed", import: "Imported", revert: "Reverted" };
@@ -64,6 +64,7 @@ function show(key: string, v: unknown): string {
   if (v === null || v === undefined || v === "") return "nothing";
   if (v === true) return "yes";
   if (v === false) return "no";
+  // The pound rate was a setting before the currency list (M-8); older history still names it.
   if (key === "gbpToEurE4" && typeof v === "number") return formatRate(v);
   if (money.has(key) && typeof v === "number") return (v / 100).toLocaleString("en-GB", { minimumFractionDigits: 2 });
   if (isDay(v)) return formatDay(v);

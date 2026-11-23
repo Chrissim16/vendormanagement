@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { addMonths, type Day } from "../../../shared/dates";
-import type { Currency } from "../../../shared/money";
+import { addMoney, noMoney, ratesUsed, toEur, type Money, type Rate } from "../../../shared/money";
 import { invoiceSchema, summariseSpend, type Invoice, type Spend } from "../../../shared/sow";
 import type { Page, User } from "../../../shared/types";
 import { diff } from "../../../shared/users";
@@ -8,7 +8,7 @@ import { audit } from "../../platform/audit";
 import { AppError, notFound } from "../../platform/errors";
 import { failFields, isUniqueViolation, toCsv } from "../../platform/http";
 import type { Db, Queryable } from "../../platform/ports/types";
-import { getSettings } from "../settings/service";
+import { getRates } from "../settings/service";
 import * as repo from "./repo";
 
 type Row = NonNullable<Awaited<ReturnType<typeof repo.getInvoice>>>;
@@ -29,11 +29,17 @@ const toInvoice = ({ invoice: i, vendorName, agreementTitle, agreementKind, mile
   createdBy: i.createdBy,
 });
 
-export async function listInvoices(db: Db, filter: repo.InvoiceFilter): Promise<Page<Invoice> & { sums: Record<Currency, number> }> {
-  const { items, total, sums } = await repo.listInvoices(db, filter, (await getSettings(db)).gbpToEurE4);
-  const out: Record<Currency, number> = { EUR: 0, GBP: 0 };
-  for (const s of sums) out[s.currency] = Number(s.n);
-  return { items: items.map(toInvoice), total, sums: out };
+/** The invoice list (M-6) with each amount also in euros, and the total of everything that matches, per currency and together in euros. */
+export async function listInvoices(db: Db, filter: repo.InvoiceFilter): Promise<Page<Invoice & { eurMinor: number }> & { sums: Money; rates: Rate[] }> {
+  const [{ items, total, sums }, rates] = await Promise.all([repo.listInvoices(db, filter), getRates(db)]);
+  const out = noMoney();
+  for (const s of sums) addMoney(out, s.currency, Number(s.n), rates);
+  return {
+    items: items.map((r) => ({ ...toInvoice(r), eurMinor: toEur(r.invoice.amountMinor, r.invoice.currency, rates) })),
+    total,
+    sums: out,
+    rates: ratesUsed(out.amounts, rates),
+  };
 }
 
 const DUPLICATE = "This vendor already has an invoice with this number.";
@@ -113,10 +119,10 @@ export async function removeInvoice(db: Db, id: string, by: User): Promise<void>
 const EXPORT_LIMIT = 10000;
 
 export async function exportCsv(db: Db, filter: Omit<repo.InvoiceFilter, "page" | "pageSize">): Promise<string> {
-  const { items, total } = await repo.listInvoices(db, { ...filter, page: 1, pageSize: EXPORT_LIMIT }, (await getSettings(db)).gbpToEurE4);
+  const [{ items, total }, rates] = await Promise.all([repo.listInvoices(db, { ...filter, page: 1, pageSize: EXPORT_LIMIT }), getRates(db)]);
   if (total > EXPORT_LIMIT) throw new AppError(400, "too_many", `There are ${total} invoices to export, more than fits in one file. Narrow the period first.`);
   return toCsv(
-    ["Vendor", "Agreement", "Milestone", "Invoice number", "Invoice date", "Amount", "Currency", "Description"],
+    ["Vendor", "Agreement", "Milestone", "Invoice number", "Invoice date", "Amount", "Currency", "Amount in euros (converted)", "Description"],
     items.map((r) => [
       r.vendorName,
       r.agreementTitle,
@@ -125,6 +131,7 @@ export async function exportCsv(db: Db, filter: Omit<repo.InvoiceFilter, "page" 
       r.invoice.invoiceDate,
       (r.invoice.amountMinor / 100).toFixed(2),
       r.invoice.currency,
+      (toEur(r.invoice.amountMinor, r.invoice.currency, rates) / 100).toFixed(2),
       r.invoice.description,
     ]),
   );
@@ -133,11 +140,11 @@ export async function exportCsv(db: Db, filter: Omit<repo.InvoiceFilter, "page" 
 /** The spend overview as a file: one row per vendor, month and currency (M-6). */
 export async function exportSpendCsv(db: Queryable, from: Day, to: Day): Promise<string> {
   if (to < from) failFields({ to: "The end of the period is before its start." });
-  const rows = await repo.spendRows(db, from, to);
+  const [rows, rates] = await Promise.all([repo.spendRows(db, from, to), getRates(db)]);
   rows.sort((a, b) => a.vendorName.localeCompare(b.vendorName) || a.month.localeCompare(b.month) || a.currency.localeCompare(b.currency));
   return toCsv(
-    ["Vendor", "Month", "Currency", "Invoiced"],
-    rows.map((r) => [r.vendorName, r.month, r.currency, (Number(r.amountMinor) / 100).toFixed(2)]),
+    ["Vendor", "Month", "Currency", "Invoiced", "Invoiced in euros (converted)"],
+    rows.map((r) => [r.vendorName, r.month, r.currency, (Number(r.amountMinor) / 100).toFixed(2), (toEur(Number(r.amountMinor), r.currency, rates) / 100).toFixed(2)]),
   );
 }
 
@@ -149,11 +156,11 @@ export function defaultPeriod(today: Day): { from: Day; to: Day } {
 /** Spend per vendor and per month for a period (M-6). */
 export async function getSpend(db: Queryable, from: Day, to: Day): Promise<Spend> {
   if (to < from) failFields({ to: "The end of the period is before its start." });
-  const [rows, settings] = await Promise.all([repo.spendRows(db, from, to), getSettings(db)]);
+  const [rows, rates] = await Promise.all([repo.spendRows(db, from, to), getRates(db)]);
   return summariseSpend(
     rows.map((r) => ({ ...r, amountMinor: Number(r.amountMinor) })),
     from,
     to,
-    settings.gbpToEurE4,
+    rates,
   );
 }

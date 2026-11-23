@@ -28,8 +28,8 @@ You need, at work:
 2. Permission in that workspace to create an app. Where you may not create the database,
    the storage folder or the secrets yourself, IT creates them; the AI tells you what to ask.
 3. The company's Jira address and a Jira service account: its email and an access key.
-4. The project: the `main` branch on GitHub once M10 and M11 are merged into it, otherwise
-   the branch `claude/serene-cerf-9ymwne`.
+4. The project: the branch GitHub opens by default, `claude/jolly-curie-d4v8z0`, which holds
+   everything up to and including M12.
 5. For the template step: the company's Word template, with [Title], [Date] and [Version]
    typed on its cover page where they should appear.
 
@@ -119,7 +119,10 @@ The app sets up its own database tables every time it starts. There is nothing t
 
 ## After the first deployment: your data
 
-Enter the real vendors and agreements with Admin, Import. The import template is on that page.
+First, in Settings, "Currencies and exchange rates": save the real rate for each currency the
+team uses (the dollar and the three kronor start with rough rates, and every euro total says
+so until an admin saves a real one). Then enter the real vendors and agreements with Admin,
+Import. The import template is on that page.
 
 ## Going back to an earlier version
 

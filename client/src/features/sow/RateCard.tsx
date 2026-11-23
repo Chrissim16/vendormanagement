@@ -3,7 +3,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { formatDay } from "../../../../shared/dates";
-import { currencies, formatMoney, parseAmount, type Currency } from "../../../../shared/money";
+import { currenciesIn, isMixed, moneyLine, parseAmount, type Currency, type Money, type Rate } from "../../../../shared/money";
+import { amountProblem, ConvertedNote, CurrencyOptions, shownMoney, wholeAmounts } from "../../platform/Money";
 import type { Invoice, RateLine } from "../../../../shared/sow";
 import type { Page } from "../../../../shared/types";
 import { api, messageOf } from "../../lib/api";
@@ -16,12 +17,12 @@ function RateForm({ vendorId, roles, onClose, onSaved }: { vendorId: string; rol
   const today = useToday();
   const form = useForm(
     { role: "", rate: "", currency: "EUR" as Currency, validFrom: today },
-    ({ rate, ...v }) => api<RateLine[]>(`/vendors/${vendorId}/rate-card`, { body: { ...v, dayRateMinor: parseAmount(rate) } }),
-    { onSaved, check: (v) => ({ rate: parseAmount(v.rate) == null ? "Enter a day rate like 1,250.00." : "" }) },
+    ({ rate, ...v }) => api<RateLine[]>(`/vendors/${vendorId}/rate-card`, { body: { ...v, dayRateMinor: parseAmount(rate, v.currency) } }),
+    { onSaved, check: (v) => ({ rate: amountProblem(v.rate, v.currency, "Enter a day rate like 1,250.00.") }) },
   );
   const { values: v, set } = form;
   const shown = { errors: { ...form.errors, rate: form.errors.rate || form.errors.dayRateMinor || "" } };
-  const minor = v.rate ? parseAmount(v.rate) : null;
+  const minor = v.rate ? parseAmount(v.rate, v.currency) : null;
   return (
     <Dialog title="Add day rate" onClose={onClose}>
       <form onSubmit={form.submit} noValidate className="flex flex-col gap-5">
@@ -40,12 +41,10 @@ function RateForm({ vendorId, roles, onClose, onSaved }: { vendorId: string; rol
             placeholder="1,250.00"
             value={v.rate}
             onChange={(e) => set("rate", e.target.value, ["dayRateMinor"])}
-            hint={minor == null ? undefined : `Read as ${formatMoney(minor, v.currency)} a day`}
+            hint={minor == null ? undefined : `Read as ${shownMoney(minor, v.currency)} a day`}
           />
           <SelectField form={shown} name="currency" label="Currency" value={v.currency} onChange={(e) => set("currency", e.target.value as Currency)}>
-            {currencies.map((c) => (
-              <option key={c}>{c}</option>
-            ))}
+            <CurrencyOptions value={v.currency} />
           </SelectField>
           <TextField form={shown} name="validFrom" label="Applies from" type="date" value={v.validFrom} onChange={(e) => set("validFrom", e.target.value)} />
         </Grid>
@@ -63,7 +62,7 @@ export function VendorMoney({ vendorId, vendorName }: { vendorId: string; vendor
   const card = useQuery({ queryKey: ["rate-card", vendorId], queryFn: () => api<RateLine[]>(`/vendors/${vendorId}/rate-card`) });
   const invoices = useQuery({
     queryKey: ["invoices", { vendorId, summary: true }],
-    queryFn: () => api<Page<Invoice> & { sums: Record<Currency, number> }>("/invoices", { query: { vendorId, pageSize: 1 } }),
+    queryFn: () => api<Page<Invoice> & { sums: Money; rates: Rate[] }>("/invoices", { query: { vendorId, pageSize: 1 } }),
   });
   const remove = useMutation({
     mutationFn: (l: RateLine) => api(`/rate-card/${l.id}`, { method: "DELETE" }),
@@ -87,8 +86,15 @@ export function VendorMoney({ vendorId, vendorName }: { vendorId: string; vendor
         ) : (
           <p className="num">
             <span className="text-[22px] font-semibold tracking-[-0.02em]">
-              {[sums!.EUR ? formatMoney(sums!.EUR, "EUR") : "", sums!.GBP ? formatMoney(sums!.GBP, "GBP") : ""].filter(Boolean).join(" and ")}
+              {wholeAmounts(currenciesIn(sums!.amounts).length === 1 ? moneyLine(sums!.amounts) : shownMoney(sums!.eurMinor, "EUR"))}
             </span>{" "}
+            {isMixed(sums!.amounts) && (
+              <span className="text-ink-2">
+                {currenciesIn(sums!.amounts).length === 1
+                  ? `(${shownMoney(sums!.eurMinor, "EUR")} in euros, converted) `
+                  : `in euros, converted (${wholeAmounts(moneyLine(sums!.amounts))}) `}
+              </span>
+            )}
             <span className="text-ink-2">
               across {invoices.data.total} {invoices.data.total === 1 ? "invoice" : "invoices"}.
             </span>{" "}
@@ -97,6 +103,7 @@ export function VendorMoney({ vendorId, vendorName }: { vendorId: string; vendor
             </Link>
           </p>
         )}
+        {invoices.data && invoices.data.total > 0 && <ConvertedNote rates={invoices.data.rates} />}
       </section>
       <section className="flex flex-col gap-3">
         <div className="flex items-center gap-3">
@@ -118,7 +125,7 @@ export function VendorMoney({ vendorId, vendorName }: { vendorId: string; vendor
                   <span className="num block text-[13px] text-ink-2">From {formatDay(l.validFrom)}</span>
                 </span>
                 {l.current && <Pill tone="brand">In force</Pill>}
-                <span className="num">{formatMoney(l.dayRateMinor, l.currency)} a day</span>
+                <span className="num">{shownMoney(l.dayRateMinor, l.currency)} a day</span>
                 <ConfirmButton
                   className="h-8 px-3.5 text-[12.5px]"
                   disabled={remove.isPending}

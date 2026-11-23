@@ -127,6 +127,13 @@
       "when": 1795354839411,
       "tag": "0017_remark_in_heading",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795363684033,
+      "tag": "0018_any_currency",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,6 @@
 import { agreementName, statusLabels } from "../../../shared/agreements";
 import { formatDay } from "../../../shared/dates";
-import { formatMoney } from "../../../shared/money";
+import { formatMoney, totalInWords } from "../../../shared/money";
 import { metricTrendWords, pointsOf, trendWords, type Briefing } from "../../../shared/overview";
 import { formatMetric, formatTarget, metricInfo, metricKeys, monthName, monthShort } from "../../../shared/performance";
 import { formatScore, paperworkWords, quarterName } from "../../../shared/scorecards";
@@ -33,8 +33,7 @@ export function briefingPdf(b: Briefing): Promise<Buffer> {
         : []),
       [
         "Invoiced, last 12 months",
-        [f.spend.total.EUR ? formatMoney(f.spend.total.EUR, "EUR") : null, f.spend.total.GBP ? formatMoney(f.spend.total.GBP, "GBP") : null].filter(Boolean).join(" and ") ||
-          "Nothing",
+        f.spend.total.eurMinor === 0 && !Object.keys(f.spend.total.amounts).length ? "Nothing" : totalInWords(f.spend.total, f.spend.rates),
       ],
     ]);
 

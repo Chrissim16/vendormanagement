@@ -22,9 +22,10 @@ can click through. A milestone is done when:
 | M8 | Contract reading | E-1 | M1; AI from M4 |
 | M10 | Vendor details, contact roles, history tabs | V-5 to V-7; changes to F-3 and Q-11 | M8 |
 | M11 | RFP editor, review rounds, company template | Q-12 to Q-14; change to Q-3 | M10 |
+| M12 | Any currency | M-8; changes to M-6, M-7, C-1 and E-1 | M11 |
 | M9 | Move to Databricks | none new | all; needs the owner at work |
 
-M10 and M11 were asked for after M8 was done (22 Nov 2026) and are built before M9.
+M10, M11 and M12 were asked for after M8 was done (22 Nov 2026) and are built before M9, so the move to Databricks starts with the final database layout.
 
 X-1 to X-6 apply to every milestone. M2 and M3 touch different features and may be built in parallel.
 
@@ -73,6 +74,21 @@ Reworks what was built: the vendor form, panel and page; the contact form; the i
 A formatting editor for RFP sections, the AI rewriting a section on request, review rounds with a version number, reading comments and tracked changes back from returned Word files, and the company's Word template uploaded by an admin.
 
 Reworks what was built: the Document and Review tabs, the AI draft prompt (formatted output), the Word export for review and for candidates, the decision record PDF (formatted sections), and the review PDF, which is removed. The editor is a new pattern and goes into the design guide. The `docx` package's handling of an existing template, and reading comments and tracked changes from a Word file, are checked against current documentation before building. An invented example template is made for trying the app.
+
+## M12 Any currency
+Replaces the single pound rate with a currency list (M-8): euro as the main currency, GBP, USD, SEK, NOK and DKK to start with, others added by an admin.
+
+Reworks what was built:
+- Database: a currencies table; every currency field (agreements, rate card lines, invoices, RFPs) refers to it instead of allowing only EUR and GBP; the pound rate moves out of settings, turned round to "1 EUR = X". One new migration.
+- Shared money code: amounts read, shown and totalled for any listed currency; one way of converting to euros used everywhere.
+- Settings page: the currency list with rates, adding and removing currencies, the starting-rate notice.
+- Money page and its exports, invoice list totals: euro total first, the amounts per currency beneath it.
+- Dashboard, monthly report and its PDF, briefing and its PDF, and the AI prompts that receive these figures.
+- Agreement, rate card, RFP and import forms (including the import template M10 extended): choose from the list.
+- Ask: totals per currency, and the figure check for every currency sign and code.
+- Contract reading: recognising amounts in every listed currency, and leaving "kr" alone out.
+- Sample data: a few vendors invoicing in USD, SEK, NOK and DKK, so the Money page shows the mix.
+- Tests and the acceptance checks for M-6, M-7, M-8, C-1 and E-1.
 
 ## M9 Move to Databricks
 Done at work by the AI in Cursor on the owner's work laptop, through its Databricks connection to the company workspace, with the owner watching (decided 22 Nov 2026). It follows `docs/deploy-with-cursor.md`, may change only `app.yaml` settings, and reports anything else back to this project. The preparation is done here first.

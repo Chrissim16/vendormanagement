@@ -62,11 +62,13 @@ test.describe("C-1 ask a question", () => {
     const figures = await looked
       .locator("dl div")
       .evaluateAll((els) => Object.fromEntries(els.map((e) => [e.querySelector("dt")!.textContent, e.querySelector("dd")!.textContent])));
-    expect(figures["Total in pounds"]).toMatch(/^£ [\d,]+\.\d\d$/);
-    await expect(answer).toContainText(`Total in pounds: ${figures["Total in pounds"]}`);
+    // M-8: the euro total first, as the invoice list shows it, with the pounds beneath.
+    expect(figures["Total in GBP"]).toMatch(/^£\s[\d,]+\.\d\d$/);
+    expect(figures["Total in euros, converted"]).toMatch(/^€\s[\d,]+\.\d\d$/);
+    await expect(answer).toContainText(figures["Total in euros, converted"]!);
     await looked.getByRole("link", { name: "Open the list" }).click();
     await expect(page).toHaveURL(/\/money\/invoices\?vendorId=/);
-    await expect(page.getByText(new RegExp(`^${figures.Found} invoices?, .*${figures["Total in pounds"]!.replace(/[.£]/g, "\\$&")}`))).toBeVisible();
+    await expect(page.getByText(`${figures.Found} ${figures.Found === "1" ? "invoice" : "invoices"}, ${figures["Total in euros, converted"]} in euros, converted (${figures["Total in GBP"]})`)).toBeVisible();
   });
 
   test("C-1 a question about a document is answered with the document and the passage", async ({ page }) => {

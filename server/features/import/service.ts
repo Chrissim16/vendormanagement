@@ -3,13 +3,14 @@ import ExcelJS from "exceljs";
 import { sql } from "drizzle-orm";
 import { agreementSchema, checkAgreement, kinds, type AgreementInput, type Kind } from "../../../shared/agreements";
 import { isDay, type Day } from "../../../shared/dates";
-import { parseAmount } from "../../../shared/money";
+import { parseAmount, typedCurrency } from "../../../shared/money";
 import type { User } from "../../../shared/types";
 import { cleanName, cleanVat, vendorSchema, type VendorInput } from "../../../shared/vendors";
 import { AppError } from "../../platform/errors";
 import type { Db } from "../../platform/ports/types";
 import { unpacksWithin } from "../../platform/zip";
 import { createAgreement, findSameAgreement } from "../agreements/service";
+import { listCurrencies } from "../settings/service";
 import { createVendor, findVendorByName, findVendorByVat, listPeople } from "../vendors/service";
 
 const vendorColumns = [
@@ -86,11 +87,19 @@ const columnOf: Record<string, string> = {
 };
 const allowed: Record<string, string> = {
   type: "software, consultancy or advisory",
-  currency: "EUR or GBP",
   pricing: "fixed or time_and_materials",
   noticePeriodDays: "a number of days from 0 to 730",
   renewalTermMonths: "a number of months from 1 to 120",
 };
+
+/** A currency cell: empty means euros; anything else must be a currency on the app's list (M-8). */
+function currencyCell(text: string, listed: string[], problems: string[]): string | undefined {
+  const code = text.trim().toUpperCase();
+  if (!code) return undefined;
+  if (listed.includes(code)) return code;
+  problems.push(`Currency: ${code} is not on the app's list of currencies. Use ${listed.join(", ")}, or ask an admin to add it in Settings.`);
+  return undefined;
+}
 
 const EXAMPLE = "(delete this row)";
 const MAX_ROWS = 2000;
@@ -165,7 +174,8 @@ export async function template(): Promise<Buffer> {
       "Kind: MSA, SOW, Subscription, NDA or DPA.",
       "Status: draft, in_negotiation, out_for_signature, active or ended. Empty means draft.",
       "Dates: as an Excel date, or typed as 2026-12-31 or 31-12-2026.",
-      "Amounts: a number with at most two decimals, such as 12500 or 12500.50.",
+      "Currency: the three-letter code of a currency on the app's list (an admin keeps it under Settings), such as EUR, GBP, USD, SEK, NOK or DKK. Empty means EUR.",
+      "Amounts: a number with at most two decimals, such as 12500 or 12500.50, in the row's currency.",
       "SOW: needs Start date, End date, Pricing (fixed or time_and_materials) and Budget. Parent MSA title is optional.",
       "Subscription: needs End date (the renewal date), Annual value and Auto renews (yes or no). Notice period days defaults to 90.",
       "NDA and DPA: need Signed on once active. End date is the valid-until date and may be empty.",
@@ -218,7 +228,8 @@ function readers(problems: string[]) {
       problems.push(`${column}: "${s}" is not a date. Use 2026-12-31 or 31-12-2026.`);
       return null;
     },
-    amount(raw: unknown, column: string): number | null {
+    /** An amount in the row's currency: "SEK 285,000" in a euro row is refused, never read as euros. */
+    amount(raw: unknown, column: string, currency = "EUR"): number | null {
       if (failed(raw, column)) return null;
       const v = unwrap(raw);
       if (v == null || str(v) === "") return null;
@@ -227,7 +238,14 @@ function readers(problems: string[]) {
         // A number cell is exact; anything finer than a cent is a mistake, not something to round away.
         const cents = Math.round(v * 100);
         minor = v >= 0 && Math.abs(v * 100 - cents) < 1e-6 && Number.isSafeInteger(cents) ? cents : null;
-      } else minor = parseAmount(str(v));
+      } else {
+        const typed = typedCurrency(str(v));
+        if (typed && typed !== currency) {
+          problems.push(`${column}: "${str(v)}" is in ${typed}, but the agreement is in ${currency}. Put ${typed} in the Currency column, or write the amount without a currency.`);
+          return null;
+        }
+        minor = parseAmount(str(v), currency);
+      }
       if (minor == null) problems.push(`${column}: "${str(v)}" is not an amount with at most two decimals.`);
       return minor;
     },
@@ -334,6 +352,7 @@ export async function importWorkbook(db: Db, buffer: Buffer, by: User, today: Da
     // One import at a time, so two cannot both decide the same row is new.
     await tx.execute(sql`select pg_advisory_xact_lock(4202)`);
     const people = new Map((await listPeople(tx as unknown as Db)).map((u) => [u.email, u.id]));
+    const listed = (await listCurrencies(tx)).map((c) => c.code);
     const rows: ImportRow[] = [];
 
     // ---- Vendors
@@ -431,6 +450,7 @@ export async function importWorkbook(db: Db, buffer: Buffer, by: User, today: Da
       const autoRenews = cell.yesNo(r.get("Auto renews"), "Auto renews");
       if (kind === "subscription" && autoRenews === undefined && !problems.some((p) => p.startsWith("Auto renews")))
         problems.push("Auto renews: write yes or no for a subscription.");
+      const currency = currencyCell(cell.text(r.get("Currency"), "Currency"), listed, problems);
       const draft = {
         vendorId: existingVendor?.id ?? fromFile?.id ?? randomUUID(),
         kind,
@@ -438,13 +458,13 @@ export async function importWorkbook(db: Db, buffer: Buffer, by: User, today: Da
         reference: cell.text(r.get("Reference"), "Reference"),
         status: key(cell.text(r.get("Status"), "Status")) || undefined,
         ownerUserId: people.get(ownerEmail) ?? by.id,
-        currency: cell.text(r.get("Currency"), "Currency").toUpperCase() || undefined,
+        currency,
         signedOn: cell.day(r.get("Signed on"), "Signed on"),
         startDate: cell.day(r.get("Start date"), "Start date"),
         endDate: cell.day(r.get("End date"), "End date"),
         pricing: key(cell.text(r.get("Pricing"), "Pricing")) || null,
-        budgetMinor: cell.amount(r.get("Budget"), "Budget"),
-        annualValueMinor: cell.amount(r.get("Annual value"), "Annual value"),
+        budgetMinor: cell.amount(r.get("Budget"), "Budget", currency),
+        annualValueMinor: cell.amount(r.get("Annual value"), "Annual value", currency),
         noticePeriodDays: cell.whole(r.get("Notice period days"), "Notice period days"),
         autoRenews: autoRenews ?? null,
         renewalTermMonths: cell.whole(r.get("Renewal term months"), "Renewal term months"),

@@ -78,7 +78,7 @@ export const lookupGuide: Record<LookupName, string> = {
   sow: "One SOW in full: budget and what was invoiced, milestones, change requests and consultants. args: title (the SOW's title or part of it), vendor.",
   sow_budgets: "Every active SOW's budget against what has been invoiced, the most used first. args: vendor.",
   invoices: "The invoice list with its totals per currency. args: vendor, from and to (YYYY-MM-DD, by invoice date), search (invoice number or description).",
-  spend: "What was invoiced per vendor and per month over a period, in euros, pounds and together in euros. args: from and to (YYYY-MM-DD; left out, the last twelve months).",
+  spend: "What was invoiced per vendor and per month over a period: together in euros, converted where needed, and in each currency it was invoiced in. args: from and to (YYYY-MM-DD; left out, the last twelve months).",
   helpdesk: "The helpdesk figures of every vendor with a Jira board for one month, against their targets. args: month (YYYY-MM; left out, the running month).",
   vendor_helpdesk:
     "One vendor's helpdesk figures for the last months, with targets met or missed. args: vendor, month (YYYY-MM, the last month shown; left out, the running month).",

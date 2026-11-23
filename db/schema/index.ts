@@ -136,7 +136,8 @@ export const agreements = pgTable(
     ownerUserId: uuid("owner_user_id")
       .notNull()
       .references(() => users.id),
-    currency: text("currency", { enum: ["EUR", "GBP"] })
+    currency: text("currency")
+      .references((): AnyPgColumn => currencies.code)
       .notNull()
       .default("EUR"),
     signedOn: date("signed_on", { mode: "string" }),
@@ -213,14 +214,35 @@ export const settings = pgTable(
   "settings",
   {
     id: integer("id").primaryKey().default(1),
-    gbpToEurE4: integer("gbp_to_eur_e4").notNull(),
     noticeDays: integer("notice_days").notNull(),
     sowEndDays: integer("sow_end_days").notNull(),
     budgetWarningPct: integer("budget_warning_pct").notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     updatedBy: text("updated_by"),
   },
-  (t) => [check("settings_single_row", sql`${t.id} = 1`), check("settings_rate_check", sql`${t.gbpToEurE4} > 0`)],
+  (t) => [check("settings_single_row", sql`${t.id} = 1`)],
+);
+
+/**
+ * The currencies amounts may be in (M-8), each with its rate: how many of it one euro buys,
+ * times 10,000. The euro is always on the list at exactly 1. A rate without `rateSetAt` is
+ * the app's rough starting rate, not yet set by an admin.
+ */
+export const currencies = pgTable(
+  "currencies",
+  {
+    code: text("code").primaryKey(),
+    name: text("name").notNull(),
+    unitsPerEurE4: integer("units_per_eur_e4").notNull(),
+    rateSetAt: timestamp("rate_set_at", { withTimezone: true }),
+    rateSetBy: text("rate_set_by"),
+    ...stamps,
+  },
+  (t) => [
+    check("currencies_code_check", sql`${t.code} ~ '^[A-Z]{3}$'`),
+    check("currencies_rate_check", sql`${t.unitsPerEurE4} > 0`),
+    check("currencies_euro_is_one", sql`${t.code} <> 'EUR' or ${t.unitsPerEurE4} = 10000`),
+  ],
 );
 
 export const rateCardLines = pgTable(
@@ -232,7 +254,8 @@ export const rateCardLines = pgTable(
       .references(() => vendors.id),
     role: text("role").notNull(),
     dayRateMinor: bigint("day_rate_minor", { mode: "number" }).notNull(),
-    currency: text("currency", { enum: ["EUR", "GBP"] })
+    currency: text("currency")
+      .references((): AnyPgColumn => currencies.code)
       .notNull()
       .default("EUR"),
     validFrom: date("valid_from", { mode: "string" }).notNull(),
@@ -320,7 +343,8 @@ export const invoices = pgTable(
     invoiceNumber: text("invoice_number").notNull(),
     invoiceDate: date("invoice_date", { mode: "string" }).notNull(),
     amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
-    currency: text("currency", { enum: ["EUR", "GBP"] }).notNull(),
+    currency: text("currency")
+      .references((): AnyPgColumn => currencies.code).notNull(),
     description: text("description"),
     ...stamps,
   },
@@ -619,7 +643,8 @@ export const rfps = pgTable(
     title: text("title").notNull(),
     need: text("need").notNull(),
     budgetMinor: bigint("budget_minor", { mode: "number" }),
-    currency: text("currency", { enum: ["EUR", "GBP"] })
+    currency: text("currency")
+      .references((): AnyPgColumn => currencies.code)
       .notNull()
       .default("EUR"),
     sponsor: text("sponsor"),

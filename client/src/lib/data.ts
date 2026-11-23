@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import type { ListedCurrency } from "../../../shared/money";
 import type { ContactRole, Warning } from "../../../shared/vendors";
 import { api } from "./api";
 
@@ -16,3 +17,6 @@ export const usePeople = () => useQuery({ queryKey: ["people"], queryFn: () => a
 
 /** Everything that needs attention today. Shown in the header count and on the warnings page. */
 export const useWarnings = () => useQuery({ queryKey: ["warnings"], queryFn: () => api<Warning[]>("/warnings") });
+
+/** The currencies amounts may be in (M-8): the euro first, then A to Z, each with its rate. */
+export const useCurrencies = () => useQuery({ queryKey: ["currencies"], queryFn: () => api<ListedCurrency[]>("/currencies"), staleTime: 30_000 });

@@ -310,7 +310,7 @@ const CHANGE =
 function planFor(q: string, ask: AskPlanAsk): { name: string; args: Record<string, unknown> }[] | "change" | null {
   if (CHANGE.test(q)) return "change";
   // "Invoices over 50,000": the lists have no filter by amount, and leaving the condition out would answer a different question.
-  if (/\b(over|above|more than|greater than|under|below|less than|at least|at most|exceed\w*)\s+(?:[€£]|eur|gbp)?\s?\d/.test(q)) return null;
+  if (/\b(over|above|more than|greater than|under|below|less than|at least|at most|exceed\w*)\s+(?:[€£$]|eur|gbp|usd|sek|nok|dkk)?\s?\d/.test(q)) return null;
   // A name the app does not know is passed on as it was written, so the answer can say that it is not known.
   const vendor = mentioned(q, ask.vendors) ?? /\b(?:of|for|with|at|from|by) ([A-Z][\p{L}\p{N}&.-]*(?: (?:[A-Z][\p{L}\p{N}&.-]*|Ltd|B\.V\.|GmbH|Inc))+)/u.exec(ask.question)?.[1];
   const period = periodIn(q, ask);
@@ -465,6 +465,10 @@ const tellingFacts = [
   "Date",
   "Overall score",
   "Together in euros",
+  "Total in euros",
+  "Total in euros, converted",
+  "Invoiced in euros",
+  "Invoiced in euros, converted",
   "Targets missed",
   "Facts",
   "Due",
@@ -592,7 +596,7 @@ function contractFieldsAnswer(ask: ContractFieldsAsk): string {
     : null;
   const notice = sentences.map((s) => ({ s, m: /(\d{1,3}) days'? (?:written |prior )*notice/i.exec(s) })).find((x) => x.m);
   const money = sentences
-    .map((s) => ({ s, m: /(?:budget|annual fee|yearly fee|annual value|fixed price|fee is|price is|fees? of)[^.\d€£]*?(€|£|EUR|GBP)\s?(\d[\d,.]*\d)/i.exec(s) }))
+    .map((s) => ({ s, m: /(?:budget|annual fee|yearly fee|annual value|fixed price|fee is|price is|fees? of)[^.\d€£$]*?(€|£|\$|\b[A-Z]{3}\b)\s?(\d[\d,.]*\d)/.exec(s) }))
     .find((x) => x.m);
   const amount = money?.m ? money.m[2]!.replace(/[.,](?=\d{3}\b)/g, "").replace(",", ".") : null;
   return JSON.stringify({
@@ -603,7 +607,8 @@ function contractFieldsAnswer(ask: ContractFieldsAsk): string {
     endDate: dated(/\bends?\b|\buntil\b|\bexpires?\b|\brenews on\b|\bterminates on\b/i),
     noticePeriodDays: notice?.m ? { value: Number(notice.m[1]), passage: notice.s } : null,
     amount: amount && money ? { value: amount, passage: money.s } : null,
-    currency: money?.m ? { value: /€|EUR/i.test(money.m[1]!) ? "EUR" : "GBP", passage: money.s } : null,
+    // The stand-in reads the sign or code next to the amount; the app's own check decides whether that currency is on the list.
+    currency: money?.m ? { value: ({ "€": "EUR", "£": "GBP", $: "USD" } as Record<string, string>)[money.m[1]!] ?? money.m[1]!, passage: money.s } : null,
   });
 }
 

@@ -11,7 +11,8 @@ import {
   type AgreementDetail,
   type Kind,
 } from "../../../../shared/agreements";
-import { amountForInput, currencies, formatMoney, parseAmount } from "../../../../shared/money";
+import { amountForInput, parseAmount } from "../../../../shared/money";
+import { amountProblem, CurrencyOptions, shownMoney } from "../../platform/Money";
 import type { Page } from "../../../../shared/types";
 import type { Vendor } from "../../../../shared/vendors";
 import { api } from "../../lib/api";
@@ -67,8 +68,8 @@ export function AgreementForm({
         endReason: v.endReason || null,
         parentMsaId: v.parentMsaId || null,
         pricing: v.pricing || null,
-        budgetMinor: budget ? parseAmount(budget) : null,
-        annualValueMinor: annualValue ? parseAmount(annualValue) : null,
+        budgetMinor: budget ? parseAmount(budget, v.currency) : null,
+        annualValueMinor: annualValue ? parseAmount(annualValue, v.currency) : null,
         noticePeriodDays: v.noticePeriodDays === "" ? null : Number(v.noticePeriodDays),
         renewalTermMonths: v.renewalTermMonths === "" ? null : Number(v.renewalTermMonths),
       };
@@ -79,8 +80,8 @@ export function AgreementForm({
       check: (v) => ({
         vendorId: v.vendorId ? "" : "Choose a vendor.",
         kind: v.kind ? "" : "Choose what kind of agreement this is.",
-        budget: v.budget && parseAmount(v.budget) == null ? AMOUNT : "",
-        annualValue: v.annualValue && parseAmount(v.annualValue) == null ? AMOUNT : "",
+        budget: v.budget ? amountProblem(v.budget, v.currency, AMOUNT) : "",
+        annualValue: v.annualValue ? amountProblem(v.annualValue, v.currency, AMOUNT) : "",
         noticePeriodDays: /^\d*$/.test(v.noticePeriodDays) ? "" : "Enter a number of days.",
         renewalTermMonths: /^\d*$/.test(v.renewalTermMonths) ? "" : "Enter a number of months.",
       }),
@@ -89,8 +90,8 @@ export function AgreementForm({
   const { values: v, set } = form;
   // What the app understood from a typed amount, shown before saving so "1.234" is never a surprise.
   const reading = (typed: string) => {
-    const minor = typed ? parseAmount(typed) : null;
-    return minor == null ? undefined : `Read as ${formatMoney(minor, v.currency)}`;
+    const minor = typed ? parseAmount(typed, v.currency) : null;
+    return minor == null ? undefined : `Read as ${shownMoney(minor, v.currency)}`;
   };
   // Changing the kind empties the fields that belonged to the old kind, so nothing unseen is sent.
   const changeKind = (kind: Kind) =>
@@ -128,9 +129,7 @@ export function AgreementForm({
   );
   const currency = (
     <SelectField form={shown} name="currency" label="Currency" value={v.currency} onChange={(e) => set("currency", e.target.value as typeof v.currency)}>
-      {currencies.map((c) => (
-        <option key={c}>{c}</option>
-      ))}
+      <CurrencyOptions value={v.currency} />
     </SelectField>
   );
 

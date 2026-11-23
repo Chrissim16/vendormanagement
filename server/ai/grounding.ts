@@ -7,6 +7,8 @@
  * A person still reads the text before it counts for anything.
  */
 
+import { isCurrencyCode } from "../../shared/money";
+
 /** 54,000.00 and 54,000 and 54000 are the same figure; so are 4.0 and 4, 91.20 and 91.2, 09 and 9. */
 const normal = (token: string) => {
   let n = token.replace(/[.,]+$/, "").replace(/,(?=\d{3}(?:\D|$))/g, "");
@@ -49,16 +51,30 @@ export function ungrounded(text: string, given: unknown, names: string[] = []): 
 
 const MONTH = "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)";
 const DATES = new RegExp(`\\b(\\d{1,2}) (${MONTH})(?: (\\d{4}))?\\b|\\b(${MONTH}) (\\d{4})\\b|\\bQ([1-4]) (\\d{4})\\b`, "gi");
-const MONEY = /([€£])\s?(\d[\d.,]*)/g;
+/**
+ * An amount with its sign (€ £ $) or its currency code in front, as the app writes money,
+ * or a code behind ("85,000 SEK"). Behind, the number must look like money (a thousands
+ * separator or cents), so "in 2026 USD invoices" is a year, not an amount.
+ */
+const MONEY = /(?:([€£$])|\b([A-Z]{3})\b)\s?(\d[\d.,]*)|(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+\.\d{2})\s?\b([A-Z]{3})\b/g;
+/** € and EUR are one currency, and so are £ and GBP, $ and USD. */
+const SIGN_CODE: Record<string, string> = { "€": "EUR", "£": "GBP", $: "USD" };
 const mon = (m: string) => m.slice(0, 3).toLowerCase();
 
-/** The dates and amounts in a text, each as one token, and the text without them. */
-function tokens(text: string) {
+/**
+ * The dates and amounts in a text, each as one token ("EUR120000", "9 dec 2026"), and the
+ * text without them. With `known`, only those currency codes make an amount; in what the
+ * model was given every standard code does.
+ */
+function tokens(text: string, known?: Set<string>) {
   const dates: string[] = [];
   const years: string[] = [];
   const money: string[] = [];
-  let rest = text.replace(MONEY, (_m, sign: string, n: string) => {
-    money.push(sign + normal(n));
+  let rest = text.replace(MONEY, (whole: string, sign?: string, code?: string, n?: string, n2?: string, code2?: string) => {
+    const c = sign ? SIGN_CODE[sign]! : (code ?? code2!);
+    // Three capitals that are not a currency ("SOW 07"), or that are one only to a bank ("TOP 3", "ALL 5"), are left as they are.
+    if (!sign && (!isCurrencyCode(c) || (known && !known.has(c)))) return whole;
+    money.push(c + normal((n ?? n2)!));
     return " ";
   });
   rest = rest.replace(DATES, (_m, d?: string, m1?: string, y1?: string, m2?: string, y2?: string, q?: string, y3?: string) => {
@@ -85,7 +101,7 @@ function tokens(text: string) {
 export function ungroundedFigures(text: string, given: unknown, names: string[] = []): string[] {
   const typed = names.filter((n) => /\p{L}/u.test(n));
   const source = tokens(without(asText(given), typed.map((n) => JSON.stringify(n).slice(1, -1)).concat(typed)));
-  const said = tokens(without(text, typed));
+  const said = tokens(without(text, typed), new Set(source.money.map((m) => m.slice(0, 3))));
   const [dates, money, years, plain] = [new Set(source.dates), new Set(source.money), new Set(source.years), new Set(numbersIn(source.rest))];
   return [
     ...new Set([

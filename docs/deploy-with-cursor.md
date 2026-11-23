@@ -55,9 +55,9 @@ out what works, fix what is a setting, and report the rest precisely.
 
 ## Step 1: get the code
 
-Download the repository from GitHub as the owner tells you: the `main` branch once M10 and
-M11 have been merged into it, otherwise the branch `claude/serene-cerf-9ymwne`. Use a
-fresh folder. Leave out `node_modules`, `dist`, `.data` and `.git` when you upload it in
+Download the repository from GitHub: the branch it opens by default,
+`claude/jolly-curie-d4v8z0` (it holds everything up to and including M12), unless the owner
+names another. Use a fresh folder. Leave out `node_modules`, `dist`, `.data` and `.git` when you upload it in
 step 5; Databricks installs and builds the app itself.
 
 ## Step 2: the two settings only the company knows
@@ -166,7 +166,9 @@ Do these with the owner; they decide what is good enough.
    [Version] on its cover page, uploads it on Settings, reads what the app found, downloads
    one RFP review copy and opens it in Word. If they can, a colleague comments in Word and
    sends it back, and the owner uploads it to its round (W11).
-4. **Real data**: the owner enters vendors and agreements with Admin, Import.
+4. **Real data**: the owner first saves the real exchange rates in Settings, "Currencies and
+   exchange rates" (the starting rates are rough and marked as such), then enters vendors
+   and agreements with Admin, Import.
 5. A 25 MB upload (any large PDF on an agreement) to see that the platform lets it through.
 
 ## Going back, and backups

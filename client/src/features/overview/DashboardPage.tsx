@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import NumberFlow from "@number-flow/react";
 import { motion } from "motion/react";
 import { Link } from "react-router-dom";
-import { formatMoney } from "../../../../shared/money";
+import { isMixed, moneyLine } from "../../../../shared/money";
 import type { Dashboard } from "../../../../shared/overview";
 import { monthName } from "../../../../shared/performance";
 import { formatScore, quarterName } from "../../../../shared/scorecards";
@@ -11,10 +11,11 @@ import { api, messageOf } from "../../lib/api";
 import { useWarnings } from "../../lib/data";
 import { hourNow, longDate } from "../../lib/format";
 import { item, list } from "../../lib/motion";
+import { ConvertedNote, shownMoney, wholeAmounts } from "../../platform/Money";
 import { ErrorState, Loading, PageHeader, Pill } from "../../platform/ui";
 import { budgetPill, BudgetMeter, linkClass, Nothing, RowLink, Section, TrendWords } from "./parts";
 
-const eur = (minor: number) => formatMoney(minor, "EUR");
+const eur = (minor: number) => shownMoney(minor, "EUR");
 const MONTHS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
 /** A round number at or above the largest bar, for the top of the scale. */
 function ceiling(minor: number): number {
@@ -88,9 +89,17 @@ function SpendBars({ spend }: { spend: Dashboard["spend"] }) {
           ))}
         </div>
       </div>
+      {isMixed(spend.total.amounts) && (
+        <div className="text-[13px]">
+          <p className="num">
+            {eur(spend.total.eurMinor)} in all, converted to euros: {wholeAmounts(moneyLine(spend.total.amounts))}
+          </p>
+          <ConvertedNote rates={spend.rates} />
+        </div>
+      )}
       <details className="text-[13px]">
         <summary className="cursor-pointer text-ink-2 hover:text-ink">
-          {eur(spend.total.eurMinor)} in all{spend.total.GBP > 0 ? ", pounds converted to euros" : ""}. Show the months
+          {isMixed(spend.total.amounts) ? "Show the months" : `${eur(spend.total.eurMinor)} in all. Show the months`}
         </summary>
         <table aria-label="Spend per month" className="mt-2 w-full border-collapse text-left">
           <thead>
@@ -208,7 +217,7 @@ export function DashboardPage() {
                             {s.vendorName} · {s.title}
                           </span>
                           <span className="num block truncate text-[13px] text-ink-2">
-                            {formatMoney(s.budget.invoicedMinor, s.currency)} of {formatMoney(s.budget.budgetMinor ?? 0, s.currency)} invoiced
+                            {shownMoney(s.budget.invoicedMinor, s.currency)} of {shownMoney(s.budget.budgetMinor ?? 0, s.currency)} invoiced
                           </span>
                         </span>
                         {budgetPill(s.budget)}

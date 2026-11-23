@@ -39,10 +39,10 @@ test.describe("V-1 vendor list", () => {
     await page.getByLabel("Owner", { exact: true }).selectOption({ label: "Sanne de Wit" });
     await page.getByRole("button", { name: "Vendor", exact: true }).click();
     await expect(page).toHaveURL(/dir=desc/);
-    await expect(table.getByRole("row").nth(1)).toContainText("Quillon Consulting");
+    await expect(table.getByRole("row").nth(1)).toContainText("Wexmoor Labs");
     await page.reload();
     await expect(page.getByLabel("Owner", { exact: true })).not.toHaveValue("");
-    await expect(table.getByRole("row").nth(1)).toContainText("Quillon Consulting");
+    await expect(table.getByRole("row").nth(1)).toContainText("Wexmoor Labs");
     await expect(table).not.toContainText("Bluefinch Systems");
   });
 });

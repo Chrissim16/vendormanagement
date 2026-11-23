@@ -1,7 +1,7 @@
 import { agreementName, kindLabels, kindShort, pricingLabels, statusLabels, type Agreement } from "../../../shared/agreements";
 import { MAX_ROWS, type AskLookup, type AskPassage, type AskRow, type LookupArgs, type LookupCall, type LookupName } from "../../../shared/ask";
 import { formatDay, type Day } from "../../../shared/dates";
-import { formatMoney } from "../../../shared/money";
+import { convertedNote, currenciesIn, formatMoney, isMixed, type Money, type Rate } from "../../../shared/money";
 import { formatMetric, formatTarget, metricInfo, metricKeys, monthName, type MonthMetrics } from "../../../shared/performance";
 import { candidateListLabels, formatHundredths, rfpStageLabels } from "../../../shared/rfp";
 import { formatScore, paperworkWords, quarterName } from "../../../shared/scorecards";
@@ -89,6 +89,14 @@ const between = (verb: string, from?: Day, to?: Day) =>
   from && to ? `${verb} ${formatDay(from)} to ${formatDay(to)}` : from ? `${verb} on or after ${formatDay(from)}` : to ? `${verb} on or before ${formatDay(to)}` : "";
 const dayOr = (d: Day | null | undefined) => (d ? formatDay(d) : "–");
 /** Facts without the ones that have nothing to say. */
+/** A total as the Money pages show it (M-8): together in euros first, then each currency in it, and the rates used when anything was converted. */
+const moneyTotals = (label: string, m: Money, rates: Rate[]) => [
+  { label: `${label} in euros${isMixed(m.amounts) ? ", converted" : ""}`, value: formatMoney(m.eurMinor, "EUR") },
+  ...(isMixed(m.amounts) ? currenciesIn(m.amounts).map((c) => ({ label: `${label} in ${c}`, value: formatMoney(m.amounts[c]!, c) })) : []),
+  // Without its full stop: the answer puts one after each figure.
+  ...(rates.length ? [{ label: "Rates", value: convertedNote(rates).replace(/\.$/, "") }] : []),
+];
+
 const facts = (o: Record<string, string | null | undefined | false>): Record<string, string> =>
   Object.fromEntries(Object.entries(o).filter((e): e is [string, string] => typeof e[1] === "string" && e[1] !== ""));
 const page = { page: 1, pageSize: MAX_ROWS };
@@ -393,10 +401,7 @@ const runners: { [N in LookupName]: Runner<N> } = {
       title: title("Invoices", vendor?.name, between("dated", from, to), a.search && `number, vendor, agreement or description contains “${a.search}”`),
       href: `/money/invoices${query(filter)}`,
       count: list.total,
-      totals: [
-        { label: "Total in euros", value: formatMoney(list.sums.EUR, "EUR") },
-        ...(list.sums.GBP ? [{ label: "Total in pounds", value: formatMoney(list.sums.GBP, "GBP") }] : []),
-      ],
+      totals: moneyTotals("Total", list.sums, list.rates),
       rows: list.items.map((i) => ({
         label: `Invoice ${i.invoiceNumber}`,
         names: [i.invoiceNumber, i.vendorName, i.agreementTitle, i.milestoneTitle, i.description],
@@ -421,18 +426,16 @@ const runners: { [N in LookupName]: Runner<N> } = {
     let [from, to] = [a.from ?? (a.to ? defaultPeriod(a.to).from : usual.from), a.to ?? (a.from ? ctx.today() : usual.to)];
     if (to < from) [from, to] = [to, from];
     const s = await getSpend(ctx.db, from, to);
-    const money = (m: { EUR: number; GBP: number; eurMinor: number }) =>
-      facts({ Euros: formatMoney(m.EUR, "EUR"), Pounds: m.GBP ? formatMoney(m.GBP, "GBP") : null, "Together in euros": formatMoney(m.eurMinor, "EUR") });
+    const money = (m: Money) =>
+      facts({
+        "Together in euros": formatMoney(m.eurMinor, "EUR"),
+        ...Object.fromEntries(isMixed(m.amounts) ? currenciesIn(m.amounts).map((c) => [`In ${c}`, formatMoney(m.amounts[c]!, c)]) : []),
+      });
     return {
       title: title("Spend per vendor and per month", between("invoices dated", from, to)),
       href: `/money${query({ period: "custom", from, to })}`,
       count: null,
-      totals: [
-        { label: "Invoiced in euros", value: formatMoney(s.total.EUR, "EUR") },
-        { label: "Invoiced in pounds", value: formatMoney(s.total.GBP, "GBP") },
-        { label: "Together in euros", value: formatMoney(s.total.eurMinor, "EUR") },
-        { label: "Vendors invoiced", value: String(s.byVendor.length) },
-      ],
+      totals: [...moneyTotals("Invoiced", s.total, s.rates), { label: "Vendors invoiced", value: String(s.byVendor.length) }],
       rows: [
         ...s.byVendor.map((v) => ({ label: v.vendorName, names: [v.vendorName], href: `/money/invoices${query({ vendorId: v.vendorId, from, to })}`, facts: money(v) })),
         ...s.byMonth

@@ -6,13 +6,14 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import type { AgreementDetail } from "../../../../shared/agreements";
 import { formatDay } from "../../../../shared/dates";
-import { amountForInput, formatMoney, parseAmount, type Currency } from "../../../../shared/money";
+import { amountForInput, parseAmount, type Currency } from "../../../../shared/money";
 import type { ChangeRequest, Consultant, Milestone, SowDelivery as Delivery } from "../../../../shared/sow";
 import { api, messageOf } from "../../lib/api";
 import { Dialog } from "../../platform/Dialog";
 import { FormFooter, Grid, SelectField, TextAreaField, TextField, useForm } from "../../platform/form";
 import { useToday } from "../../platform/session";
 import { Button, ConfirmButton, ErrorState, Loading, Pill } from "../../platform/ui";
+import { amountProblem, shownMoney } from "../../platform/Money";
 
 const AMOUNT = "Enter an amount like 12,500.00.";
 const small = "h-8 px-3.5 text-[12.5px]";
@@ -25,13 +26,13 @@ const Section = ({ title, action, children }: { title: string; action?: ReactNod
     {children}
   </section>
 );
-const signed = (minor: number, currency: Currency) => `${minor < 0 ? "−" : "+"} ${formatMoney(Math.abs(minor), currency)}`;
+const signed = (minor: number, currency: Currency) => `${minor < 0 ? "−" : "+"} ${shownMoney(Math.abs(minor), currency)}`;
 
 /** Budget against invoiced, as a meter and three figures (M-5). */
 function Budget({ d }: { d: Delivery }) {
   const b = d.budget;
   const pct = b.budgetMinor && b.budgetMinor > 0 ? Math.min(100, (b.invoicedMinor / b.budgetMinor) * 100) : 0;
-  const money = (minor: number | null) => (minor == null ? "–" : formatMoney(minor, b.currency));
+  const money = (minor: number | null) => (minor == null ? "–" : shownMoney(minor, b.currency));
   const figures: [string, string, string?][] = [
     ["Budget", money(b.budgetMinor), b.originalMinor != null && b.originalMinor !== b.budgetMinor ? `${money(b.originalMinor)} originally` : undefined],
     ["Invoiced", money(b.invoicedMinor)],
@@ -76,13 +77,13 @@ function MilestoneForm({ sow, milestone: m, onClose, onSaved }: { sow: Agreement
     ({ amount, ...v }) =>
       api(m ? `/milestones/${m.id}` : `/agreements/${sow.id}/milestones`, {
         method: m ? "PATCH" : "POST",
-        body: { ...v, deliveredOn: v.status === "delivered" ? v.deliveredOn || null : null, amountMinor: fixed && amount ? parseAmount(amount) : null },
+        body: { ...v, deliveredOn: v.status === "delivered" ? v.deliveredOn || null : null, amountMinor: fixed && amount ? parseAmount(amount, sow.currency) : null },
       }),
-    { onSaved, check: (v) => ({ amount: fixed && v.amount && parseAmount(v.amount) == null ? AMOUNT : "" }) },
+    { onSaved, check: (v) => ({ amount: fixed && v.amount ? amountProblem(v.amount, sow.currency, AMOUNT) : "" }) },
   );
   const { values: v, set } = form;
   const shown = { errors: { ...form.errors, amount: form.errors.amount || form.errors.amountMinor || "" } };
-  const minor = v.amount ? parseAmount(v.amount) : null;
+  const minor = v.amount ? parseAmount(v.amount, sow.currency) : null;
   return (
     <Dialog title={m ? `Edit ${m.title}` : "Add milestone"} onClose={onClose}>
       <form onSubmit={form.submit} noValidate className="flex flex-col gap-5">
@@ -98,7 +99,7 @@ function MilestoneForm({ sow, milestone: m, onClose, onSaved }: { sow: Agreement
               placeholder="12,500.00"
               value={v.amount}
               onChange={(e) => set("amount", e.target.value, ["amountMinor"])}
-              hint={minor == null ? undefined : `Read as ${formatMoney(minor, sow.currency)}`}
+              hint={minor == null ? undefined : `Read as ${shownMoney(minor, sow.currency)}`}
             />
           )}
           <SelectField form={shown} name="status" label="Status" value={v.status} onChange={(e) => set("status", e.target.value as typeof v.status)}>
@@ -138,13 +139,13 @@ function ChangeForm({ sow, change: c, onClose, onSaved }: { sow: AgreementDetail
     ({ amount, direction, ...v }) =>
       api(c ? `/change-requests/${c.id}` : `/agreements/${sow.id}/change-requests`, {
         method: c ? "PATCH" : "POST",
-        body: { ...v, newEndDate: v.newEndDate || null, budgetChangeMinor: amount ? (parseAmount(amount) ?? 0) * (direction === "less" ? -1 : 1) : null },
+        body: { ...v, newEndDate: v.newEndDate || null, budgetChangeMinor: amount ? (parseAmount(amount, sow.currency) ?? 0) * (direction === "less" ? -1 : 1) : null },
       }),
-    { onSaved, check: (v) => ({ amount: v.amount && parseAmount(v.amount) == null ? AMOUNT : "" }) },
+    { onSaved, check: (v) => ({ amount: v.amount ? amountProblem(v.amount, sow.currency, AMOUNT) : "" }) },
   );
   const { values: v, set } = form;
   const shown = { errors: { ...form.errors, amount: form.errors.amount || form.errors.budgetChangeMinor || "" } };
-  const minor = v.amount ? parseAmount(v.amount) : null;
+  const minor = v.amount ? parseAmount(v.amount, sow.currency) : null;
   return (
     <Dialog title={c ? `Edit ${c.title}` : "Add change request"} onClose={onClose}>
       <form onSubmit={form.submit} noValidate className="flex flex-col gap-5">
@@ -267,12 +268,12 @@ export function SowDelivery({ agreement: a }: { agreement: AgreementDetail }) {
                         (m.invoicedMinor === m.amountMinor
                           ? " · invoiced in full"
                           : m.amountMinor != null && m.invoicedMinor > m.amountMinor
-                            ? ` · ${formatMoney(m.invoicedMinor, a.currency)} invoiced, more than its amount`
-                            : ` · ${formatMoney(m.invoicedMinor, a.currency)} invoiced`)}
+                            ? ` · ${shownMoney(m.invoicedMinor, a.currency)} invoiced, more than its amount`
+                            : ` · ${shownMoney(m.invoicedMinor, a.currency)} invoiced`)}
                     </span>
                   </span>
                   {m.late && <Pill tone="bad">{m.daysLate === 1 ? "1 day late" : `${m.daysLate} days late`}</Pill>}
-                  {m.amountMinor != null && <span className="num">{formatMoney(m.amountMinor, a.currency)}</span>}
+                  {m.amountMinor != null && <span className="num">{shownMoney(m.amountMinor, a.currency)}</span>}
                   {m.status === "open" && (
                     <Button
                       className={small}
@@ -296,8 +297,8 @@ export function SowDelivery({ agreement: a }: { agreement: AgreementDetail }) {
           <Section title="Change requests" action={<Button onClick={() => setOpen("change")}>Add change</Button>}>
             {changed && (
               <p className="num rounded-2xl bg-sunk px-5 py-3.5 text-[13px] text-ink-2">
-                Started at {d.budget.originalMinor == null ? "no budget" : formatMoney(d.budget.originalMinor, a.currency)}
-                {d.endDateOriginal && `, ending ${formatDay(d.endDateOriginal)}`}. Now {d.budget.budgetMinor == null ? "no budget" : formatMoney(d.budget.budgetMinor, a.currency)}
+                Started at {d.budget.originalMinor == null ? "no budget" : shownMoney(d.budget.originalMinor, a.currency)}
+                {d.endDateOriginal && `, ending ${formatDay(d.endDateOriginal)}`}. Now {d.budget.budgetMinor == null ? "no budget" : shownMoney(d.budget.budgetMinor, a.currency)}
                 {a.endDate && `, ending ${formatDay(a.endDate)}`}.
               </p>
             )}
@@ -363,7 +364,7 @@ export function SowDelivery({ agreement: a }: { agreement: AgreementDetail }) {
                     <span className="block truncate font-semibold">{c.name}</span>
                     <span className="block truncate text-[13px] text-ink-2">{c.role}</span>
                   </span>
-                  <span className="num text-ink-2">{c.dayRateMinor == null ? "No rate yet" : `${formatMoney(c.dayRateMinor, c.currency!)} a day`}</span>
+                  <span className="num text-ink-2">{c.dayRateMinor == null ? "No rate yet" : `${shownMoney(c.dayRateMinor, c.currency!)} a day`}</span>
                   <Button className={small} onClick={() => setOpen({ consultant: c })} aria-label={`Edit ${c.name}`}>
                     Edit
                   </Button>

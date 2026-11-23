@@ -63,7 +63,9 @@ describe("A-8 import", () => {
         a("Import Alpha", "Lease", "Car"),
         a("Bluefinch Systems", "MSA", "master services agreement"),
         a("Import Alpha", "SOW", "Orphan", { 8: "2026-04-01", 9: "2026-05-01", 10: "No such MSA", 11: "fixed", 12: 100 }),
-        a("Import Alpha", "NDA", "Odd NDA", { 4: "signed", 6: "USD", 10: "Alpha MSA" }),
+        a("Import Alpha", "NDA", "Odd NDA", { 4: "signed", 6: "CHF", 10: "Alpha MSA" }),
+        a("Import Alpha", "SOW", "Kronor SOW", { 6: "sek", 8: "2026-04-01", 9: "2026-09-30", 11: "fixed", 12: "SEK 285 000" }),
+        a("Import Alpha", "SOW", "Mixed SOW", { 6: "EUR", 8: "2026-04-01", 9: "2026-09-30", 11: "fixed", 12: "SEK 285,000" }),
       ],
     );
     const before = (await t.as(ADMIN).get("/api/vendors").query({ status: "all" })).body.total;
@@ -87,14 +89,17 @@ describe("A-8 import", () => {
     expect(rows.A6.problems.join(" ")).toMatch(/Kind: use MSA/);
     expect(rows.A7).toMatchObject({ outcome: "exists" });
     expect(rows.A8.problems.join(" ")).toMatch(/no MSA called "No such MSA"/);
+    // M-8: any listed currency, and an amount in the row's own currency only.
+    expect(rows.A10).toMatchObject({ outcome: "add", problems: [] });
+    expect(rows.A11.problems).toEqual(['Budget: "SEK 285,000" is in SEK, but the agreement is in EUR. Put SEK in the Currency column, or write the amount without a currency.']);
     expect(rows.A9.problems.sort()).toEqual([
-      "Currency: use EUR or GBP.",
+      "Currency: CHF is not on the app's list of currencies. Use EUR, DKK, GBP, NOK, SEK, USD, or ask an admin to add it in Settings.",
       "Parent MSA title: only a SOW can sit under an MSA.",
       "Status: use one of draft, in_negotiation, out_for_signature, active or ended.",
     ]);
     // No message leaks the validator's own wording.
     expect(JSON.stringify(res.body.rows)).not.toMatch(/Invalid option|expected one of|Too big/);
-    expect(res.body.counts).toEqual({ add: 3, exists: 2, invalid: 11 });
+    expect(res.body.counts).toEqual({ add: 4, exists: 2, invalid: 12 });
     expect((await t.as(ADMIN).get("/api/vendors").query({ status: "all" })).body.total).toBe(before);
   });
 

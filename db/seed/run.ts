@@ -25,6 +25,7 @@ import { addCandidate, issueCandidate, moveCandidate, saveAnswer } from "../../s
 import { compareAnswers, decide, saveScore } from "../../server/features/rfp/evaluation";
 import { addSignoff, changeSignoff, createRfp, getRfp, moveStage, reviewDraft, suggestDraft, type RfpContext } from "../../server/features/rfp/service";
 import { createBriefing } from "../../server/features/briefings/service";
+import { setCurrencyRate } from "../../server/features/settings/service";
 import { reviewSummary, suggestSummary } from "../../server/features/reports/service";
 import type { BoardLinkInput, Targets } from "../../shared/performance";
 
@@ -44,8 +45,8 @@ interface SeedVendor {
   /** The first is the primary contact. */
   contacts?: [name: string, roles: string[]][];
   agreements: (A & { under?: string })[];
-  /** Day rates per role: [role, rate in cents, days ago it started]. */
-  rates?: [role: string, dayRateMinor: number, since: number][];
+  /** Day rates per role: [role, rate in cents, days ago it started, currency (euros when left out)]. */
+  rates?: [role: string, dayRateMinor: number, since: number, currency?: string][];
 }
 
 /** What happens on a SOW or subscription after it is signed. Amounts are in cents; days are relative to today. */
@@ -265,6 +266,29 @@ function sampleVendors(today: Day): SeedVendor[] {
       contacts: [["Noor Castell", ["Partner"]]],
       agreements: [],
     },
+    // M-8: vendors that invoice in other currencies than euros and pounds, so the Money page shows the mix.
+    {
+      vendor: { name: "Norrvik Software", type: "software", scoringEnabled: false, country: "SE", addressLine1: "Norrviksgatan 4", postalCode: "111 22", city: "Stockholm" },
+      owner: "mira@example.test",
+      contacts: [["Elin Exempel", ["Account Manager"]]],
+      agreements: [sub("Planning cloud", 320, 285_000_00, { currency: "SEK" }), ...paper(-400)],
+    },
+    {
+      vendor: { name: "Brannholt Analytics", type: "software", scoringEnabled: false, country: "NO", addressLine1: "Brannholtveien 9", postalCode: "0150", city: "Oslo" },
+      owner: "jonas@example.test",
+      agreements: [sub("Forecasting service", 280, 196_000_00, { currency: "NOK" }), ...paper(-380)],
+    },
+    {
+      vendor: { name: "Wexmoor Labs", type: "software", scoringEnabled: false, country: "US", addressLine1: "40 Wexmoor Avenue", postalCode: "10001", city: "New York" },
+      owner: "sanne@example.test",
+      agreements: [sub("Contract analytics", 340, 30_000_00, { currency: "USD" }), ...paper(-300)],
+    },
+    {
+      vendor: { name: "Hvidsand Advisory", type: "advisory", scoringEnabled: false, country: "DK", addressLine1: "Hvidsandvej 21", postalCode: "1050", city: "Copenhagen" },
+      owner: "sanne@example.test",
+      agreements: [sub("Advisory retainer", 300, 120_000_00, { currency: "DKK", noticePeriodDays: 60 }), ...paper(-500)],
+      rates: [["Senior advisor", 9_800_00, 400, "DKK"]],
+    },
   ];
 }
 
@@ -320,6 +344,21 @@ const sampleDelivery: Record<string, Delivery> = {
   "Service desk licence": { invoices: [["MG-5521", 26_400_00, -248]] },
   "Data platform licence": { invoices: [["SC-00917", 31_500_00, -115]] },
   "Research membership": { invoices: [["EA-2026-77", 62_000_00, -65]] },
+  "Planning cloud": { invoices: [["NV-2026-03", 285_000_00, -180]] },
+  "Forecasting service": {
+    invoices: [
+      ["BH-1041", 49_000_00, -200],
+      ["BH-1077", 49_000_00, -110],
+      ["BH-1102", 49_000_00, -20],
+    ],
+  },
+  "Contract analytics": { invoices: [["WM-5530", 30_000_00, -25]] },
+  "Advisory retainer": {
+    invoices: [
+      ["HA-301", 30_000_00, -150],
+      ["HA-322", 30_000_00, -60],
+    ],
+  },
 };
 
 /**
@@ -697,8 +736,8 @@ async function seedCore(db: Db, today: Day) {
       const created = await createAgreement(db, { ...a, vendorId: vendor.id, ownerUserId: idOf(s.owner), parentMsaId: under ? made.get(under) : null }, admin, today);
       made.set(a.title, created.id);
     }
-    for (const [role, dayRateMinor, since] of s.rates ?? [])
-      await saveRateLine(db, { vendorId: vendor.id }, { role, dayRateMinor, validFrom: addDays(today, -since) }, admin, today);
+    for (const [role, dayRateMinor, since, currency] of s.rates ?? [])
+      await saveRateLine(db, { vendorId: vendor.id }, { role, dayRateMinor, validFrom: addDays(today, -since), ...(currency ? { currency } : {}) }, admin, today);
     for (const [title, id] of made) {
       const plan = sampleDelivery[title];
       if (!plan) continue;
@@ -732,6 +771,8 @@ async function seedCore(db: Db, today: Day) {
       }
     }
   }
+  // M-8: the pound's rate was set by an admin; the other currencies keep their starting rates, so the app shows what that looks like.
+  await setCurrencyRate(db, "GBP", { unitsPerEurE4: 8547 }, admin);
   // Tie the people to a known state for anyone re-seeding.
   await db.update(users).set({ active: false }).where(eq(users.email, "former@example.test"));
 }

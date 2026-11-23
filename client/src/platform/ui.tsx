@@ -31,6 +31,8 @@ export function ConfirmButton({
   }, [armed]);
   return (
     <Button
+      // Never a form's submit button: removing is not saving, also when it sits inside a form.
+      type="button"
       className={clsx(className, armed && "border-crit text-crit-text")}
       disabled={disabled}
       aria-label={armed ? `${confirm} ${label}, click again to confirm` : label}

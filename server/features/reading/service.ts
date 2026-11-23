@@ -2,13 +2,14 @@ import { eq } from "drizzle-orm";
 import { aiSuggestions } from "../../../db/schema";
 import { kindLabels, type AgreementDetail } from "../../../shared/agreements";
 import { formatDay, type Day } from "../../../shared/dates";
-import { formatMoney, parseAmount, type Currency } from "../../../shared/money";
+import { formatMoney, parseAmount, type ListedCurrency } from "../../../shared/money";
 import {
   MAX_READING_CHARS,
   readingFields,
   readingLabels,
   readingReviewSchema,
   targetOf,
+  unlistedIn,
   verifyReading,
   type ContractReading,
   type DocumentReading,
@@ -25,6 +26,7 @@ import { AppError, notFound } from "../../platform/errors";
 import type { AiPort, Db, Queryable } from "../../platform/ports/types";
 import { PART_BREAK, partName } from "../../platform/text";
 import { changeAgreement, documentText, getAgreement, lockDocument, setReading } from "../agreements/service";
+import { listCurrencies } from "../settings/service";
 
 /**
  * Contract reading (E-1): the AI proposes values for an agreement's fields from a document
@@ -41,7 +43,6 @@ export interface ReadingContext {
 
 const SUBJECT = "document";
 const words = (s: SuggestionStatus) => suggestionStatusLabels[s].toLowerCase();
-const currencyWords: Record<Currency, string> = { EUR: "Euro (EUR)", GBP: "Pound sterling (GBP)" };
 const squash = (s: string) => s.replace(/\s+/g, " ").trim();
 /** The part of a document's text that is read: its first stretch, with a blank line where a page or sheet ends. */
 const readText = (text: string) => text.slice(0, MAX_READING_CHARS).split(PART_BREAK).join("\n\n");
@@ -63,7 +64,11 @@ function whereIs(doc: { fileName: string; text: string | null }, passage: string
 }
 
 /** What the agreement holds for a field, and what a read value would be, both as stored and as shown. */
-function sides(field: ReadingField, a: AgreementDetail, r: ContractReading) {
+function sides(field: ReadingField, a: AgreementDetail, r: ContractReading, listed: ListedCurrency[]) {
+  const currencyWords = (code: string) => {
+    const c = listed.find((x) => x.code === code);
+    return c ? `${c.name} (${code})` : code;
+  };
   const day = (d: string | null) => (d ? formatDay(d) : "Not filled in");
   // An amount is shown in the currency the document names, and otherwise in the agreement's.
   const currency = r.currency?.value ?? a.currency;
@@ -96,7 +101,7 @@ function sides(field: ReadingField, a: AgreementDetail, r: ContractReading) {
       };
     }
     case "currency":
-      return { current: currencyWords[a.currency], proposed: currencyWords[r.currency!.value], stored: a.currency, value: r.currency!.value as unknown };
+      return { current: currencyWords(a.currency), proposed: currencyWords(r.currency!.value), stored: a.currency, value: r.currency!.value as unknown };
   }
 }
 
@@ -104,10 +109,12 @@ function build(
   doc: { id: string; fileName: string; text: string | null },
   row: typeof aiSuggestions.$inferSelect,
   a: AgreementDetail,
+  listed: ListedCurrency[],
 ): DocumentReading & { values: Map<ReadingField, Record<string, unknown>> } {
   const answered = row.output as ContractReading;
   // The model's answer is kept as it was given; what is shown and can be used is only what the document bears out.
-  const { reading: r, unverified } = verifyReading(readText(doc.text ?? ""), answered);
+  const { reading: r, unverified } = verifyReading(readText(doc.text ?? ""), answered, listed);
+  const unlisted = !r.amount && answered.amount && unverified.includes("amount") ? unlistedIn(answered.amount.passage, listed) : [];
   const proposals: Proposal[] = [];
   /** What using a field writes to the agreement, by the agreement's own field names. */
   const values = new Map<ReadingField, Record<string, unknown>>();
@@ -116,7 +123,7 @@ function build(
     const read = r[field];
     if (!read) continue;
     const target = targetOf(field, a.kind);
-    const s = sides(field, a, r);
+    const s = sides(field, a, r, listed);
     const same = s.stored === s.value;
     let why = "why" in target ? target.why : null;
     // The currency says what the amount is in. Changing it by itself would turn the amount the agreement holds into another amount.
@@ -153,7 +160,9 @@ function build(
     },
     proposals,
     notFound: readingFields.filter((f) => !answered[f] && !r[f]).map((f) => readingLabels[f]),
-    unverified: unverified.filter((f) => !r[f]).map((f) => readingLabels[f]),
+    // An amount in a currency that is not on the list is named as such, not as a passage that does not state it.
+    unverified: unverified.filter((f) => !r[f] && !(unlisted.length && (f === "amount" || f === "currency"))).map((f) => readingLabels[f]),
+    unlisted,
     partly: (doc.text ?? "").length > MAX_READING_CHARS,
     values,
   };
@@ -162,12 +171,12 @@ const shown = ({ values: _values, ...reading }: ReturnType<typeof build>): Docum
 
 /** The AI's latest reading of each document of an agreement that has one. */
 export async function listReadings(ctx: ReadingContext, agreementId: string): Promise<DocumentReading[]> {
-  const a = await getAgreement(ctx.db, agreementId, ctx.today());
+  const [a, listed] = await Promise.all([getAgreement(ctx.db, agreementId, ctx.today()), listCurrencies(ctx.db)]);
   const out: DocumentReading[] = [];
   for (const d of a.documents) {
     const doc = await document(ctx.db, d.id);
     const row = await current(ctx.db, doc);
-    if (row) out.push(shown(build(doc, row, a)));
+    if (row) out.push(shown(build(doc, row, a, listed)));
   }
   return out;
 }
@@ -198,7 +207,7 @@ export async function readDocument(ctx: ReadingContext, documentId: string, by: 
       summary: `${a.vendorName} · ${a.title}`,
       changes: { [`AI reading of ${doc.fileName}`]: { from: null, to: before ? "asked for again" : "asked for" } },
     });
-    return shown(build(now, row as typeof aiSuggestions.$inferSelect, a));
+    return shown(build(now, row as typeof aiSuggestions.$inferSelect, a, await listCurrencies(tx)));
   });
 }
 
@@ -219,7 +228,8 @@ export async function reviewReading(ctx: ReadingContext, documentId: string, inp
     if (row.id !== review.suggestionId) throw replaced();
     if (row.status !== "proposed")
       throw new AppError(409, "already_reviewed", "Someone has already used or rejected this reading. Ask the AI to read the document again to start over.");
-    const reading = build(doc, row, a);
+    const listed = await listCurrencies(tx);
+    const reading = build(doc, row, a, listed);
     let status: Exclude<SuggestionStatus, "proposed"> = "rejected";
     /** The labels of the values that were taken over, for the history: afterwards the page can only compare with the agreement as it has become. */
     let taken: string[] = [];
@@ -261,6 +271,6 @@ export async function reviewReading(ctx: ReadingContext, documentId: string, inp
       },
     });
     const after = (await current(tx, doc))!;
-    return shown(build(doc, after, await getAgreement(tx, a.id, ctx.today())));
+    return shown(build(doc, after, await getAgreement(tx, a.id, ctx.today()), listed));
   });
 }

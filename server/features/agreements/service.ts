@@ -27,7 +27,7 @@ import { extractText } from "../../platform/text";
 import { failFields, toCsv } from "../../platform/http";
 import { explain } from "../../platform/ports/explain";
 import type { Db, Queryable, StoragePort, Tx } from "../../platform/ports/types";
-import { getSettings } from "../settings/service";
+import { getSettings, requireListed } from "../settings/service";
 import { checkSowEdit, invoicedByAgreement } from "../sow/service";
 import * as repo from "./repo";
 
@@ -48,7 +48,7 @@ function toAgreement({ agreement: a, vendorName, ownerName, decisionId }: Row, t
 
 export async function listAgreements(db: Db, filter: repo.AgreementFilter, today: Day): Promise<Page<Agreement>> {
   const settings = await getSettings(db);
-  const { items, total } = await repo.listAgreements(db, filter, settings.gbpToEurE4);
+  const { items, total } = await repo.listAgreements(db, filter);
   return { items: items.map((r) => toAgreement(r, today, settings.noticeDays)), total };
 }
 
@@ -104,6 +104,7 @@ export async function createAgreement(db: Db, input: unknown, by: User, today: D
     if (!vendor) failFields({ vendorId: "Choose a vendor." });
     if (vendor.status === "offboarded") failFields({ vendorId: "This vendor is offboarded and cannot receive new agreements." });
     await checkLinks(tx, value, { owner: true, parent: true });
+    await requireListed(tx, value.currency);
     const row = await repo.insertAgreement(tx, value, by.email);
     await audit(tx, { userEmail: by.email, action, entityType: "agreement", entityId: row.id, summary: `${vendor.name} · ${row.title}` });
     return getAgreement(tx, row.id, today);
@@ -131,6 +132,7 @@ export async function changeAgreement(tx: Tx, id: string, input: unknown, by: Us
     if (vendor?.status === "offboarded") failFields({ status: "This vendor is offboarded, so its agreements cannot be made active." });
   }
   if (Object.keys(errors).length) failFields(errors);
+  if (value.currency !== current.currency) await requireListed(tx, value.currency);
   if (value.kind === "sow") {
     const sowErrors = await checkSowEdit(tx, id, current, value);
     if (Object.keys(sowErrors).length) failFields(sowErrors);
@@ -189,7 +191,7 @@ const EXPORT_LIMIT = 5000;
 
 export async function exportCsv(db: Db, filter: Omit<repo.AgreementFilter, "page" | "pageSize">, today: Day): Promise<string> {
   const settings = await getSettings(db);
-  const { items, total } = await repo.listAgreements(db, { ...filter, page: 1, pageSize: EXPORT_LIMIT }, settings.gbpToEurE4);
+  const { items, total } = await repo.listAgreements(db, { ...filter, page: 1, pageSize: EXPORT_LIMIT });
   if (total > EXPORT_LIMIT) throw new AppError(400, "too_many", `There are ${total} agreements to export, more than fits in one file. Narrow the filters first.`);
   const money = (minor: number | null) => (minor == null ? "" : (minor / 100).toFixed(2));
   return toCsv(

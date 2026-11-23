@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { kinds, type Kind } from "./agreements";
 import { isDay } from "./dates";
-import { currencies, parseAmount, type Currency } from "./money";
+import { currencyCode, isCurrencyCode, parseAmount, STARTING_CURRENCIES, type Currency } from "./money";
 import type { TextSuggestion } from "./overview";
 
 /**
@@ -32,7 +32,7 @@ export const contractReadingSchema = z.object({
   noticePeriodDays: found(z.number().int().min(0).max(730)),
   /** A plain amount such as "48000" or "48000.50", without a currency sign. */
   amount: found(z.string().regex(/^\d{1,13}(\.\d{1,2})?$/)),
-  currency: found(z.enum(currencies)),
+  currency: found(currencyCode),
 });
 export type ContractReading = z.infer<typeof contractReadingSchema>;
 
@@ -64,21 +64,93 @@ export function datesIn(text: string): string[] {
   return [...new Set(out)];
 }
 
-const CURRENCY_WORD = String.raw`€|£|\bEUR\b|\bGBP\b|\beuros?\b|\bpounds?(?: sterling)?\b`;
-const NUMBER = String.raw`\d[\d.,]*\d|\d`;
-const MONEY = new RegExp(String.raw`(?:(${CURRENCY_WORD})\s?(${NUMBER})|(?<![\p{L}\p{N}.,])(${NUMBER})\s?(${CURRENCY_WORD}))`, "giu");
-const currencyOf = (word: string): Currency => (/€|eur/i.test(word) ? "EUR" : "GBP");
+/** A currency on the app's list, as contract reading needs it: its code and its name. */
+export interface NamedCurrency {
+  code: Currency;
+  name: string;
+}
+
+/** The ways a document writes a currency other than its code and its name. "kr" alone is not one: it does not say which kronor. "$" is read as US dollars. */
+const OTHER_WORDS: Record<string, string[]> = {
+  EUR: ["€", "euro", "euros"],
+  GBP: ["£", "pound", "pounds", "pound sterling", "pounds sterling", "sterling"],
+  USD: ["$", "US$", "US dollar", "US dollars", "U.S. dollar", "U.S. dollars", "dollar", "dollars"],
+  SEK: ["Swedish kronor"],
+  NOK: ["Norwegian kroner"],
+  DKK: ["Danish kroner"],
+};
+
+const escape = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** A number as contracts write amounts, also with spaces between the thousands ("7 400,00", common in Scandinavia), so "SEK 7 400" is never read as SEK 7. */
+const NUMBER = String.raw`\d{1,3}(?:[ \u00a0]\d{3})+(?:[.,]\d{1,2})?(?!\d)|\d[\d.,]*\d|\d`;
 /** No agreement is worth more than this; the same ceiling the edit form has. */
 const MAX_MINOR = 9_000_000_000_00;
 
-/** Every amount of money a piece of text states: a number with its currency right next to it. A bare number is not an amount. */
-export function moneyIn(text: string): { minor: number; currency: Currency }[] {
+interface Words {
+  pattern: string;
+  codeOf: Map<string, Currency>;
+  /** The codes, in lower case: a code counts only in capitals, so "all" is never Albanian lek. */
+  codes: Set<string>;
+}
+const wordsCache = new Map<string, Words>();
+/** One pattern for every way the listed currencies can be written, longest first, so "Canadian dollars" wins over "dollars". */
+function wordsFor(listed: readonly NamedCurrency[]): Words {
+  const key = listed.map((c) => `${c.code}:${c.name}`).join("|");
+  const cached = wordsCache.get(key);
+  if (cached) return cached;
+  const codeOf = new Map<string, Currency>();
+  for (const c of listed) {
+    const name = c.name.trim();
+    for (const w of [c.code, name, /s$/i.test(name) ? "" : `${name}s`, ...(OTHER_WORDS[c.code] ?? [])].filter(Boolean)) {
+      const k = w.toLowerCase();
+      if (!codeOf.has(k)) codeOf.set(k, c.code);
+    }
+  }
+  const alternatives = [...codeOf.keys()]
+    .sort((a, b) => b.length - a.length)
+    .map((w) => (w === "$" ? String.raw`(?<![\p{L}])\$` : /^[\p{L}]/u.test(w) ? String.raw`(?<![\p{L}])${escape(w)}(?![\p{L}])` : escape(w)));
+  const words = { pattern: alternatives.join("|"), codeOf, codes: new Set(listed.map((c) => c.code.toLowerCase())) };
+  wordsCache.set(key, words);
+  return words;
+}
+
+/**
+ * Every amount of money a piece of text states: a number with a listed currency right next
+ * to it, written as its code, its sign or its name. A bare number is not an amount, and
+ * neither is one in a currency that is not on the list.
+ */
+export function moneyIn(text: string, listed: readonly NamedCurrency[] = STARTING_CURRENCIES): { minor: number; currency: Currency }[] {
+  const words = wordsFor(listed);
+  const { pattern } = words;
+  if (!pattern) return [];
+  const money = new RegExp(String.raw`(?:(${pattern})\s?(${NUMBER})|(?<![\p{L}\p{N}.,])(${NUMBER})\s?(${pattern}))`, "giu");
   const out: { minor: number; currency: Currency }[] = [];
-  for (const m of text.matchAll(MONEY)) {
+  for (const m of text.matchAll(money)) {
     const minor = parseAmount((m[2] ?? m[3])!.replace(/[.,]$/, ""));
-    if (minor != null && minor <= MAX_MINOR) out.push({ minor, currency: currencyOf((m[1] ?? m[4])!) });
+    const currency = currencyOf(words, (m[1] ?? m[4])!);
+    if (minor != null && minor <= MAX_MINOR && currency) out.push({ minor, currency });
   }
   return out;
+}
+
+/** The currency a written word stands for, or undefined. A code counts only in capitals. */
+function currencyOf(words: Words, written: string): Currency | undefined {
+  const k = written.toLowerCase();
+  if (words.codes.has(k) && written !== written.toUpperCase()) return undefined;
+  return words.codeOf.get(k);
+}
+
+/** The standard currency codes written next to a number in a passage that are not on the list (M-8): "CHF 12,000" while CHF is not listed. */
+export function unlistedIn(passage: string, listed: readonly NamedCurrency[]): Currency[] {
+  const known = new Set(listed.map((c) => c.code));
+  const found = [...passage.matchAll(new RegExp(String.raw`\b([A-Z]{3})\s?\d|\d\s?([A-Z]{3})\b`, "g"))].map((m) => (m[1] ?? m[2])!);
+  return [...new Set(found.filter((c) => isCurrencyCode(c) && !known.has(c)))];
+}
+
+/** Whether a passage names a currency in any of the ways a document writes it. */
+function namesCurrency(passage: string, code: Currency, listed: readonly NamedCurrency[]): boolean {
+  const words = wordsFor(listed);
+  return [...passage.matchAll(new RegExp(words.pattern, "giu"))].some((m) => currencyOf(words, m[0]) === code);
 }
 
 /** The notice periods a piece of text states in days. Months are not turned into days: three months is not always ninety days. */
@@ -127,7 +199,7 @@ export interface Verified {
  * amount takes its currency from its own passage. Everything else is left out and named,
  * so a person never sees a value next to a passage that does not say it.
  */
-export function verifyReading(text: string, r: ContractReading): Verified {
+export function verifyReading(text: string, r: ContractReading, listed: readonly NamedCurrency[] = STARTING_CURRENCIES): Verified {
   const reading: ContractReading = { kind: null, title: null, signedOn: null, startDate: null, endDate: null, noticePeriodDays: null, amount: null, currency: null };
   const unverified: ReadingField[] = [];
   const keep = <F extends ReadingField>(field: F, holds: (passage: string, value: NonNullable<ContractReading[F]>["value"]) => boolean) => {
@@ -141,13 +213,13 @@ export function verifyReading(text: string, r: ContractReading): Verified {
   keep("title", (p, v) => squash(v).length >= 3 && p.toLowerCase().includes(squash(v).toLowerCase()));
   for (const field of ["signedOn", "startDate", "endDate"] as const) keep(field, (p, v) => datesIn(p).includes(v));
   keep("noticePeriodDays", (p, v) => noticeDaysIn(p).includes(v));
-  keep("amount", (p, v) => moneyIn(p).some((m) => m.minor === parseAmount(v)));
+  keep("amount", (p, v) => moneyIn(p, listed).some((m) => m.minor === parseAmount(v)));
   if (reading.amount) {
     // The amount's own passage says which currency it is in; that is the currency, whatever else was answered.
     const cents = parseAmount(reading.amount.value);
     const stated = [
       ...new Set(
-        moneyIn(reading.amount.passage)
+        moneyIn(reading.amount.passage, listed)
           .filter((m) => m.minor === cents)
           .map((m) => m.currency),
       ),
@@ -161,7 +233,7 @@ export function verifyReading(text: string, r: ContractReading): Verified {
       unverified.push("amount");
       if (r.currency) unverified.push("currency");
     }
-  } else keep("currency", (p, v) => new RegExp(v === "EUR" ? String.raw`€|\bEUR\b|\beuros?\b` : String.raw`£|\bGBP\b|\bpounds?\b|\bsterling\b`, "i").test(p));
+  } else keep("currency", (p, v) => listed.some((c) => c.code === v) && namesCurrency(p, v, listed));
   return { reading, unverified: [...new Set(unverified)] };
 }
 
@@ -198,6 +270,8 @@ export interface DocumentReading {
   notFound: string[];
   /** Fields the AI gave a value for that its passage did not bear out; they are not shown as proposals. */
   unverified: string[];
+  /** M-8: currencies the AI's amount was written in that are not on the app's list, which is why that amount was left out. */
+  unlisted: string[];
   /** The document was longer than the AI reads in one go; only its first part was read. */
   partly: boolean;
 }

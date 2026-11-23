@@ -4,7 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { kindShort, statusLabels, type Agreement } from "../../../../shared/agreements";
 import { formatDay } from "../../../../shared/dates";
-import { formatMoney } from "../../../../shared/money";
+
 import { candidateListLabels, rfpStageLabels, type CandidateList, type RfpStage } from "../../../../shared/rfp";
 import type { Page } from "../../../../shared/types";
 import { addressLines, vendorStatusLabels, vendorTypeLabels, type Contact, type Paperwork, type VendorDetail } from "../../../../shared/vendors";
@@ -22,6 +22,7 @@ import { VendorMoney } from "../sow/RateCard";
 import { agreementTone } from "../agreements/display";
 import { roleErrorKeys, RolesField, rolesError } from "./ContactRoles";
 import { VendorForm } from "./VendorForm";
+import { shownMoney } from "../../platform/Money";
 
 const paper: Record<Paperwork, [Tone, string]> = { in_place: ["ok", "In place"], missing: ["bad", "Missing"], expired: ["bad", "Expired"], not_required: ["none", "Not required"] };
 export const vendorTone = (status: VendorDetail["status"]): Tone => (status === "active" ? "ok" : status === "on_hold" ? "warn" : "none");
@@ -77,7 +78,7 @@ export function AgreementRow({ a, indent }: { a: Agreement; indent?: boolean }) 
         </span>
       </span>
       <Pill tone={agreementTone(a.status)}>{statusLabels[a.status]}</Pill>
-      {value != null && <span className="num text-ink-2">{formatMoney(value, a.currency)}</span>}
+      {value != null && <span className="num text-ink-2">{shownMoney(value, a.currency)}</span>}
     </Link>
   );
 }

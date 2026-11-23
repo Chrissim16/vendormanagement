@@ -120,7 +120,7 @@ describe("E-1 the AI proposes field values, each with its passage", () => {
         rows: object[];
       }
     ).rows;
-    expect(stored).toEqual([{ kind: "contract_fields", subject_type: "document", subject_id: doc.id, prompt_version: "contract-fields/2", status: "proposed" }]);
+    expect(stored).toEqual([{ kind: "contract_fields", subject_type: "document", subject_id: doc.id, prompt_version: "contract-fields/3", status: "proposed" }]);
   });
 
   it("E-1 what the document does not say stays empty and is named; a kind that differs is shown and cannot be taken over", async () => {
@@ -394,7 +394,7 @@ describe("E-1 what cannot be read, and who may ask", () => {
     expect(after).toEqual(before);
   });
 
-  it("E-1 an amount is its number and its currency: the same number in pounds differs, a currency alone does not replace the one an amount is held in, and other currencies are left out", async () => {
+  it("E-1 M-8 an amount is its number and its currency: the same number in pounds differs, a currency alone does not replace the one an amount is held in, dollars are offered and currencies not on the list are left out", async () => {
     const a = await subscription();
     const same = await attach(a.id, ["Order form", "The annual fee is £ 20,000.00, invoiced yearly."]);
     const r = await read(same.id);
@@ -415,9 +415,21 @@ describe("E-1 what cannot be read, and who may ask", () => {
     } finally {
       t.ports.ai.complete = real;
     }
+    // M-8: US dollars are on the list, so an amount in dollars is offered, with its currency.
     const dollars = await attach(a.id, ["Order form", "The annual fee is USD 9,000 a year.", "It renews on 31 January 2028 unless cancelled."]);
     const usd = await read(dollars.id);
-    expect(usd.proposals.map((p) => p.field)).toEqual(["endDate"]);
+    expect(of(usd, "amount")).toMatchObject({ current: "€ 20,000.00", proposed: "$ 9,000.00", state: "differs" });
+    expect(of(usd, "currency")).toMatchObject({ current: "Euro (EUR)", proposed: "US dollar (USD)", state: "differs" });
+    ok(await review(dollars.id, { action: "reject", suggestionId: usd.suggestion.id }));
+    // Swiss francs are not on the list, and "kr" alone does not say which kronor: both amounts are left out.
+    for (const fee of ["The annual fee is CHF 9,000 a year.", "The annual fee is kr 9 000 a year."]) {
+      const doc = await attach(a.id, ["Order form", fee, "It renews on 31 January 2028 unless cancelled."]);
+      const other = await read(doc.id);
+      expect(other.proposals.map((p) => p.field), fee).toEqual(["endDate"]);
+      // The page names a currency that is not on the list, so it is clear what an admin could add.
+      expect(other.unlisted, fee).toEqual(fee.includes("CHF") ? ["CHF"] : []);
+      if (fee.includes("CHF")) expect(other.unverified, fee).toEqual([]);
+    }
     expect(await get(a.id)).toMatchObject({ annualValueMinor: 20_000_00, currency: "EUR" });
   });
 

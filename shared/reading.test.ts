@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { contractReadingSchema, datesIn, moneyIn, noticeDaysIn, standsIn, targetOf, verifyReading, type ContractReading } from "./reading";
+import { STARTING_CURRENCIES } from "./money";
 
 const none: ContractReading = { kind: null, title: null, signedOn: null, startDate: null, endDate: null, noticePeriodDays: null, amount: null, currency: null };
 const text = [
@@ -40,7 +41,32 @@ describe("E-1 what a passage states", () => {
       { minor: 48_000_50, currency: "EUR" },
       { minor: 9_000_00, currency: "GBP" },
     ]);
-    expect(moneyIn("USD 9,000 within 30 days, in 2027, for a European company")).toEqual([]);
+    expect(moneyIn("CHF 9,000 within 30 days, in 2027, for a European company")).toEqual([]);
+  });
+  it("M-8 an amount can be in any currency on the list, by its code, its sign or its name", () => {
+    expect(moneyIn("USD 9,000; $ 1,250.50; US$ 700; 40 dollars; SEK 85,000; 12.500 Norwegian kroner; 7 400,00 Danish kroner; DKK 3")).toEqual([
+      { minor: 9_000_00, currency: "USD" },
+      { minor: 1_250_50, currency: "USD" },
+      { minor: 700_00, currency: "USD" },
+      { minor: 40_00, currency: "USD" },
+      { minor: 85_000_00, currency: "SEK" },
+      { minor: 12_500_00, currency: "NOK" },
+      { minor: 7_400_00, currency: "DKK" },
+      { minor: 3_00, currency: "DKK" },
+    ]);
+    // Thousands written with a space are one number, never just their last part.
+    expect(moneyIn("SEK 1 250 000 a year")).toEqual([{ minor: 1_250_000_00, currency: "SEK" }]);
+  });
+  it("M-8 a bare kr does not say which kronor, and a currency not on the list is no currency", () => {
+    expect(moneyIn("The fee is kr 85,000, or 85.000 kr.")).toEqual([]);
+    expect(moneyIn("CHF 1,000 and 2,000 Swiss francs")).toEqual([]);
+    const withFrancs = [...STARTING_CURRENCIES, { code: "CHF", name: "Swiss franc" }];
+    expect(moneyIn("CHF 1,000 and 2,000 Swiss francs", withFrancs)).toEqual([
+      { minor: 1_000_00, currency: "CHF" },
+      { minor: 2_000_00, currency: "CHF" },
+    ]);
+    // A code counts only in capitals, and a dollar with another country's letters before it is not a US dollar.
+    expect(moneyIn("usd 5 and CA$ 100 and A$ 7")).toEqual([]);
   });
   it("a notice period is a number of days in a sentence about notice; months are not converted", () => {
     expect(noticeDaysIn("giving 45 days' written notice before 5 June 2027")).toEqual([45]);
@@ -112,9 +138,15 @@ describe("E-1 only values their passage bears out are kept", () => {
     });
     expect(pounds.reading.currency?.value).toBe("EUR");
     expect(pounds.unverified).toEqual(["currency"]);
+    const francs = verifyReading("The annual fee is CHF 9,000 a year.", { ...none, amount: { value: "9000", passage: "The annual fee is CHF 9,000 a year." } });
+    expect(francs.reading.amount).toBeNull();
+    expect(francs.unverified).toEqual(["amount"]);
+    const kronor = verifyReading("The annual fee is kr 9,000 a year.", { ...none, amount: { value: "9000", passage: "The annual fee is kr 9,000 a year." }, currency: { value: "SEK", passage: "The annual fee is kr 9,000 a year." } });
+    expect(kronor.reading.amount).toBeNull();
+    expect(kronor.reading.currency).toBeNull();
+    expect(kronor.unverified).toEqual(["amount", "currency"]);
     const dollars = verifyReading("The annual fee is USD 9,000 a year.", { ...none, amount: { value: "9000", passage: "The annual fee is USD 9,000 a year." } });
-    expect(dollars.reading.amount).toBeNull();
-    expect(dollars.unverified).toEqual(["amount"]);
+    expect(dollars.reading.currency?.value).toBe("USD");
   });
   it("the answer's shape: values as the app stores them, a field left out counts as not found", () => {
     expect(contractReadingSchema.parse({ kind: { value: "sow", passage: "Statement of work" } })).toEqual({ ...none, kind: { value: "sow", passage: "Statement of work" } });

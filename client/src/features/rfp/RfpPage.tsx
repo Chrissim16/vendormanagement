@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import { useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { formatMoney } from "../../../../shared/money";
+
 import { isOpen, nextStep, rfpPath, rfpStageLabels, type RfpDetail, type RfpTab } from "../../../../shared/rfp";
 import { api, messageOf } from "../../lib/api";
 import { formatDate, formatDateTime } from "../../lib/format";
@@ -22,6 +22,7 @@ import { ResponsesTab } from "./ResponsesTab";
 import { ReviewTab } from "./ReviewTab";
 import { DemandForm } from "./RfpsPage";
 import { ScoringTab } from "./ScoringTab";
+import { shownMoney } from "../../platform/Money";
 
 const tabs: { id: RfpTab; label: string }[] = [
   { id: "overview", label: "Overview" },
@@ -80,7 +81,7 @@ function CancelForm({ rfp, onClose, onSaved }: { rfp: RfpDetail; onClose: () => 
 
 function Overview({ rfp, onEdit, onCancel }: { rfp: RfpDetail; onEdit: () => void; onCancel: () => void }) {
   const facts: [string, string][] = [
-    ["Budget", rfp.budgetMinor == null ? "Not set" : formatMoney(rfp.budgetMinor, rfp.currency)],
+    ["Budget", rfp.budgetMinor == null ? "Not set" : shownMoney(rfp.budgetMinor, rfp.currency)],
     ["Sponsor", rfp.sponsor ?? "Not set"],
     ["Demand approved on", rfp.demandApprovedOn ? formatDate(rfp.demandApprovedOn) : "Not set"],
     ["Decision wanted by", rfp.targetDecisionDate ? formatDate(rfp.targetDecisionDate) : "Not set"],

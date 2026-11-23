@@ -24,7 +24,7 @@ wrong. Answered questions move to the bottom.
 | Q16 | After a change request is approved, can the SOW's budget or end date still be typed over directly? | No. From then on they change only through change requests, so "started at, now at" stays true. Before any approval they can be corrected freely. | M2 |
 | Q17 | Must every milestone on a fixed-price SOW have an amount? | No, the amount is optional. A milestone invoiced above its amount is marked rather than refused. | M2 |
 | Q18 | May a consultant's day rate be in pounds on a euro SOW? | Yes; the rate is shown in its own currency. Say if it should be refused instead. | M2 |
-| Q15 | The pound to euro rate starts at 1.17 until an admin sets it. | Fine as a starting value; set the real one on the Settings page. | M2 |
+| Q15 | The pound to euro rate starts at 1.17 until an admin sets it. | Replaced by Q109 (rough starting rates for every currency, flagged until an admin sets them). | M2 |
 | Q19 | How often should tickets be fetched from Jira? | Every hour while the app is running, plus "Sync now". One setting to change. | M3 |
 | Q20 | A ticket that never had any of the listed level 2 or level 3 statuses or labels: which level is it? | Level 1, solved by the first line. Level 1 values are therefore optional on the board link. | M3 |
 | Q21 | What exactly is the "backlog age" target, and the "SLA breaches" target? | Backlog: the oldest open ticket may be at most so many days old. SLA breaches: at most so many percent of the month's resolved tickets were late. | M3 |
@@ -115,6 +115,17 @@ wrong. Answered questions move to the bottom.
 | Q108 | A reviewer edits a section's heading with tracked changes. What happens? | The edit is shown as "in the heading" and taking it over changes the heading, not the text, unless another section already has that heading. | M11 |
 | Q104 | Can a returned file uploaded by mistake be removed? | Yes, with its remarks, as long as none of them has been dealt with or set aside yet. | M11 |
 | Q27 | How long are tickets kept? | 24 months after they were resolved, as the data model says. Open tickets are kept however old. | M3 |
+| Q109 | Which starting rates does each currency get? | Rough rates (1 EUR = 0.8550 GBP, 1.0800 USD, 11.5000 SEK, 11.7000 NOK, 7.4600 DKK), shown as "starting rate" until an admin saves the real one. | M12 |
+| Q110 | How is a currency without a single symbol shown? | € for euros, £ for pounds, $ for US dollars; every other currency by its code (SEK 85,000.00), so Swedish, Norwegian and Danish kronor cannot be mixed up. | M12 |
+| Q111 | In a contract, what if an amount says only "kr", or "$" when it could be another dollar? | "kr" alone is left out and named, since it does not say which kronor. "$" is read as US dollars. Say if your contracts write it differently. | M12 |
+| Q112 | Can a currency be removed from the list? | Only while nothing uses it (no agreement, rate card line or RFP). EUR can never be removed. | M12 |
+| Q113 | The pound rate already saved in Settings | Carried over the other way round (1 GBP = 1.17 EUR becomes 1 EUR = 0.8547 GBP), keeping who set it and when. | M12 |
+| Q114 | Where are amounts shown in euros with the original in brackets? | In totals and in the lists that add up money: the Money page (by vendor, by month, the invoice list), the dashboard, the monthly report, briefings and Ask. A record's own page (an agreement, an invoice on a SOW, a day rate) shows its own currency only, and a SOW's budget against invoiced is never converted. | M12 |
+| Q115 | A contract writes thousands with a space ("SEK 1 250 000" or "7 400,00 kr") | Read as one number, never just its last part. | M12 |
+| Q116 | In the sample data, which rates look set by an admin? | The pound's (1 EUR = 0.8547 GBP). The dollar and the three kronor keep their starting rates, so you can see what that looks like. | M12 |
+| Q117 | Does a monthly report keep the rates of the day it was made? | No. Like every figure in it, the report is worked out afresh, at today's rates, and says when its figures have changed since its summary was written. Only a briefing is kept as it was. A summary saved before this change will be marked as written for other figures once, because the figures it was checked against now name the currencies; nothing like that has been saved at work yet. | M12 |
+| Q118 | A rate typed with a comma before three digits ("17,250") | Refused, with a request to write it with a point and no thousands separator, because it could mean 17.25 or 17,250. "0,855" is read as 0.855. | M12 |
+| Q119 | An amount typed with another currency's sign or code ("SEK 285,000" on a euro agreement, or in the import) | Refused, never read as the record's own currency. In the import the row says which currency was typed. | M12 |
 
 ## To check at work before M9
 
@@ -152,6 +163,7 @@ These cannot be answered from outside the company. None block the build.
 | 2026-11-21 | Contract lifecycle? | A light status only. |
 | 2026-11-21 | Spend? | Invoices keyed in by the owner against a SOW or subscription. No approval step. |
 | 2026-11-21 | Currency? | EUR mainly, some GBP. EUR total with an admin-set rate. |
+| 2026-11-22 | Currency, again? | Any currency, EUR always the main one. List starts with EUR, GBP, USD, SEK, NOK, DKK; an admin adds others (two-decimal ones only). One current rate each, typed as 1 EUR = X. Totals in euros first, the amount per currency beneath. An invoice stays in its agreement's currency. Rough starting rates, flagged. (M-8) |
 | 2026-11-21 | Jira? | Jira Cloud, Jira Service Management with SLAs. One board per vendor. Escalation by status or label. A service account exists. |
 | 2026-11-21 | Metrics? | First response time, first-line closure rate, SLA breaches, backlog age, satisfaction. Monthly, with quarterly review. |
 | 2026-11-21 | Service credits? | Flag only; calculation is on the backlog. |

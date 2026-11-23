@@ -4,6 +4,7 @@ import { ask, AiUnavailable, readSuggestion, recordSuggestion, reviewSuggestion 
 import { briefing as briefingPrompt } from "../../ai/prompts/briefing";
 import { agreementName, type Agreement } from "../../../shared/agreements";
 import { addDays, daysBetween, formatDay } from "../../../shared/dates";
+import { noMoney } from "../../../shared/money";
 import {
   BRIEFING_DATES_DAYS,
   BRIEFING_MONTHS,
@@ -105,7 +106,7 @@ export async function gatherFacts(ctx: OverviewContext, vendorId: string): Promi
     })),
     dates: dates.map((d) => ({ ...d, daysLeft: daysBetween(today, d.date) })).sort((a, b) => a.date.localeCompare(b.date) || a.what.localeCompare(b.what)),
     budgets: budgets.map(({ vendorId: _v, vendorName: _n, ...b }) => b),
-    spend: { from: period.from, to: period.to, total: invoiced ? { EUR: invoiced.EUR, GBP: invoiced.GBP, eurMinor: invoiced.eurMinor } : { EUR: 0, GBP: 0, eurMinor: 0 } },
+    spend: { from: period.from, to: period.to, total: invoiced ? { amounts: invoiced.amounts, eurMinor: invoiced.eurMinor } : noMoney(), rates: spend.rates.filter((r) => invoiced?.amounts[r.code]) },
     performance: shown && {
       months: shown,
       trends: Object.fromEntries(metricKeys.map((k) => [k, metricTrend(k, before?.cells[k].valueTenths ?? null, latest?.cells[k].valueTenths ?? null)])) as Record<

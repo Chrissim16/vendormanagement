@@ -100,9 +100,20 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 
 **M-5 Budget view.** A SOW shows budget, invoiced, remaining and percentage used. At 80% or more it appears on the warnings page; over 100% is marked as overrun.
 
-**M-6 Spend overview.** Spend per vendor and per month for a chosen period, in each currency and as a EUR total marked as converted. The overview itself can be exported as CSV, and the invoices behind it can be listed, filtered and exported as CSV.
+**M-6 Spend overview.** Spend per vendor and per month for a chosen period, as a EUR total marked as converted, with the amounts in their own currencies alongside (see M-8 for how). The overview itself can be exported as CSV, and the invoices behind it can be listed, filtered and exported as CSV.
 
-**M-7 Exchange rate and warning thresholds.** An admin sets the GBP to EUR rate; changing it changes converted totals only. The same page sets how many days ahead to warn of a notice deadline and of a SOW ending, and at what percentage of a budget to warn. Warnings, the Renewals page and the explanations on screen all follow these settings.
+**M-7 Warning thresholds.** An admin sets how many days ahead to warn of a notice deadline and of a SOW ending, and at what percentage of a budget to warn. Warnings, the Renewals page and the explanations on screen all follow these settings. (Exchange rates were part of M-7 until 22 Nov 2026 and are now M-8.)
+
+**M-8 Currencies and exchange rates.** Euro is the main currency; amounts can be in any currency on the admin's list, and every total across currencies is in euros. Built in M12.
+- The list starts with EUR, GBP, USD, SEK, NOK and DKK. On the Settings page an admin can add any other currency that uses cents (two decimals), chosen from the standard currency list, by giving its rate. A currency without cents or with three decimals (for example yen or dinar) is refused with a plain explanation.
+- Each currency other than EUR has one current rate, typed as "1 EUR = X" with up to four decimals, as banks and the European Central Bank publish them. EUR itself is always 1 and cannot be removed or changed.
+- Settings shows, per currency, the rate and when and by whom it was last set. Until an admin saves a rate, the app uses a rough starting rate and says "starting rate, not yet set by an admin" there and next to every euro total that uses it.
+- A currency can be removed only while no agreement, rate card line or RFP uses it; otherwise the page says what still uses it. Adding, changing and removing a currency or a rate are in the audit log.
+- Agreements, rate card lines, RFP budgets and the Excel import accept any currency on the list, and nothing else. An invoice is always in its agreement's currency, as before, so a SOW's budget against invoiced is never converted.
+- Every total across currencies (Money page, dashboard, monthly report, briefing, Ask) is one euro total marked as converted, with a line beneath it naming the amount in each currency that appears in it, for example "€ 120,000.00 · $ 30,000.00 · SEK 85,000.00". Lists show each amount in euros, with the original in brackets where it was not in euros.
+- Changing a rate changes converted totals only; no stored amount changes. A briefing keeps the figures and rates of the day it was made. The monthly report is worked out afresh, at the current rates, like all its figures, and says when they have changed since its summary was written (D-2).
+- Amounts are shown with € for euros, £ for pounds and $ for US dollars, and with the code for every other currency (SEK 85,000.00), so kronor of different countries cannot be confused.
+- Contract reading (E-1) and Ask (C-1) recognise amounts in every currency on the list. An amount in a currency not on the list, or written only as "kr" without saying which kronor, is left out and named as left out.
 
 ## Performance from Jira (M3)
 

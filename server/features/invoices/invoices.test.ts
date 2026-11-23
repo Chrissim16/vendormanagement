@@ -131,16 +131,17 @@ describe("M-4 invoices", () => {
           .query({ agreementId: s.id, ...q })
       ).body;
     expect((await list({})).items.map((i: { invoiceNumber: string }) => i.invoiceNumber)).toEqual(["LIST-C", "LIST-B", "LIST-A"]);
-    expect((await list({})).sums).toEqual({ EUR: 7_000_00, GBP: 0 });
+    expect((await list({})).sums).toEqual({ amounts: { EUR: 7_000_00 }, eurMinor: 7_000_00 });
+    expect((await list({})).rates).toEqual([]);
     expect((await list({ from: "2026-06-10", to: "2026-09-09" })).items.map((i: { invoiceNumber: string }) => i.invoiceNumber)).toEqual(["LIST-B"]);
     expect((await list({ q: "findable" })).total).toBe(1);
     expect((await list({ sort: "amount", dir: "asc" })).items[0].invoiceNumber).toBe("LIST-A");
     expect((await t.as(MEMBER).get("/api/invoices").query({ from: "2026-02-31" })).status).toBe(400);
     const csv = ((await t.as(MEMBER).get("/api/invoices/export.csv").query({ agreementId: s.id }).buffer(true).parse(binary)).body as Buffer).toString("utf8");
     const lines = csv.slice(1).trimEnd().split("\r\n");
-    expect(lines[0]).toBe('"Vendor","Agreement","Milestone","Invoice number","Invoice date","Amount","Currency","Description"');
+    expect(lines[0]).toBe('"Vendor","Agreement","Milestone","Invoice number","Invoice date","Amount","Currency","Amount in euros (converted)","Description"');
     expect(lines).toHaveLength(4);
-    expect(lines[1]).toBe(`"Invoice Test Vendor","${s.title}","","LIST-C","2026-09-10","4000.00","EUR","Findable words"`);
+    expect(lines[1]).toBe(`"Invoice Test Vendor","${s.title}","","LIST-C","2026-09-10","4000.00","EUR","4000.00","Findable words"`);
   });
 });
 
@@ -193,8 +194,8 @@ describe("M-5 budget view", () => {
   });
 });
 
-describe("M-6 spend overview and M-7 exchange rate", () => {
-  it("shows spend per vendor and per month, per currency, with a converted euro total that follows the rate", async () => {
+describe("M-6 spend overview, M-7 warning thresholds and M-8 rates", () => {
+  it("M-6 M-8 shows spend per vendor and per month, per currency, with a converted euro total that follows the rate", async () => {
     const other = await testApp({}, { empty: true });
     const who = (await other.as(ADMIN).get("/api/me")).body.id;
     const vendor = async (name: string) => (await other.as(ADMIN).post("/api/vendors").send({ name, type: "software", ownerUserId: who })).body.id;
@@ -228,34 +229,43 @@ describe("M-6 spend overview and M-7 exchange rate", () => {
     await book(a, "2025-11-30", 999_00);
     const spend = async (q: Record<string, string> = {}) => (await other.as(ADMIN).get("/api/spend").query(q)).body;
 
+    // Before an admin sets it, the pound's rough starting rate is used, and the totals say so.
+    const starting = await spend({ from: "2026-01-01", to: "2026-03-31" });
+    expect(starting.rates).toEqual([{ code: "GBP", unitsPerEurE4: 8550, starting: true }]);
+    expect(starting.total.eurMinor).toBe(150_00 + 233_92);
+
+    // M-8: only an admin sets a rate, typed as 1 EUR = 0.80 GBP.
+    expect((await other.as(MEMBER).put("/api/admin/currencies/GBP").send({ unitsPerEurE4: 8000 })).status).toBe(403);
+    expect((await other.as(ADMIN).put("/api/admin/currencies/GBP").send({ unitsPerEurE4: 8000 })).status).toBe(200);
     const first = await spend({ from: "2026-01-01", to: "2026-03-31" });
-    expect(first.total).toEqual({ EUR: 150_00, GBP: 200_00, eurMinor: 384_00 });
+    expect(first.total).toEqual({ amounts: { EUR: 150_00, GBP: 200_00 }, eurMinor: 400_00 });
+    expect(first.rates).toEqual([{ code: "GBP", unitsPerEurE4: 8000, starting: false }]);
     expect(first.byVendor.map((v: { vendorName: string; eurMinor: number }) => [v.vendorName, v.eurMinor])).toEqual([
-      ["Spend B", 234_00],
+      ["Spend B", 250_00],
       ["Spend A", 150_00],
     ]);
-    expect(first.byMonth.map((m: { month: string; EUR: number; GBP: number }) => [m.month, m.EUR, m.GBP])).toEqual([
-      ["2026-01", 100_00, 0],
-      ["2026-02", 50_00, 200_00],
-      ["2026-03", 0, 0],
+    expect(first.byMonth.map((m: { month: string; amounts: Record<string, number> }) => [m.month, m.amounts])).toEqual([
+      ["2026-01", { EUR: 100_00 }],
+      ["2026-02", { EUR: 50_00, GBP: 200_00 }],
+      ["2026-03", {}],
     ]);
-    expect(first.gbpToEurE4).toBe(11700);
 
     // Without dates it covers the last twelve months up to today, from the first of the month.
     const dflt = await spend();
     expect([dflt.from, dflt.to]).toEqual(["2025-12-01", TODAY]);
     expect(dflt.byMonth).toHaveLength(12);
-    expect(dflt.total.EUR).toBe(150_00);
+    expect(dflt.total.amounts.EUR).toBe(150_00);
 
-    // M-7: only an admin sets the rate, and it changes converted totals only.
-    expect((await other.as(MEMBER).put("/api/admin/settings").send({ gbpToEurE4: 12000, noticeDays: 90, sowEndDays: 30, budgetWarningPct: 80 })).status).toBe(403);
-    expect((await other.as(ADMIN).put("/api/admin/settings").send({ gbpToEurE4: 12000, noticeDays: 90, sowEndDays: 30, budgetWarningPct: 80 })).status).toBe(200);
+    // A new rate changes converted totals only: no amount changes.
+    await other.as(ADMIN).put("/api/admin/currencies/GBP").send({ unitsPerEurE4: 10000 });
     const second = await spend({ from: "2026-01-01", to: "2026-03-31" });
-    expect(second.total).toEqual({ EUR: 150_00, GBP: 200_00, eurMinor: 390_00 });
-    expect((await other.as(ADMIN).get("/api/invoices")).body.sums).toEqual({ EUR: 1_149_00, GBP: 200_00 });
-    expect((await other.as(MEMBER).get("/api/settings")).body.gbpToEurE4).toBe(12000);
-    const log = (await other.as(ADMIN).get("/api/admin/audit").query({ entityType: "settings" })).body.items;
-    expect(log[0]).toMatchObject({ userEmail: ADMIN, changes: { gbpToEurE4: { from: 11700, to: 12000 } } });
+    expect(second.total).toEqual({ amounts: { EUR: 150_00, GBP: 200_00 }, eurMinor: 350_00 });
+    const invoices = (await other.as(ADMIN).get("/api/invoices")).body;
+    expect(invoices.sums).toEqual({ amounts: { EUR: 1_149_00, GBP: 200_00 }, eurMinor: 1_349_00 });
+    expect(invoices.items.find((i: { currency: string }) => i.currency === "GBP")).toMatchObject({ amountMinor: 200_00, eurMinor: 200_00 });
+    const log = (await other.as(ADMIN).get("/api/admin/audit").query({ entityType: "currencies" })).body.items;
+    expect(log[0]).toMatchObject({ userEmail: ADMIN, changes: { "rate GBP": { from: "1 EUR = 0.80 GBP", to: "1 EUR = 1.00 GBP" } } });
+    expect(log[1]).toMatchObject({ changes: { "rate GBP": { from: "1 EUR = 0.855 GBP (starting rate, not yet set by an admin)", to: "1 EUR = 0.80 GBP" } } });
     expect((await spend({ from: "2026-03-01", to: "2026-02-01" })).error.fields.to).toBeTruthy();
     await other.close();
   });
@@ -292,20 +302,25 @@ describe("M-6 spend overview and M-7 exchange rate", () => {
     expect(backwards.headers["content-type"]).toMatch(/json/);
     expect(backwards.headers["content-disposition"]).toBeUndefined();
     const lines = (res.body as Buffer).toString("utf8").slice(1).trimEnd().split("\r\n");
-    expect(lines).toEqual(['"Vendor","Month","Currency","Invoiced"', '"\'=Export, ""Vendor""","2026-01","GBP","150.50"', '"\'=Export, ""Vendor""","2026-03","GBP","0.07"']);
+    // Each row also in euros, at 1 EUR = 0.855 GBP (the starting rate): 150.50 pounds are 176.02 euros, 7 pence 8 cents.
+    expect(lines).toEqual([
+      '"Vendor","Month","Currency","Invoiced","Invoiced in euros (converted)"',
+      '"\'=Export, ""Vendor""","2026-01","GBP","150.50","176.02"',
+      '"\'=Export, ""Vendor""","2026-03","GBP","0.07","0.08"',
+    ]);
     await other.close();
   });
   it("lists renewals within the admin's own notice window unless another is asked for", async () => {
     const other = await testApp();
     const titles = async (q: Record<string, string> = {}) => (await other.as(MEMBER).get("/api/renewals").query(q)).body.map((x: { title: string }) => x.title);
     expect(await titles()).toEqual(["Reporting suite", "Service desk licence"]);
-    await other.as(ADMIN).put("/api/admin/settings").send({ gbpToEurE4: 11700, noticeDays: 20, sowEndDays: 30, budgetWarningPct: 80 });
+    await other.as(ADMIN).put("/api/admin/settings").send({ noticeDays: 20, sowEndDays: 30, budgetWarningPct: 80 });
     expect(await titles()).toEqual(["Reporting suite"]);
     expect(await titles({ window: "45" })).toEqual(["Reporting suite", "Service desk licence"]);
     expect((await other.as(MEMBER).get("/api/renewals").query({ window: "0" })).status).toBe(400);
     await other.close();
   });
-  it("uses the admin's warning windows and refuses nonsense settings", async () => {
+  it("M-7 uses the admin's warning windows and refuses nonsense settings", async () => {
     const other = await testApp();
     const count = async (type: string) => (await other.as(MEMBER).get("/api/warnings")).body.filter((w: { type: string }) => w.type === type).length;
     expect(await count("sow_ending")).toBe(1);
@@ -314,14 +329,14 @@ describe("M-6 spend overview and M-7 exchange rate", () => {
       other
         .as(ADMIN)
         .put("/api/admin/settings")
-        .send({ gbpToEurE4: 11700, noticeDays: 90, sowEndDays: 30, budgetWarningPct: 80, ...o });
+        .send({ noticeDays: 90, sowEndDays: 30, budgetWarningPct: 80, ...o });
     await save({ sowEndDays: 10, budgetWarningPct: 90, noticeDays: 20 });
     expect(await count("sow_ending")).toBe(0);
     expect(await count("budget_warning")).toBe(0);
     expect(await count("renewal_due")).toBe(0);
     await save({ sowEndDays: 365 });
     expect(await count("sow_ending")).toBeGreaterThan(1);
-    for (const bad of [{ gbpToEurE4: 0 }, { noticeDays: 0 }, { sowEndDays: 400 }, { budgetWarningPct: 101 }, { budgetWarningPct: 79.5 }])
+    for (const bad of [{ noticeDays: 0 }, { sowEndDays: 400 }, { budgetWarningPct: 101 }, { budgetWarningPct: 79.5 }])
       expect((await save(bad)).status, JSON.stringify(bad)).toBe(400);
     await other.close();
   });

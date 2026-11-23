@@ -1,12 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Agreement } from "../../../../shared/agreements";
-import { amountForInput, formatMoney, parseAmount, type Currency } from "../../../../shared/money";
+import { amountForInput, parseAmount, type Currency } from "../../../../shared/money";
 import type { Invoice, SowDelivery } from "../../../../shared/sow";
 import type { Page } from "../../../../shared/types";
 import { api } from "../../lib/api";
 import { Dialog } from "../../platform/Dialog";
 import { FormFooter, Grid, SelectField, TextAreaField, TextField, useForm } from "../../platform/form";
 import { useToday } from "../../platform/session";
+import { amountProblem, shownMoney } from "../../platform/Money";
 
 /**
  * Key in an invoice (M-4). Opened from a SOW or subscription the agreement is fixed;
@@ -36,13 +37,13 @@ export function InvoiceForm({
     ({ amount, ...v }) =>
       api<Invoice>(invoice ? `/invoices/${invoice.id}` : "/invoices", {
         method: invoice ? "PATCH" : "POST",
-        body: { ...v, milestoneId: v.milestoneId || null, amountMinor: parseAmount(amount) },
+        body: { ...v, milestoneId: v.milestoneId || null, amountMinor: parseAmount(amount, currency) },
       }),
     {
       onSaved,
       check: (v) => ({
         agreementId: v.agreementId ? "" : "Choose the SOW or subscription this invoice is for.",
-        amount: parseAmount(v.amount) == null ? "Enter an amount like 12,500.00." : "",
+        amount: amountProblem(v.amount, currency, "Enter an amount like 12,500.00."),
       }),
     },
   );
@@ -70,7 +71,7 @@ export function InvoiceForm({
   });
   const milestones = (delivery.data?.milestones ?? []).filter((m) => m.status !== "cancelled" || m.id === invoice?.milestoneId);
   const shown = { errors: { ...form.errors, amount: form.errors.amount || form.errors.amountMinor || "" } };
-  const minor = v.amount ? parseAmount(v.amount) : null;
+  const minor = v.amount ? parseAmount(v.amount, currency) : null;
 
   return (
     <Dialog title={invoice ? `Edit invoice ${invoice.invoiceNumber}` : "Add invoice"} onClose={onClose}>
@@ -104,7 +105,7 @@ export function InvoiceForm({
             placeholder="12,500.00"
             value={v.amount}
             onChange={(e) => set("amount", e.target.value, ["amountMinor"])}
-            hint={minor == null ? undefined : `Read as ${formatMoney(minor, currency)}`}
+            hint={minor == null ? undefined : `Read as ${shownMoney(minor, currency)}`}
           />
           {milestones.length > 0 && (
             <SelectField form={shown} name="milestoneId" label="For milestone (optional)" value={v.milestoneId} onChange={(e) => set("milestoneId", e.target.value)}>
