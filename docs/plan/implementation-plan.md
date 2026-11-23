@@ -20,6 +20,7 @@ can click through. A milestone is done when:
 | M6 | RFP | Q-1 to Q-11 | M1; AI from M4 |
 | M7 | Ask a question | C-1 | M5, M6 |
 | M8 | Contract reading | E-1 | M1; AI from M4 |
+| M8a | Dropping files | X-7 | M1, M6 |
 | M10 | Vendor details, contact roles, history tabs | V-5 to V-7; changes to F-3 and Q-11 | M8 |
 | M11 | RFP editor, review rounds, company template | Q-12 to Q-14; change to Q-3 | M10 |
 | M12 | Any currency | M-8; changes to M-6, M-7, C-1 and E-1 | M11 |
@@ -27,7 +28,7 @@ can click through. A milestone is done when:
 
 M10, M11 and M12 were asked for after M8 was done (22 Nov 2026) and are built before M9, so the move to Databricks starts with the final database layout.
 
-X-1 to X-6 apply to every milestone. M2 and M3 touch different features and may be built in parallel.
+X-1 to X-7 apply to every milestone. M2 and M3 touch different features and may be built in parallel.
 
 ## M0 Foundation
 - Check current Databricks Apps and AppKit docs, scaffold the app, update `architecture/overview.md` to the real layout.
@@ -64,6 +65,9 @@ Read-only query tools over the existing list queries, document text search, chat
 
 ## M8 Contract reading
 Field proposal from an uploaded document with source passages and confirm step.
+
+## M8a Dropping files
+Added on request on 22 Nov 2026. Drag and drop onto the four upload places, several documents at once, and a page that ignores a file dropped beside them. Reworks the existing upload buttons on the agreement page, the RFP responses tab and the import page; no change to the server or the data.
 
 ## M10 Vendor details, contact roles, history tabs
 Address and VAT or tax number on the vendor, a main contact on the new-vendor form, a shared list of contact roles in place of the job title, and the history out of the way of long pages.

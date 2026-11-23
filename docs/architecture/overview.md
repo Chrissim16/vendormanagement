@@ -50,7 +50,7 @@ server/
   ai/                     prompts/ (versioned), index.ts (ask, record, review), evals/
 client/src/
   features/<feature>/     pages, components, hooks
-  platform/               layout, session, shared components (ui, DataTable, SplitView, History)
+  platform/               layout, session, shared components (ui, DataTable, SplitView, History, files: drop places and file buttons)
   lib/                    api client, URL state, formatting, motion presets, theme
 shared/                   types, Zod schemas, pure business rules
 db/schema, db/migrations, db/seed

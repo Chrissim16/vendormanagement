@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { api, messageOf } from "../../lib/api";
+import { DropZone, FileButton, oneFileProblem } from "../../platform/files";
 import { Button, EmptyState, ErrorState, PageHeader, Pill } from "../../platform/ui";
 
 interface Row {
@@ -21,8 +22,8 @@ const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 /** Bring vendors and agreements in from the Excel template: check first, then import (A-8). */
 export function ImportPage() {
   const qc = useQueryClient();
-  const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
   const run = useMutation({
     mutationFn: ({ f, apply }: { f: File; apply: boolean }) => api<Result>(`/admin/import/${apply ? "apply" : "preview"}`, { file: f }),
     onSuccess: async (r) => {
@@ -32,8 +33,18 @@ export function ImportPage() {
   const r = run.data;
   const reset = () => {
     setFile(null);
+    setProblem(null);
     run.reset();
   };
+  // A-8, X-7: one file, picked or dropped, checked before it is sent.
+  const choose = (files: File[]) => {
+    const why = oneFileProblem(files, ["xlsx"]);
+    if (why) return setProblem(why);
+    setProblem(null);
+    setFile(files[0]!);
+    run.mutate({ f: files[0]!, apply: false });
+  };
+
   return (
     <>
       <PageHeader context="Bring in vendors and agreements from Excel" title="Import">
@@ -50,27 +61,19 @@ export function ImportPage() {
         <li>Choose the file here. Nothing is saved yet: you first see what each row would do.</li>
         <li>Import the rows that are fine. Rows with problems are skipped, and rows already in the app are left alone, so the same file can be imported again safely.</li>
       </ol>
-      <div className="flex flex-wrap items-center gap-3">
-        <input
-          ref={input}
-          type="file"
-          aria-label="Choose the filled-in template"
-          accept=".xlsx"
-          className="sr-only"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            e.target.value = "";
-            if (f) {
-              setFile(f);
-              run.mutate({ f, apply: false });
-            }
-          }}
+      <DropZone enabled label="Drop the filled-in template here" busy={run.isPending} onFiles={choose} onProblem={setProblem} className="flex flex-wrap items-center gap-3">
+        <FileButton
+          label={file ? "Choose another file" : "Choose the filled-in template"}
+          busyLabel={file ? "Choose another file" : "Choose the filled-in template"}
+          chooserLabel="Choose the filled-in template"
+          accept={["xlsx"]}
+          busy={run.isPending}
+          primary={!r}
+          onFiles={choose}
         />
-        <Button variant={r ? "plain" : "primary"} onClick={() => input.current?.click()}>
-          {file ? "Choose another file" : "Choose the filled-in template"}
-        </Button>
         {file && <span className="text-ink-2">{file.name}</span>}
-      </div>
+      </DropZone>
+      {problem && <ErrorState message={problem} />}
 
       {run.isPending && <p className="text-ink-2">{run.variables?.apply ? "Importing" : "Checking the file"}…</p>}
       {run.isError && <ErrorState message={messageOf(run.error)} />}

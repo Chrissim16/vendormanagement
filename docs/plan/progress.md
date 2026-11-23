@@ -15,6 +15,7 @@ Newest entry first. Written for the owner, in plain language.
 | M6 RFP | Done here; the AI draft and comparison are unproven until tried with the company's model |
 | M7 Ask a question | Done here; how well a real AI understands questions is unproven until tried with the company's model |
 | M8 Contract reading | Done here; how well a real AI reads a contract is unproven until tried with the company's model |
+| M8a Dropping files | Done |
 | M10 Vendor details, contact roles, history tabs | Done |
 | M11 RFP editor, review rounds, company template | Done here; the company's own template, real Word and the AI's rewriting are unproven until tried at work |
 | M12 Any currency | Done here; how well a real AI reads amounts in other currencies is unproven until tried with the company's model |
@@ -179,6 +180,28 @@ You noticed that going from "NDA missing" on the dashboard to editing the NDA to
 - **Data processing agreements** behave in the same way.
 
 The same link is used in answers on the Ask page, so "Which vendors have no NDA?" now leads to Larkspur Data's NDA in negotiation. Other warnings were already three clicks from editing and are unchanged. Requirement A-7 has two new lines saying this; no new requirement was needed. The full set of automated checks passes, with new checks for each of the cases above.
+
+### 2026-11-22 Dropping files onto the app
+You asked to be able to drag documents onto the app instead of always using the button. This is now requirement X-7, built as a small step of its own before the move to Databricks. Nothing else in the plan moved.
+
+What you can do now:
+
+- **Drag files from your computer onto the app.** This works on an agreement's documents, on an RFP candidate's answer sheet and other documents, and on the admin Excel import page. The buttons stay as they were.
+- **See where a file can go.** While you drag a file over the window, each place that takes it gets a dashed blue outline that says what dropping there does: "Drop to attach", "Drop the answer sheet here" or "Drop the filled-in template here". Nothing else on the page moves.
+- **Attach several documents at once**, by dropping them or by picking them together with "Attach document". Each file is checked on its own. The fine ones are attached, a message says how many ("Attached 2 documents"), and each refused one is listed by name with its reason.
+- **One file only where one is meant.** The answer sheet and the Excel import take one file. Dropping several there says "Drop one file at a time", and nothing is sent.
+- **Missing the spot does no harm.** A file dropped anywhere else on a page is ignored. Before, the browser would open the file itself and take you out of the app. A drop while files are still being sent is refused with a request to wait. Once an RFP is decided or cancelled, its responses take no drop.
+
+How it was checked: an independent tester used the app in a browser. It dropped mixes of good, wrong-type, fake and too-large files, accented file names, files dropped beside the drop places and onto a half-typed answer, two drops in quick succession, a closed RFP, the keyboard alone, dark mode and a narrow window. Every point passed. An independent reviewer read the code and found nothing that had to be fixed and six things that should be; all six are fixed. The two that mattered:
+
+- **On an RFP's responses, "Attach document" sat inside the answer sheet's drop place.** Dropping PDFs on that button was treated as an answer sheet and refused. The button now sits with the documents, in their own drop place, and refused files are listed there too.
+- **In Safari the outline could vanish as soon as the pointer moved.** Safari reports moving across the page differently from Chrome. The app now only takes it as leaving the window when the pointer is really at the edge. Safari and Firefox could not be tried here; Chrome and Edge were.
+
+The words "Drop to attach" now sit at the top of the outline, so they stay in sight on a long list of documents.
+
+Also fixed along the way: on an RFP, a button pressed right after another one could be quietly ignored for a moment while the app refreshed other lists in the background. Buttons now work again as soon as the RFP is saved. This showed up as an automated check that failed now and then.
+
+Decided on your behalf (see `docs/open-questions.md`, Q120 and Q121): several files are sent one after another, and one refused file does not stop the others. A file dropped on the answer sheet is checked exactly as one chosen with the button.
 
 ### 2026-11-22 Three building blocks updated
 Installing the app reported eight known weaknesses, all rated moderate, in three of the outside building blocks it uses: the one that moves between pages, one used when making Excel files, and one used only by a tool for building. All three are now on versions without those weaknesses, and the install reports none. Nothing changes in how the app looks or works; the full set of automated checks passes. The notes about "deprecated" packages during install remain: those are old but working parts that other building blocks bring along, and are not weaknesses.
@@ -604,3 +627,6 @@ First version of the brief, requirements, plan and agent workflow. No applicatio
 - One older check (two admins demoting each other at the same instant) failed once in seven runs on the real database while the machine was busy, and passed every other time. To be watched; if it recurs it needs a proper look.
 - Two people changing the same SOW at the very same moment has been reasoned through and guarded, but not tried with two real people.
 - Deploy the app once at work as a rehearsal (open question Q3). With M1 done there is now something real to try there.
+- Two automated checks failed once each while the whole set ran, and passed on their own and in the next full run: choosing "Ask: …" with the keyboard in the top search field, and searching the RFP list by title. Both look like timing when the computer is busy; to be looked into if they fail again. (Found during M8a.)
+- A workbook for the Excel import or an answer sheet is checked against 25 MB before sending, but the app refuses workbooks over 10 MB. A file between the two is sent and then refused in plain words. (Found during M8a.)
+- Dropping or picking several documents refreshes the page once at the end; if one file of many is refused by the app, the others are still attached.

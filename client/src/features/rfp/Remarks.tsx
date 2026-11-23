@@ -9,7 +9,8 @@ import { personName, usePeople } from "../../lib/data";
 import { formatDate, formatDateTime } from "../../lib/format";
 import { Button, ConfirmButton, ErrorState, Pill, Select } from "../../platform/ui";
 import { Nothing } from "../overview/parts";
-import { downloadClass, FileButton, kb, useRfpChange } from "./parts";
+import { FileButton, oneFileProblem } from "../../platform/files";
+import { downloadClass, kb, useRfpChange } from "./parts";
 
 /** Who did something, by name where the app knows the person. */
 export function usePersonName() {
@@ -249,14 +250,12 @@ function RoundCard({ rfp, round }: { rfp: RfpDetail; round: ReviewRound }) {
             label="Upload a returned file"
             chooserLabel={`Choose a returned Word file for version ${round.version}`}
             accept={["docx"]}
-            wrongType="Choose the Word file the reviewer sent back (.docx)."
             busy={upload.isPending}
-            onFile={(f) =>
-              upload.mutate(f, {
-                onError: (e) => setProblem(messageOf(e)),
-              })
-            }
-            onProblem={setProblem}
+            onFiles={(files) => {
+              const problem = files.length === 1 && !/\.docx$/i.test(files[0]!.name) ? "Choose the Word file the reviewer sent back (.docx)." : oneFileProblem(files, ["docx"]);
+              if (problem) setProblem(problem);
+              else upload.mutate(files[0]!, { onError: (e) => setProblem(messageOf(e)) });
+            }}
           />
         )}
       </div>

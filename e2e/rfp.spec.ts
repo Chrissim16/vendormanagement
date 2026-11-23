@@ -1,7 +1,7 @@
 import ExcelJS from "exceljs";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import type { RfpDetail } from "../shared/rfp";
-import { ADMIN, expectAccessible, MEMBER, newAgreement, newVendor, signInAs, TODAY } from "./helpers";
+import { ADMIN, dragFiles, dropFiles, dropOutline, expectAccessible, MEMBER, newAgreement, newVendor, signInAs, TODAY } from "./helpers";
 
 const BASE = "http://127.0.0.1:4173";
 const unique = (label: string) => `${label} ${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`;
@@ -464,6 +464,71 @@ test.describe("Q-6 responses", () => {
       .getByRole("button", { name: new RegExp(a.vendorName) })
       .click();
     await expect(answers.nth(1).getByRole("textbox")).toHaveValue("Given by phone: yes, as standard.");
+  });
+});
+
+test.describe("X-7 dropping files on a response", () => {
+  test("X-7 the answer sheet is dropped one at a time, other documents several at once, and a closed RFP takes no drop", async ({ page, context, request }) => {
+    const { rfp, a } = await issued(request);
+    const res = await request.get(`${BASE}/api/rfp-candidates/${a.id}/answer-sheet.xlsx`, { headers: { "x-dev-user": MEMBER, cookie: "" } });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load((await res.body()) as unknown as ArrayBuffer);
+    wb.getWorksheet("Answers")!.getRow(6).getCell(4).value = "Our answer to question 1.";
+    const xlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    const sheet = { name: "Dropped answers.xlsx", mimeType: xlsx, buffer: Buffer.from(await wb.xlsx.writeBuffer()) };
+    const pdf = (name: string) => ({ name, mimeType: "application/pdf", buffer: Buffer.from(`%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF ${name}`) });
+
+    await signInAs(context, MEMBER);
+    await open(page, rfp, "responses");
+    await page
+      .getByRole("group", { name: "Candidate" })
+      .getByRole("button", { name: new RegExp(a.vendorName) })
+      .click();
+    const last = rfp.questions.length;
+    const sheetPlace = page.getByText(`0 of ${last} questions answered.`);
+    await expect(sheetPlace).toBeVisible();
+
+    // While a file is carried over the window, both places say what dropping there does.
+    await page.locator("body").dispatchEvent("dragenter", { dataTransfer: await dragFiles(page, [sheet]) });
+    await expect(dropOutline(page, "Drop the answer sheet here")).toBeVisible();
+    await expect(dropOutline(page, "Drop to attach")).toBeVisible();
+    await page.locator("body").dispatchEvent("dragleave", { dataTransfer: await dragFiles(page, [sheet]) });
+
+    await dropFiles(page, sheetPlace, [sheet, sheet]);
+    await expect(page.getByRole("alert")).toContainText("Drop one file at a time.");
+    await dropFiles(page, sheetPlace, [pdf("Not a sheet.pdf")]);
+    await expect(page.getByRole("alert")).toContainText("Choose an Excel file (.xlsx).");
+    await dropFiles(page, sheetPlace, [sheet]);
+    await expect(page.getByRole("status").filter({ hasText: "matched" })).toContainText("1 answer was matched to its question.");
+    await expect(page.getByText(`1 of ${last} questions answered.`)).toBeVisible();
+
+    const docs = page.getByRole("list", { name: `Documents of ${a.vendorName}` });
+    await dropFiles(page, page.getByRole("heading", { name: "Documents", exact: true }), [
+      pdf("Security whitepaper.pdf"),
+      pdf("Price list.pdf"),
+      { name: "logo.png", mimeType: "image/png", buffer: Buffer.from("png") },
+    ]);
+    await expect(page.getByText("Attached 2 documents")).toBeVisible();
+    await expect(docs.getByRole("listitem")).toHaveCount(3);
+    await expect(page.getByRole("alert")).toContainText("logo.png: Only PDF, Word and Excel files can be attached.");
+    // The "Attach document" button is part of the documents' drop place, not the answer sheet's.
+    await dropFiles(page, page.getByRole("button", { name: "Attach document" }), [pdf("Terms.pdf"), pdf("Brochure.pdf")]);
+    await expect(page.getByText("Attached 2 documents")).toBeVisible();
+    await expect(docs.getByRole("listitem")).toHaveCount(5);
+    await expectAccessible(page);
+
+    // Once the RFP is closed nothing can be dropped on it.
+    await call(request, "post", `/rfps/${rfp.id}/cancel`, { reason: "The budget was withdrawn." });
+    await open(page, rfp, "responses");
+    await page
+      .getByRole("group", { name: "Candidate" })
+      .getByRole("button", { name: new RegExp(a.vendorName) })
+      .click();
+    await expect(docs.getByRole("listitem")).toHaveCount(5);
+    await page.locator("body").dispatchEvent("dragenter", { dataTransfer: await dragFiles(page, [sheet]) });
+    await expect(page.locator("[data-drop-zone]")).toHaveCount(0);
+    await dropFiles(page, page.getByRole("heading", { name: "Documents", exact: true }), [pdf("Late.pdf")]);
+    await expect(docs.getByRole("listitem")).toHaveCount(5);
   });
 });
 

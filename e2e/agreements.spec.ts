@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import { expect, test } from "@playwright/test";
-import { ADMIN, expectAccessible, MEMBER, newAgreement, newVendor, signInAs, warningCount } from "./helpers";
+import { ADMIN, dragFiles, dropFiles, dropOutline, expectAccessible, MEMBER, newAgreement, newVendor, signInAs, warningCount } from "./helpers";
 
 const sub = { kind: "subscription", annualValueMinor: 4_800_000, startDate: "2026-02-10", endDate: "2027-02-10", signedOn: "2026-02-01", status: "active" };
 
@@ -556,5 +556,140 @@ test.describe("throughout M1", () => {
       await expect(ready.getByRole(path.includes("renewals") || path === "/warnings" ? "listitem" : "row").first()).toBeVisible();
       expect(Date.now() - started, path).toBeLessThan(2000);
     }
+  });
+});
+
+test.describe("X-7 dropping files", () => {
+  const pdf = (name: string) => ({ name, mimeType: "application/pdf", buffer: Buffer.from(`%PDF-1.4 invented test document ${name}`) });
+
+  test("X-7 documents dropped on an agreement are each checked; the fine ones are attached and each refused one is named", async ({ page, context, request }) => {
+    const v = await newVendor(request, "Drops");
+    const a = await newAgreement(request, v, { kind: "nda", title: "Drops NDA" });
+    await signInAs(context, MEMBER);
+    await page.goto(`/agreements/${a.id}`);
+    const outline = dropOutline(page, "Drop to attach");
+    await expect(outline).toBeHidden();
+
+    // Carrying a file over the window shows where it can go; leaving the window takes the outline away again.
+    const carried = await dragFiles(page, [pdf("Carried.pdf")]);
+    await page.locator("body").dispatchEvent("dragenter", { dataTransfer: carried });
+    await expect(outline).toBeVisible();
+    await expect(outline).toHaveText("Drop to attach");
+    await page.locator("body").dispatchEvent("dragleave", { dataTransfer: carried });
+    await expect(outline).toBeHidden();
+
+    // Dragged text is not a file: no outline.
+    const text = await page.evaluateHandle(() => {
+      const dt = new DataTransfer();
+      dt.setData("text/plain", "some words");
+      return dt;
+    });
+    await page.locator("body").dispatchEvent("dragenter", { dataTransfer: text });
+    await expect(outline).toBeHidden();
+    // …and dragging text into a field is left to the browser.
+    const textPrevented = await page.getByRole("combobox", { name: "Find anything, or ask a question" }).evaluate((field) => {
+      const dt = new DataTransfer();
+      dt.setData("text/plain", "some words");
+      const over = new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: dt });
+      field.dispatchEvent(over);
+      return over.defaultPrevented;
+    });
+    expect(textPrevented).toBe(false);
+
+    // Moving from one part of the page into another keeps the outline, also when the browser
+    // leaves out where the pointer went (as Safari does); leaving at the window's edge ends it.
+    const move = (step: "in" | "across" | "out") =>
+      page.evaluate((step) => {
+        const dt = new DataTransfer();
+        dt.items.add(new File(["%PDF-1.4"], "Moving.pdf", { type: "application/pdf" }));
+        const h1 = document.querySelector("h1")!;
+        const fire = (el: Element, type: string, relatedTarget: Element | null, at = 300) =>
+          el.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt, relatedTarget, clientX: at, clientY: at }));
+        if (step === "in") fire(document.body, "dragenter", null);
+        if (step === "across") {
+          fire(h1, "dragenter", document.body);
+          fire(document.body, "dragleave", h1);
+          fire(document.body, "dragenter", h1);
+          fire(h1, "dragleave", null);
+        }
+        if (step === "out") fire(document.body, "dragleave", null, 0);
+      }, step);
+    await move("in");
+    await expect(outline).toBeVisible();
+    await move("across");
+    await expect(outline).toBeVisible();
+    await move("out");
+    await expect(outline).toBeHidden();
+
+    const section = page.getByRole("heading", { name: "Documents", exact: true });
+    await dropFiles(page, section, [
+      pdf("Signed NDA.pdf"),
+      { name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("hello") },
+      pdf("Annex.pdf"),
+      { name: "pretend.pdf", mimeType: "application/pdf", buffer: Buffer.from("<html>") },
+    ]);
+    await expect(page.getByText("Attached 2 documents")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Signed NDA.pdf" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Annex.pdf" })).toBeVisible();
+    const alert = page.getByRole("alert");
+    await expect(alert.getByRole("listitem")).toHaveCount(2);
+    await expect(alert).toContainText("notes.txt: Only PDF, Word and Excel files can be attached.");
+    await expect(alert).toContainText("pretend.pdf:");
+    await expect(alert).toContainText("not a real PDF file");
+    await expect(outline).toBeHidden();
+    await expectAccessible(page);
+
+    // The button takes several at once too.
+    await page.getByLabel("Choose a document to attach").setInputFiles([pdf("Picked one.pdf"), pdf("Picked two.pdf")]);
+    await expect(page.getByText("Attached 2 documents")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Picked two.pdf" })).toBeVisible();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+
+    // A drop while files are still being sent is refused with a request to wait.
+    await page.route("**/api/agreements/*/documents", async (route) => {
+      await new Promise((r) => setTimeout(r, 1500));
+      await route.continue();
+    });
+    await dropFiles(page, section, [pdf("Slow.pdf")]);
+    await expect(page.getByRole("button", { name: "Uploading" })).toBeVisible();
+    await dropFiles(page, section, [pdf("Too soon.pdf")]);
+    await expect(page.getByRole("alert")).toContainText("Files are still being sent. Wait until they are done, then drop again.");
+    await expect(page.getByRole("link", { name: "Slow.pdf" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Too soon.pdf" })).toHaveCount(0);
+    await page.unroute("**/api/agreements/*/documents");
+
+    // A file dropped beside the drop place is not opened by the browser, and nothing is attached.
+    const opened = await page.getByRole("heading", { level: 1 }).evaluate((h) => {
+      const dt = new DataTransfer();
+      dt.items.add(new File(["%PDF-1.4 beside"], "Beside.pdf", { type: "application/pdf" }));
+      const over = new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: dt });
+      const drop = new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: dt });
+      h.dispatchEvent(over);
+      return h.dispatchEvent(drop);
+    });
+    expect(opened).toBe(false);
+    await expect(page.getByRole("link", { name: "Beside.pdf" })).toHaveCount(0);
+    await expect(page).toHaveURL(new RegExp(`/agreements/${a.id}$`));
+  });
+
+  test("X-7 the import page takes one dropped template", async ({ page, context, request }) => {
+    await signInAs(context, ADMIN);
+    const res = await request.get("http://127.0.0.1:4173/api/admin/import/template.xlsx", { headers: { "x-dev-user": ADMIN, cookie: "" } });
+    const template = { name: "template.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: await res.body() };
+    await page.goto("/admin/import");
+    const place = page.locator("button", { hasText: "Choose the filled-in template" });
+    await page.locator("body").dispatchEvent("dragenter", { dataTransfer: await dragFiles(page, [template]) });
+    await expect(dropOutline(page, "Drop the filled-in template here")).toBeVisible();
+
+    await dropFiles(page, place, [template, template]);
+    await expect(page.getByRole("alert")).toContainText("Drop one file at a time.");
+    await expect(page.getByRole("table", { name: "Rows in the file" })).toHaveCount(0);
+    await dropFiles(page, place, [pdf("Not a template.pdf")]);
+    await expect(page.getByRole("alert")).toContainText("Choose an Excel file (.xlsx).");
+
+    await dropFiles(page, place, [template]);
+    await expect(page.getByText(/can be imported\./)).toBeVisible();
+    await expect(page.getByText("template.xlsx")).toBeVisible();
+    await expect(page.getByRole("alert")).toHaveCount(0);
   });
 });

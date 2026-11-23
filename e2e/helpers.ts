@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, type APIRequestContext, type BrowserContext, type Page } from "@playwright/test";
+import { expect, type APIRequestContext, type BrowserContext, type Locator, type Page } from "@playwright/test";
 
 export const ADMIN = "admin@example.test";
 export const MEMBER = "mira@example.test";
@@ -96,3 +96,32 @@ export async function attachPdf(request: APIRequestContext, agreementId: string,
   expect(res.ok(), await res.text()).toBe(true);
   return (await res.json()) as { id: string; fileName: string };
 }
+
+export interface DroppedFile {
+  name: string;
+  mimeType: string;
+  buffer: Buffer;
+}
+
+/** X-7: what dragging files from the computer looks like to the page: carrying them over the window, and optionally letting go. */
+export async function dragFiles(page: Page, files: DroppedFile[]) {
+  return page.evaluateHandle(
+    (fs) => {
+      const dt = new DataTransfer();
+      for (const f of fs) dt.items.add(new File([new Uint8Array(f.bytes)], f.name, { type: f.mimeType }));
+      return dt;
+    },
+    files.map((f) => ({ name: f.name, mimeType: f.mimeType, bytes: [...f.buffer] })),
+  );
+}
+
+/** Drags the files over the page onto `target` and drops them there. */
+export async function dropFiles(page: Page, target: Locator, files: DroppedFile[]) {
+  const dataTransfer = await dragFiles(page, files);
+  await target.dispatchEvent("dragenter", { dataTransfer });
+  await target.dispatchEvent("dragover", { dataTransfer });
+  await target.dispatchEvent("drop", { dataTransfer });
+}
+
+/** The outline a drop place shows while a file is dragged over the window, found by what it says. */
+export const dropOutline = (page: Page, label: string) => page.locator(`[data-drop-zone="${label}"]`);

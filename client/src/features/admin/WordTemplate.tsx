@@ -5,7 +5,17 @@ import { MARKS, markLabels, markMeaning, type TemplateFound, type WordTemplateIn
 import { api, messageOf } from "../../lib/api";
 import { formatDateTime } from "../../lib/format";
 import { ConfirmButton, ErrorState, Loading, Pill } from "../../platform/ui";
-import { downloadClass, FileButton, kb } from "../rfp/parts";
+import { FileButton } from "../../platform/files";
+import { downloadClass, kb } from "../rfp/parts";
+
+/** Checked before sending; the server checks again. */
+function templateProblem(files: File[]): string | null {
+  if (files.length !== 1) return "Choose one template.";
+  const f = files[0]!;
+  if (!/\.(dotx|docx)$/i.test(f.name)) return "Choose a Word template (.dotx) or a Word document (.docx).";
+  if (f.size > 10 * 1024 * 1024) return "That file is larger than 10 MB.";
+  return null;
+}
 
 const list = (places: string[]) => (places.length > 1 ? `${places.slice(0, -1).join(", ")} and ${places[places.length - 1]}` : places[0]);
 
@@ -129,11 +139,12 @@ export function WordTemplateSection() {
               label={current ? "Upload a new template" : "Upload template"}
               chooserLabel="Choose the Word template"
               accept={["dotx", "docx"]}
-              wrongType="Choose a Word template (.dotx) or a Word document (.docx)."
-              maxBytes={10 * 1024 * 1024}
               busy={upload.isPending}
-              onFile={(f) => upload.mutate(f)}
-              onProblem={setProblem}
+              onFiles={(files) => {
+                const problem = templateProblem(files);
+                if (problem) setProblem(problem);
+                else upload.mutate(files[0]!);
+              }}
               primary={!current}
             />
             {current && (
