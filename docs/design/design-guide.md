@@ -95,7 +95,7 @@ Figures that line up use tabular numerals. Dates read `21 Nov 2026`. Money reads
 ## Forms and dialogs
 
 - Adding or editing a record happens in a dialog over the page: 24px radius, the same shadow as the side panel, a dimmed page behind. It rises into place with the spring.
-- Focus starts in the first field, stays inside the dialog, Escape closes it, and focus returns to the button that opened it.
+- Focus starts in the first field (or the first one left to fill, when a link already filled some in), stays inside the dialog, Escape closes it, and focus returns to the button that opened it.
 - Fields sit in two columns with the label above each field. Only the fields that apply are shown; choosing a different kind empties the ones that no longer apply.
 - A problem is written under its field in red text, and a summary sits above the buttons. Nothing typed is lost when saving fails.
 - An amount shows what the app understood under the box ("Read as € 12,500.00") before anything is saved.

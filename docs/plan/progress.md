@@ -170,6 +170,16 @@ What it costs: M10 is small. M11 is about the size of one of the earlier parts. 
 
 Before M9, at work: type [Title], [Date] and [Version] on the template's cover page where they should appear. Decided on your behalf (see `docs/open-questions.md`, Q87 to Q91): open reviewer comments block approval; only the RFP document gets the editor for now.
 
+### 2026-11-22 From a missing NDA to editing it in three clicks
+You noticed that going from "NDA missing" on the dashboard to editing the NDA took five clicks: the warning opened the vendor, then you had to find the Agreements tab, then the NDA, then Edit. Now:
+
+- **An NDA is being worked on** (a draft, in negotiation or out for signature): the warning opens that NDA directly. From the dashboard that is three clicks to its edit form: "NDA missing", the vendor's warning, "Edit or change status". If there are several, the one closest to being signed is opened. The warning now also names it, for example "No NDA is in place. “Mutual NDA” is in negotiation."
+- **There is no NDA at all:** the warning opens the form to add one, for that vendor and with NDA already chosen, and the cursor waits in the Title field. That is two clicks from the dashboard.
+- **The NDA has expired:** the warning opens the replacement if one is being worked on, otherwise the expired one, as before.
+- **Data processing agreements** behave in the same way.
+
+The same link is used in answers on the Ask page, so "Which vendors have no NDA?" now leads to Larkspur Data's NDA in negotiation. Other warnings were already three clicks from editing and are unchanged. Requirement A-7 has two new lines saying this; no new requirement was needed. The full set of automated checks passes, with new checks for each of the cases above.
+
 ### 2026-11-22 Three building blocks updated
 Installing the app reported eight known weaknesses, all rated moderate, in three of the outside building blocks it uses: the one that moves between pages, one used when making Excel files, and one used only by a tool for building. All three are now on versions without those weaknesses, and the install reports none. Nothing changes in how the app looks or works; the full set of automated checks passes. The notes about "deprecated" packages during install remain: those are old but working parts that other building blocks bring along, and are not weaknesses.
 

@@ -300,14 +300,62 @@ test.describe("A-7 warnings", () => {
     await list.getByRole("link").filter({ hasText: "Ending SOW" }).click();
     await expect(page.getByRole("heading", { name: "Ending SOW", level: 1 })).toBeVisible();
     await page.goBack();
+    // With no NDA at all, the warning opens the form to add one, with the kind already chosen.
     await nda.getByRole("link").click();
+    const adding = page.getByRole("dialog", { name: "Add agreement" });
+    await expect(adding.getByLabel("Kind")).toHaveValue("nda");
+    // The kind is chosen, so typing starts in the title.
+    await expect(adding.getByLabel("Title")).toBeFocused();
+    await adding.getByLabel("Title").fill("Warned NDA");
+    await adding.getByRole("button", { name: "Add agreement" }).click();
+    await expect(adding).toBeHidden();
+    // The new NDA is listed on the vendor's Agreements tab, and the form does not open again on a reload.
+    await expect(page.getByRole("region", { name: v.name }).getByRole("link", { name: /Warned NDA/ })).toBeVisible();
+    await expect(page).not.toHaveURL(/add=/);
+    await page.reload();
     await expect(page.getByRole("region", { name: v.name })).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    // A draft is not in place yet, so the warning stays, and now leads to the draft.
+    await page.goto("/warnings?type=nda_missing");
+    await expect(nda).toContainText("“Warned NDA” is still a draft.");
+    await nda.getByRole("link").click();
+    await expect(page.getByRole("heading", { name: "Warned NDA", level: 1 })).toBeVisible();
 
     // Dealing with the cause removes the warning and lowers the count.
     await newAgreement(request, v, { kind: "nda", title: "Now signed", status: "active", signedOn: "2026-11-20" });
     await page.goto("/");
     await expect(page.getByTestId("warning-count")).toHaveText(String(total - 1));
     await expect(page.getByRole("heading", { level: 1 })).toContainText(`${total - 1} things could use a decision.`);
+  });
+
+  test("A-7 from the dashboard, an NDA or data processing agreement being worked on is three clicks from its edit form", async ({ page, context, request }) => {
+    const v = await newVendor(request, "Paperwork", { ndaRequired: true, dpaRequired: true });
+    await newAgreement(request, v, { kind: "nda", title: "Early NDA", status: "draft" });
+    await newAgreement(request, v, { kind: "nda", title: "Signing NDA", status: "out_for_signature" });
+    const old = await newAgreement(request, v, { kind: "dpa", title: "Old DPA", status: "active", signedOn: "2025-01-01", endDate: "2026-01-01" });
+    await signInAs(context, MEMBER);
+
+    // 1. The kind on the dashboard, 2. the vendor's warning, 3. the edit button on the NDA closest to signed.
+    await page.goto("/");
+    await page.getByRole("list", { name: "Warnings and risk flags by kind" }).getByRole("link", { name: /NDA missing/ }).click();
+    await expect(page).toHaveURL(/\/warnings\?type=nda_missing$/);
+    const row = page.getByRole("list", { name: "Warnings", exact: true }).getByRole("listitem").filter({ hasText: v.name });
+    await expect(row).toContainText("No NDA is in place. “Signing NDA” is out for signature.");
+    await row.getByRole("link").click();
+    await expect(page.getByRole("heading", { name: "Signing NDA", level: 1 })).toBeVisible();
+    await page.getByRole("button", { name: "Edit or change status" }).click();
+    await expect(page.getByRole("dialog", { name: "Edit Signing NDA" })).toBeVisible();
+
+    // An expired one with nothing under way leads to the expired one; once a replacement is under way, to that.
+    await page.goto("/warnings?type=dpa_expired");
+    await expect(row).toContainText("Data processing agreement expired on 1 Jan 2026.");
+    await row.getByRole("link").click();
+    await expect(page).toHaveURL(new RegExp(`/agreements/${old.id}$`));
+    const next = await newAgreement(request, v, { kind: "dpa", title: "New DPA", status: "in_negotiation" });
+    await page.goto("/warnings?type=dpa_expired");
+    await expect(row).toContainText("“New DPA” is in negotiation.");
+    await row.getByRole("link").click();
+    await expect(page).toHaveURL(new RegExp(`/agreements/${next.id}$`));
   });
 });
 

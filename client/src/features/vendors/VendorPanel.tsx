@@ -123,11 +123,25 @@ function VendorRfps({ vendorId }: { vendorId: string }) {
 
 export function VendorPanel({ id, onClose }: { id: string; onClose: () => void }) {
   const qc = useQueryClient();
-  // A link may name the tab to open on (a briefing's page links back to the Briefings tab).
-  const [params] = useSearchParams();
+  // A link may name the tab to open on (a briefing's page links back to the Briefings tab),
+  // or ask for a missing NDA or data processing agreement to be added (a warning does).
+  const [params, setParams] = useSearchParams();
   const asked = params.get("tab") as Tab | null;
-  const [tab, setTab] = useState<Tab>(asked && tabIds.includes(asked) ? asked : "overview");
-  const [dialog, setDialog] = useState<null | "edit" | "contact" | "agreement" | Contact>(null);
+  const add = (["nda", "dpa"] as const).find((k) => k === params.get("add"));
+  const [tab, setTab] = useState<Tab>(add ? "agreements" : asked && tabIds.includes(asked) ? asked : "overview");
+  const [dialog, setDialogState] = useState<null | "edit" | "contact" | "agreement" | Contact>(add ? "agreement" : null);
+  const setDialog = (d: typeof dialog) => {
+    setDialogState(d);
+    // Once closed, the form does not open again on a reload or on going back.
+    if (d === null && params.has("add"))
+      setParams(
+        (p) => {
+          p.delete("add");
+          return p;
+        },
+        { replace: true },
+      );
+  };
   const q = useQuery({ queryKey: ["vendor", id], queryFn: () => api<VendorDetail>(`/vendors/${id}`), retry: false });
   const agreements = useQuery({
     queryKey: ["agreements", { vendorId: id }],
@@ -293,7 +307,7 @@ export function VendorPanel({ id, onClose }: { id: string; onClose: () => void }
       {dialog === "edit" && <VendorForm vendor={v} onClose={() => setDialog(null)} onSaved={(x) => saved(`Saved ${x.name}`)} />}
       {dialog === "contact" && <ContactForm vendorId={v.id} onClose={() => setDialog(null)} onSaved={() => saved("Contact added")} />}
       {dialog && typeof dialog === "object" && <ContactForm vendorId={v.id} contact={dialog} onClose={() => setDialog(null)} onSaved={() => saved("Contact saved")} />}
-      {dialog === "agreement" && <AgreementForm vendorId={v.id} onClose={() => setDialog(null)} onSaved={(a) => saved(`Added ${a.title}`)} />}
+      {dialog === "agreement" && <AgreementForm vendorId={v.id} kind={add} onClose={() => setDialog(null)} onSaved={(a) => saved(`Added ${a.title}`)} />}
     </Panel>
   );
 }

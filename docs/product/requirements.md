@@ -82,6 +82,8 @@ Roles: **admin** and **member**. Members can do everything except what is marked
 - A member can record renew, renegotiate or terminate. Renew offers to roll the dates forward. A decided subscription leaves the list.
 
 **A-7 Warnings.** A warnings page, and a count in the header, list: notice deadlines due or overdue, SOWs ending within 30 days or already past their end date while still active, and active vendors with a required NDA or DPA missing or expired. Each warning links to its record.
+- From the dashboard, the record a warning is about is two clicks away (the kind, then the warning), and its edit form three.
+- A missing or expired NDA or DPA leads to the one being worked on (draft, in negotiation or out for signature), the one closest to signed first, and the warning names it and its status. With none under way, an expired one leads to the expired agreement, and a missing one opens the form to add one for that vendor with the kind already chosen.
 
 **A-8 Import.** An admin can download an Excel template, fill in vendors and agreements, and upload it. A preview shows valid rows and the reason for each invalid one before anything is saved. Importing the same file twice creates no duplicates.
 

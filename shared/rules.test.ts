@@ -194,6 +194,24 @@ describe("warnings", () => {
     expect(types([{ ...needs, status: "prospect" }], [])).toEqual([]);
     expect(types([{ ...needs, status: "offboarded" }], [])).toEqual([]);
   });
+  it("leads a paperwork warning to the one closest to signed, else to the expired one, else nowhere", () => {
+    const needs = vendor({ ndaRequired: true });
+    const one = (a: WarningAgreement[]) => buildWarnings([needs], a, today)[0]!;
+    expect(one([])).toMatchObject({ type: "nda_missing", agreementId: null, detail: "No NDA is in place." });
+    const draft = ag({ id: "d", kind: "nda", title: "Draft", status: "draft", endDate: null });
+    const signing = ag({ id: "s", kind: "nda", title: "Signing", status: "out_for_signature", endDate: null });
+    expect(one([draft])).toMatchObject({ agreementId: "d", detail: "No NDA is in place. “Draft” is still a draft." });
+    expect(one([draft, signing])).toMatchObject({ agreementId: "s", detail: "No NDA is in place. “Signing” is out for signature." });
+    // A DPA under way says nothing about the NDA.
+    expect(one([{ ...signing, kind: "dpa" }])).toMatchObject({ agreementId: null });
+    const expired = ag({ id: "x", kind: "nda", endDate: "2026-01-01" });
+    expect(one([expired])).toMatchObject({ type: "nda_expired", agreementId: "x", detail: "NDA expired on 1 Jan 2026." });
+    expect(one([expired, ag({ id: "n", kind: "nda", title: "Next", status: "in_negotiation", endDate: null })])).toMatchObject({
+      type: "nda_expired",
+      agreementId: "n",
+      detail: "NDA expired on 1 Jan 2026. “Next” is in negotiation.",
+    });
+  });
   it("puts what is already wrong first, then the soonest", () => {
     const list = buildWarnings(
       [vendor()],

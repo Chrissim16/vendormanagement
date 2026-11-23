@@ -28,11 +28,14 @@ const AMOUNT = "Enter an amount like 12,500.00.";
 export function AgreementForm({
   agreement,
   vendorId,
+  kind,
   onClose,
   onSaved,
 }: {
   agreement?: AgreementDetail;
   vendorId?: string;
+  /** For a new agreement: the kind to start with, when a link already says which is needed. */
+  kind?: Kind;
   onClose: () => void;
   onSaved: (a: AgreementDetail) => void;
 }) {
@@ -42,7 +45,7 @@ export function AgreementForm({
   const form = useForm(
     {
       vendorId: a?.vendorId ?? vendorId ?? "",
-      kind: (a?.kind ?? "") as Kind | "",
+      kind: (a?.kind ?? kind ?? "") as Kind | "",
       title: a?.title ?? "",
       reference: a?.reference ?? "",
       status: a?.status ?? "draft",
@@ -157,7 +160,8 @@ export function AgreementForm({
               ))}
             </SelectField>
           )}
-          {text("title", "Title", { autoFocus: true })}
+          {/* With the kind already chosen by a link, the title is the first thing left to fill. */}
+          {text("title", "Title", { autoFocus: true, "data-start": !a && kind ? "" : undefined })}
           {text("reference", "Our reference (optional)")}
           <SelectField form={shown} name="ownerUserId" label="Owner" value={v.ownerUserId} onChange={(e) => set("ownerUserId", e.target.value)}>
             {owners.map((p) => (
